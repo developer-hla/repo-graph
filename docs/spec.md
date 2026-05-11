@@ -182,12 +182,25 @@ repo-graph agent-instructions --api-url http://localhost:8000 --config path/to/s
 Start with parsers that are useful across many codebases:
 
 - Git metadata
-- package manifests
-- TypeScript and JavaScript imports
-- HTTP route declarations
+- project discovery from package manifests and workspaces
+- package manifests and dependency declarations
+- TypeScript and JavaScript imports, exports, and route declarations
+- HTTP calls from `fetch` and common client libraries
 - SQL tables, views, functions, and stored procedures
 - SQL references from application code
-- configurable regex patterns
+
+The default extractor pass should do useful discovery without asking users to
+predefine relationships. Configurable patterns can come later for organization
+or framework-specific conventions, but they should extend the scanner rather
+than replace rich initial extraction.
+
+Future parser slices should add:
+
+- Python imports, FastAPI or Flask routes, and exported application symbols
+- .NET project files, package references, controllers, and service calls
+- Kubernetes manifests for service and deployment topology
+- optional LLM-assisted documentation discovery that emits evidence-backed
+  candidate entities and edges
 
 ## Public/Private Boundary
 
@@ -210,8 +223,8 @@ Private local config:
 
 1. Config loader and source model.
 2. Git sync into a local cache.
-3. JSON graph builder with repository and file entities.
-4. Package, import, route, and SQL parsers.
+3. JSON graph builder with repository, project, and file entities.
+4. Package, import, export, HTTP, route, and SQL parsers.
 5. Neo4j loader.
 6. FastAPI query service.
 7. Docker Compose runtime.

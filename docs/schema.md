@@ -20,7 +20,7 @@ be loaded into different stores.
 ```json
 {
   "entity_id": "stable-id",
-  "entity_type": "repository | file | package | api_route | sql_table | sql_view | sql_function | stored_procedure",
+  "entity_type": "repository | project | file | package | api_route | function | class | sql_table | sql_view | sql_function | stored_procedure",
   "name": "display name",
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -41,7 +41,7 @@ be loaded into different stores.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_FILE | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | IMPORTS | DECLARES_ROUTE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | CALLS_HTTP | CALLS_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -51,6 +51,38 @@ be loaded into different stores.
   "properties": {}
 }
 ```
+
+## Core Entity Types
+
+- `repository`: one configured source.
+- `project`: a package or workspace discovered inside a repository.
+- `file`: a scanned source file.
+- `package`: a package manifest declaration, such as `package.json` `name`.
+- `api_route`: an HTTP route declared in source code.
+- `function` and `class`: exported JavaScript or TypeScript symbols.
+- `sql_table`, `sql_view`, `sql_function`, `stored_procedure`: SQL objects
+  declared in SQL files.
+
+## Core Edge Types
+
+- `CONTAINS_PROJECT`: repository to discovered project.
+- `CONTAINS_FILE`: repository or project to file.
+- `DECLARES_PACKAGE`: file or project to package.
+- `DEPENDS_ON_PACKAGE`: package or manifest file to package target.
+- `IMPORTS`: file to imported package or relative module target.
+- `DECLARES_ROUTE`: file to route.
+- `EXPOSES_ROUTE`: project to route.
+- `DECLARES_SYMBOL`: file to exported function or class.
+- `CALLS_HTTP`: file to route target inferred from `fetch` or `axios`.
+- `CALLS_SERVICE`: file to a service-like target inferred from environment
+  URL names.
+- `DEFINES`: SQL file to SQL object declaration.
+- `CALLS_SQL`: file to stored procedure target.
+- `READS_SQL_OBJECT`: file to table, view, function, or procedure target.
+
+Scanner-derived reference edges include evidence in `properties`, such as
+`raw_target`, `normalized_target`, dependency type, HTTP method, target path,
+target environment variable, or SQL object name.
 
 ## Unresolved Edges
 
@@ -63,6 +95,12 @@ If a target matches multiple possible entities, the edge remains unresolved and
 includes `properties.resolution_status = "ambiguous"` plus a bounded
 `resolution_candidates` list. This avoids silently linking a reference to the
 wrong repository or database object.
+
+Service-like targets are resolved in priority order: explicit `service`
+entities first, then `project`, then `repository`. This lets an environment URL
+such as `INVENTORY_SERVICE_URL` resolve to a discovered project named or
+aliased `inventory-service` without being treated as an ambiguous match with
+its parent repository.
 
 ## Neo4j Mapping
 

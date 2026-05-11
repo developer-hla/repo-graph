@@ -192,6 +192,14 @@ def resolution_candidates(
     target_type: str | None,
     target_name: str,
 ) -> list[Entity]:
+    if target_type == "service":
+        for entity_types in (["service"], ["project"], ["repository"]):
+            candidates = [
+                candidate for entity_type in entity_types for candidate in lookup.get((entity_type, target_name), [])
+            ]
+            if candidates:
+                return dedupe_entities(candidates)
+
     candidates: list[Entity] = []
     for entity_type in resolution_entity_types(target_type):
         candidates.extend(lookup.get((entity_type, target_name), []))
@@ -203,6 +211,8 @@ def resolution_candidates(
 def resolution_entity_types(target_type: str | None) -> list[str | None]:
     if target_type == "sql_object":
         return ["sql_table", "sql_view", "sql_function", "stored_procedure"]
+    if target_type == "service":
+        return ["service", "project", "repository"]
     if target_type:
         return [target_type]
     return [None]

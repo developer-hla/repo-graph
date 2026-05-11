@@ -3,7 +3,14 @@ import { formatThing } from "@example/shared";
 
 const server = fastify();
 
-server.get("/things/:id", async () => {
+export async function loadThing(id: string) {
+  const response = await fetch(`/things/${id}`);
+  await fetch(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
+  return response.json();
+}
+
+server.get("/things/:id", async request => {
   const query = "EXEC dbo.get_thing_by_id";
+  await loadThing("42");
   return formatThing(query);
 });

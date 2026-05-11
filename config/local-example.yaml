@@ -8,6 +8,14 @@ sources:
     path: ../examples/api-service
 
   - type: local_path
+    name: shared-library
+    path: ../examples/shared-library
+
+  - type: local_path
+    name: inventory-service
+    path: ../examples/inventory-service
+
+  - type: local_path
     name: database-project
     path: ../examples/database-project
 
