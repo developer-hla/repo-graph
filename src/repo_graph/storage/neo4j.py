@@ -148,6 +148,253 @@ def read_graph_stats(settings: Neo4jSettings) -> dict[str, Any]:
     return dict(record)
 
 
+def search_entities(
+    settings: Neo4jSettings,
+    query: str | None = None,
+    entity_type: str | None = None,
+    source_name: str | None = None,
+    limit: int = 25,
+) -> list[dict[str, Any]]:
+    params = {
+        "search_text": lower_filter(query),
+        "entity_type": optional_filter(entity_type),
+        "source_name": optional_filter(source_name),
+        "limit": normalize_limit(limit, maximum=100),
+    }
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            records = session.run(
+                """
+                MATCH (entity:RepoGraphEntity)
+                WHERE
+                  ($search_text IS NULL
+                    OR toLower(coalesce(entity.name, "")) CONTAINS $search_text
+                    OR toLower(coalesce(entity.entity_id, "")) = $search_text
+                    OR toLower(coalesce(entity.file_path, "")) CONTAINS $search_text
+                    OR toLower(coalesce(entity.property_full_name, "")) CONTAINS $search_text
+                    OR any(alias IN coalesce(entity.aliases, [])
+                      WHERE toLower(toString(alias)) CONTAINS $search_text))
+                  AND ($entity_type IS NULL OR entity.entity_type = $entity_type)
+                  AND ($source_name IS NULL OR entity.source_name = $source_name)
+                RETURN entity
+                ORDER BY entity.entity_type, entity.source_name, entity.name
+                LIMIT $limit
+                """,
+                **params,
+            )
+            return [entity_payload(record["entity"]) for record in records]
+
+
+def get_entity(settings: Neo4jSettings, entity_id: str) -> dict[str, Any] | None:
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            record = session.run(
+                """
+                MATCH (entity:RepoGraphEntity {entity_id: $entity_id})
+                RETURN entity
+                LIMIT 1
+                """,
+                entity_id=entity_id,
+            ).single()
+    if record is None:
+        return None
+    return entity_payload(record["entity"])
+
+
+def get_entity_neighbors(
+    settings: Neo4jSettings,
+    entity_id: str,
+    direction: str = "both",
+    edge_type: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    normalized_direction = normalize_direction(direction)
+    normalized_limit = normalize_limit(limit, maximum=200)
+    params = {
+        "entity_id": entity_id,
+        "edge_type": optional_filter(edge_type),
+        "limit": normalized_limit,
+    }
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            records: list[Any] = []
+            if normalized_direction in {"out", "both"}:
+                records.extend(session.run(outgoing_neighbors_query(), **params))
+            if normalized_direction in {"in", "both"}:
+                records.extend(session.run(incoming_neighbors_query(), **params))
+
+    return [neighbor_payload(record) for record in records[:normalized_limit]]
+
+
+def list_unresolved_edges(
+    settings: Neo4jSettings,
+    source_name: str | None = None,
+    edge_type: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    params = {
+        "source_name": optional_filter(source_name),
+        "edge_type": optional_filter(edge_type),
+        "limit": normalize_limit(limit, maximum=200),
+    }
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            records = session.run(
+                """
+                MATCH (source:RepoGraphEntity)-[edge]->(target:RepoGraphTarget)
+                WHERE edge.edge_id IS NOT NULL
+                  AND ($source_name IS NULL OR edge.source_name = $source_name)
+                  AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
+                RETURN source, edge, target
+                ORDER BY edge.source_name, edge.edge_type, edge.to_name
+                LIMIT $limit
+                """,
+                **params,
+            )
+            return [unresolved_edge_payload(record) for record in records]
+
+
+def outgoing_neighbors_query() -> str:
+    return """
+        MATCH (:RepoGraphEntity {entity_id: $entity_id})-[edge]->(neighbor)
+        WHERE edge.edge_id IS NOT NULL
+          AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
+        RETURN edge, neighbor, labels(neighbor) AS labels, "out" AS direction
+        ORDER BY edge.edge_type, edge.to_name
+        LIMIT $limit
+    """
+
+
+def incoming_neighbors_query() -> str:
+    return """
+        MATCH (neighbor)-[edge]->(:RepoGraphEntity {entity_id: $entity_id})
+        WHERE edge.edge_id IS NOT NULL
+          AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
+        RETURN edge, neighbor, labels(neighbor) AS labels, "in" AS direction
+        ORDER BY edge.edge_type, edge.from_name
+        LIMIT $limit
+    """
+
+
+def entity_payload(entity: Mapping[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "entity_id": entity.get("entity_id"),
+            "entity_type": entity.get("entity_type"),
+            "name": entity.get("name"),
+            "source_name": entity.get("source_name"),
+            "file_path": entity.get("file_path"),
+            "line_number": entity.get("line_number"),
+            "aliases": entity.get("aliases", []),
+            "properties": json_object(entity.get("properties_json")),
+        }
+    )
+
+
+def target_payload(target: Mapping[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "target_id": target.get("target_id"),
+            "name": target.get("name"),
+            "target_type": target.get("target_type"),
+            "source_name": target.get("source_name"),
+            "resolved": target.get("resolved", False),
+        }
+    )
+
+
+def edge_payload(edge: Mapping[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "edge_id": edge.get("edge_id"),
+            "edge_type": edge.get("edge_type"),
+            "from_entity_id": edge.get("from_entity_id"),
+            "from_name": edge.get("from_name"),
+            "from_type": edge.get("from_type"),
+            "to_entity_id": edge.get("to_entity_id"),
+            "to_name": edge.get("to_name"),
+            "to_type": edge.get("to_type"),
+            "resolved": edge.get("resolved", False),
+            "source_name": edge.get("source_name"),
+            "file_path": edge.get("file_path"),
+            "line_number": edge.get("line_number"),
+            "confidence": edge.get("confidence"),
+            "parser": edge.get("parser"),
+            "properties": json_object(edge.get("properties_json")),
+        }
+    )
+
+
+def neighbor_payload(record: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "direction": record["direction"],
+        "edge": edge_payload(record["edge"]),
+        "neighbor": graph_node_payload(record["neighbor"], record.get("labels", [])),
+    }
+
+
+def unresolved_edge_payload(record: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "source": entity_payload(record["source"]),
+        "edge": edge_payload(record["edge"]),
+        "target": target_payload(record["target"]),
+    }
+
+
+def graph_node_payload(node: Mapping[str, Any], labels: Iterable[str]) -> dict[str, Any]:
+    if "RepoGraphTarget" in labels:
+        return target_payload(node)
+    return entity_payload(node)
+
+
+def json_object(value: Any) -> dict[str, Any]:
+    if not isinstance(value, str) or not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
+
+
+def compact_dict(values: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def optional_filter(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    return value.strip()
+
+
+def lower_filter(value: str | None) -> str | None:
+    normalized = optional_filter(value)
+    if normalized is None:
+        return None
+    return normalized.lower()
+
+
+def normalize_limit(value: int, maximum: int) -> int:
+    if value < 1:
+        raise ValueError("Limit must be at least 1.")
+    if value > maximum:
+        raise ValueError(f"Limit must be at most {maximum}.")
+    return value
+
+
+def normalize_direction(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in {"in", "out", "both"}:
+        raise ValueError("Direction must be one of: in, out, both.")
+    return normalized
+
+
 def graph_items(graph_data: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
     raw_items = graph_data.get(key, [])
     if not isinstance(raw_items, list):

@@ -5,10 +5,16 @@ from __future__ import annotations
 import unittest
 
 from repo_graph.storage.neo4j import (
+    edge_payload,
     edge_record,
+    entity_payload,
     entity_record,
+    graph_node_payload,
     load_summary,
+    normalize_direction,
+    normalize_limit,
     sanitize_relationship_type,
+    target_payload,
     unresolved_target_records,
 )
 
@@ -89,6 +95,59 @@ class Neo4jStorageTests(unittest.TestCase):
         self.assertEqual(summary.edge_count, 2)
         self.assertEqual(summary.resolved_edge_count, 1)
         self.assertEqual(summary.unresolved_target_count, 1)
+
+    def test_entity_payload_restores_nested_properties(self) -> None:
+        payload = entity_payload(
+            {
+                "entity_id": "entity-1",
+                "entity_type": "api_route",
+                "name": "GET /accounts",
+                "source_name": "api-service",
+                "properties_json": '{"method": "GET", "path": "/accounts"}',
+            }
+        )
+
+        self.assertEqual(payload["entity_id"], "entity-1")
+        self.assertEqual(payload["properties"]["method"], "GET")
+
+    def test_edge_payload_restores_nested_properties(self) -> None:
+        payload = edge_payload(
+            {
+                "edge_id": "edge-1",
+                "edge_type": "IMPORTS",
+                "from_entity_id": "file-1",
+                "to_name": "express",
+                "resolved": False,
+                "properties_json": '{"resolution_status": "ambiguous"}',
+            }
+        )
+
+        self.assertEqual(payload["edge_type"], "IMPORTS")
+        self.assertEqual(payload["properties"]["resolution_status"], "ambiguous")
+
+    def test_graph_node_payload_uses_target_shape_for_targets(self) -> None:
+        payload = graph_node_payload(
+            {"target_id": "target-1", "name": "dbo.Missing", "target_type": "stored_procedure"},
+            ["RepoGraphTarget"],
+        )
+
+        self.assertEqual(payload, target_payload(payload))
+        self.assertEqual(payload["target_id"], "target-1")
+
+    def test_normalize_limit_rejects_out_of_range_values(self) -> None:
+        self.assertEqual(normalize_limit(25, maximum=100), 25)
+
+        with self.assertRaises(ValueError):
+            normalize_limit(0, maximum=100)
+
+        with self.assertRaises(ValueError):
+            normalize_limit(101, maximum=100)
+
+    def test_normalize_direction_accepts_only_supported_values(self) -> None:
+        self.assertEqual(normalize_direction("OUT"), "out")
+
+        with self.assertRaises(ValueError):
+            normalize_direction("sideways")
 
 
 if __name__ == "__main__":

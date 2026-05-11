@@ -110,6 +110,16 @@ relationships derived from graph edge types.
 The manifest tells agents how to use the running graph and what scope was
 loaded.
 
+The first public query surface should use purpose-built read endpoints:
+
+- `GET /entities/search`
+- `GET /entities/{entity_id}`
+- `GET /entities/{entity_id}/neighbors`
+- `GET /edges/unresolved`
+
+Raw Cypher should stay unavailable until there is an explicit read-only mode
+and clear result limits.
+
 ## CLI MVP
 
 ```bash

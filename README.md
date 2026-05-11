@@ -120,6 +120,17 @@ REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
 pixi run repo-graph stats
 ```
 
+Read-only query endpoints are available for agents and local tools:
+
+```bash
+curl "http://localhost:8000/entities/search?type=api_route"
+curl "http://localhost:8000/entities/<entity_id>/neighbors"
+curl "http://localhost:8000/edges/unresolved"
+```
+
+See [docs/agent-usage.md](docs/agent-usage.md) for endpoint examples and agent
+guidance. Raw Cypher is intentionally not exposed yet.
+
 ## Repository Layout
 
 ```text
@@ -131,6 +142,7 @@ config/                 Example source profiles
 docker-compose.yaml     Local API plus Neo4j runtime
 docs/spec.md            MVP planning spec
 docs/schema.md          Current JSON graph shape
+docs/agent-usage.md     Agent query API examples
 docs/public-release.md  Public release checklist
 examples/               Offline demo sources
 src/repo_graph/         Tool implementation

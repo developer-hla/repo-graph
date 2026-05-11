@@ -7,12 +7,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from repo_graph import __version__
 from repo_graph.config import load_config
-from repo_graph.storage.neo4j import Neo4jSettings, load_graph_path, read_graph_stats
+from repo_graph.storage.neo4j import (
+    Neo4jSettings,
+    get_entity,
+    get_entity_neighbors,
+    list_unresolved_edges,
+    load_graph_path,
+    read_graph_stats,
+    search_entities,
+)
 
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
 DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
@@ -100,10 +108,15 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "POST", "path": "/load", "available": True},
             {"method": "POST", "path": "/query", "available": False},
             {"method": "GET", "path": "/stats", "available": True},
+            {"method": "GET", "path": "/entities/search", "available": True},
+            {"method": "GET", "path": "/entities/{entity_id}", "available": True},
+            {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
+            {"method": "GET", "path": "/edges/unresolved", "available": True},
         ],
         "agent_guidance": {
             "purpose": "Discover the local Repo Graph runtime and supported API surface.",
-            "query_api_status": "planned",
+            "query_api_status": "safe read endpoints available",
+            "raw_cypher_status": "planned",
             "graph_loader_status": "available",
         },
     }
@@ -132,6 +145,74 @@ def load_response(settings: RuntimeSettings, request: LoadRequest) -> dict[str, 
         "graph_path": str(graph_path),
         "summary": summary.to_dict(),
     }
+
+
+def search_entities_response(
+    settings: RuntimeSettings,
+    query: str | None,
+    entity_type: str | None,
+    source_name: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    items = search_entities(
+        settings.neo4j_settings(),
+        query=query,
+        entity_type=entity_type,
+        source_name=source_name,
+        limit=limit,
+    )
+    return {"items": items, "count": len(items)}
+
+
+def entity_response(settings: RuntimeSettings, entity_id: str) -> dict[str, Any]:
+    entity = get_entity(settings.neo4j_settings(), entity_id)
+    if entity is None:
+        raise KeyError(entity_id)
+    return entity
+
+
+def neighbors_response(
+    settings: RuntimeSettings,
+    entity_id: str,
+    direction: str,
+    edge_type: str | None,
+    depth: int,
+    limit: int,
+) -> dict[str, Any]:
+    if depth != 1:
+        raise ValueError("Only depth=1 is supported.")
+    items = get_entity_neighbors(
+        settings.neo4j_settings(),
+        entity_id,
+        direction=direction,
+        edge_type=edge_type,
+        limit=limit,
+    )
+    return {
+        "entity_id": entity_id,
+        "direction": direction,
+        "depth": depth,
+        "items": items,
+        "count": len(items),
+    }
+
+
+def unresolved_edges_response(
+    settings: RuntimeSettings,
+    source_name: str | None,
+    edge_type: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    items = list_unresolved_edges(settings.neo4j_settings(), source_name=source_name, edge_type=edge_type, limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+def neo4j_http_exception(operation: str, exc: Exception) -> HTTPException:
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, KeyError):
+        return HTTPException(status_code=404, detail=f"Entity not found: {exc.args[0]}")
+    return HTTPException(status_code=503, detail=f"Neo4j {operation} failed: {exc}")
 
 
 def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
@@ -165,6 +246,49 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Neo4j stats failed: {exc}") from exc
+
+    @app.get("/entities/search")
+    def search_entities_endpoint(
+        q: str | None = None,
+        entity_type: str | None = Query(default=None, alias="type"),
+        source: str | None = None,
+        limit: int = Query(default=25, ge=1, le=100),
+    ) -> dict[str, Any]:
+        try:
+            return search_entities_response(runtime_settings, q, entity_type, source, limit)
+        except Exception as exc:
+            raise neo4j_http_exception("entity search", exc) from exc
+
+    @app.get("/entities/{entity_id}")
+    def get_entity_endpoint(entity_id: str) -> dict[str, Any]:
+        try:
+            return entity_response(runtime_settings, entity_id)
+        except Exception as exc:
+            raise neo4j_http_exception("entity lookup", exc) from exc
+
+    @app.get("/entities/{entity_id}/neighbors")
+    def get_neighbors_endpoint(
+        entity_id: str,
+        direction: str = "both",
+        depth: int = Query(default=1, ge=1, le=1),
+        edge_type: str | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return neighbors_response(runtime_settings, entity_id, direction, edge_type, depth, limit)
+        except Exception as exc:
+            raise neo4j_http_exception("neighbor lookup", exc) from exc
+
+    @app.get("/edges/unresolved")
+    def get_unresolved_edges_endpoint(
+        source: str | None = None,
+        edge_type: str | None = Query(default=None, alias="type"),
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return unresolved_edges_response(runtime_settings, source, edge_type, limit)
+        except Exception as exc:
+            raise neo4j_http_exception("unresolved edge lookup", exc) from exc
 
     return app
 

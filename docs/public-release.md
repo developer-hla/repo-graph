@@ -8,6 +8,7 @@ Use this checklist before making Repo Graph public.
 - `README.md` describes the alpha status, quickstart, and privacy model.
 - `CONTRIBUTING.md` explains setup, checks, and public-safety rules.
 - `SECURITY.md` explains vulnerability reporting and sensitive data handling.
+- `docs/agent-usage.md` explains the local agent query contract.
 - CI runs on pull requests and pushes to `main`.
 - Generated files are ignored and not committed.
 
