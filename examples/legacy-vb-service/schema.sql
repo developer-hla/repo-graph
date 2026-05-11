@@ -1,0 +1,2 @@
+CREATE PROCEDURE dbo.GetOrder AS
+SELECT 1;

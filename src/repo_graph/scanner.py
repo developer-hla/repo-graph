@@ -23,8 +23,11 @@ MAX_FILE_BYTES = 1_000_000
 DOTNET_PROJECT_SUFFIXES = {".csproj", ".fsproj", ".vbproj"}
 DOTNET_BUILD_SUFFIXES = {".props", ".targets"}
 MANIFEST_FILENAMES = {
+    "App.config",
     "Directory.Build.props",
+    "Web.config",
     "package.json",
+    "packages.config",
     "pnpm-workspace.yaml",
     "pyproject.toml",
     "requirements.txt",
@@ -55,6 +58,26 @@ AXIOS_RE = re.compile(
 ENV_URL_RE = re.compile(r"(?:process\.env\.|import\.meta\.env\.)([A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST))")
 REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)")
 SLN_PROJECT_RE = re.compile(r'^Project\("[^"]+"\)\s*=\s*"([^"]+)",\s*"([^"]+)"')
+VB_ATTRIBUTE_RE = re.compile(r"^\s*<\s*([A-Za-z_][\w.]*)", re.IGNORECASE)
+VB_NAMESPACE_RE = re.compile(r"^\s*Namespace\s+([A-Za-z_][\w.]*)", re.IGNORECASE)
+VB_TYPE_RE = re.compile(
+    r"^\s*(?:(?:Public|Private|Friend|Protected|Partial|MustInherit|NotInheritable)\s+)*"
+    r"(Class|Module|Interface)\s+([A-Za-z_]\w*)",
+    re.IGNORECASE,
+)
+VB_METHOD_RE = re.compile(
+    r"^\s*(?:(?:Public|Private|Protected|Friend|Shared|Overrides|Overridable|Async|Static)\s+)*"
+    r"(Function|Sub)\s+([A-Za-z_]\w*)",
+    re.IGNORECASE,
+)
+VB_CONFIG_SETTING_RE = re.compile(r"ConfigurationManager\.AppSettings\s*\(\s*\"([^\"]+)\"\s*\)", re.IGNORECASE)
+VB_COMMAND_TEXT_RE = re.compile(r"\.CommandText\s*=\s*\"([^\"]+)\"", re.IGNORECASE)
+VB_SQL_COMMAND_RE = re.compile(r"New\s+SqlCommand\s*\(\s*\"([^\"]+)\"", re.IGNORECASE)
+VB_HTTP_LITERAL_RE = re.compile(
+    r"(?:WebRequest\.Create|WebClient\(\)\.(?:DownloadString|OpenRead|UploadString)|\.DownloadString|\.OpenRead)"
+    r"\s*\(\s*\"([^\"]+)\"",
+    re.IGNORECASE,
+)
 SQL_OBJECT_RE = re.compile(
     r"\bCREATE\s+(?:OR\s+ALTER\s+)?(?:PROCEDURE|PROC|TABLE|VIEW|FUNCTION)\s+([\[\]\w.]+)",
     re.IGNORECASE,
@@ -133,9 +156,13 @@ def default_extractors() -> list[FileExtractor]:
         PythonProjectExtractor(),
         PythonRequirementsExtractor(),
         DotnetProjectExtractor(),
+        DotnetPackagesConfigExtractor(),
+        DotnetFrameworkConfigExtractor(),
         DotnetBuildConfigExtractor(),
         DotnetSolutionExtractor(),
         PnpmWorkspaceExtractor(),
+        LegacyDotnetEndpointExtractor(),
+        VbCodeExtractor(),
         JavaScriptExtractor(),
         SqlExtractor(),
         SqlReferenceExtractor(),
@@ -227,6 +254,8 @@ def project_info_for_manifest(
         return dotnet_project_info(source, repo_entity, manifest_path)
     if manifest_path.suffix.lower() == ".sln":
         return dotnet_solution_project_info(source, repo_entity, manifest_path)
+    if manifest_path.name in {"App.config", "Web.config", "packages.config"}:
+        return None
     return None
 
 
@@ -662,6 +691,85 @@ class DotnetProjectExtractor:
         return result
 
 
+class DotnetPackagesConfigExtractor:
+    name = "packages_config"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).name == "packages.config"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        root = xml_root(content, context)
+        dependency_source = context.project.entity if context.project else context.file_entity
+        config_entity = config_file_entity(context, "packages_config")
+        result.entities.append(config_entity)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                config_entity,
+                "DECLARES_CONFIG_FILE",
+                context.source.name,
+                context.rel_path,
+                self.name,
+            )
+        )
+        for dependency in packages_config_references(root):
+            result.edges.append(
+                package_dependency_edge(
+                    dependency_source,
+                    dependency["name"],
+                    "dotnet",
+                    "packages.config",
+                    dependency["version"],
+                    dependency["raw_target"],
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+        return result
+
+
+class DotnetFrameworkConfigExtractor:
+    name = "dotnet_framework_config"
+
+    def can_process(self, rel_path: str) -> bool:
+        path = Path(rel_path)
+        return path.suffix.lower() == ".config" and path.name != "packages.config"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        root = xml_root(content, context)
+        config_entity = config_file_entity(context, "dotnet_framework_config")
+        result.entities.append(config_entity)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                config_entity,
+                "DECLARES_CONFIG_FILE",
+                context.source.name,
+                context.rel_path,
+                self.name,
+            )
+        )
+        for config_value in framework_config_values(context, root):
+            result.entities.append(config_value)
+            result.edges.append(
+                resolved_edge(
+                    config_entity,
+                    config_value,
+                    "DECLARES_CONFIG",
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+            service_edge = config_service_edge(config_value, context, self.name)
+            if service_edge:
+                result.edges.append(service_edge)
+        return result
+
+
 class DotnetBuildConfigExtractor:
     name = "dotnet_build_config"
 
@@ -802,6 +910,99 @@ class PnpmWorkspaceExtractor:
         return result
 
 
+class LegacyDotnetEndpointExtractor:
+    name = "legacy_dotnet_endpoint"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).suffix.lower() in {".asmx", ".svc"}
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        suffix = Path(context.rel_path).suffix.lower()
+        framework = "asmx" if suffix == ".asmx" else "wcf"
+        path = "/" + context.rel_path.replace("\\", "/")
+        route = route_entity(context, "POST", path, 1, framework, operation_name=None)
+        result.entities.append(route)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                route,
+                "DECLARES_ROUTE",
+                context.source.name,
+                context.rel_path,
+                self.name,
+                1,
+            )
+        )
+        if context.project:
+            result.edges.append(
+                resolved_edge(
+                    context.project.entity,
+                    route,
+                    "EXPOSES_ROUTE",
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                    1,
+                )
+            )
+        return result
+
+
+class VbCodeExtractor:
+    name = "vb_code"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).suffix.lower() == ".vb"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        namespace: str | None = None
+        current_type: str | None = None
+        pending_attributes: list[str] = []
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            attribute_match = VB_ATTRIBUTE_RE.match(line)
+            if attribute_match:
+                pending_attributes.append(attribute_match.group(1).lower())
+                continue
+
+            namespace_match = VB_NAMESPACE_RE.match(line)
+            if namespace_match:
+                namespace = namespace_match.group(1)
+
+            type_match = VB_TYPE_RE.match(line)
+            if type_match:
+                current_type = type_match.group(2)
+                result.extend(
+                    vb_symbol_result(context, type_match.group(1).lower(), current_type, namespace, line_number)
+                )
+                pending_attributes = []
+                continue
+
+            method_match = VB_METHOD_RE.match(line)
+            if method_match:
+                method_name = method_match.group(2)
+                result.extend(
+                    vb_symbol_result(
+                        context,
+                        method_match.group(1).lower(),
+                        method_name,
+                        namespace,
+                        line_number,
+                        parent_name=current_type,
+                    )
+                )
+                result.extend(vb_contract_route_result(context, method_name, pending_attributes, line_number))
+                pending_attributes = []
+
+            result.edges.extend(vb_service_call_edges(context, line, line_number))
+            result.edges.extend(vb_sql_command_edges(context, line, line_number))
+
+            if not attribute_match and line.strip():
+                pending_attributes = []
+        return result
+
+
 class JavaScriptExtractor:
     name = "javascript"
 
@@ -893,26 +1094,12 @@ def route_entities_and_edges(context: FileScanContext, line: str, line_number: i
 
 def add_route(context: FileScanContext, method: str, path: str, line_number: int, parser: str) -> ScanResult:
     result = ScanResult()
-    normalized_path = normalize_route_path(path)
-    route_entity = Entity(
-        entity_type="api_route",
-        name=f"{method} {path}",
-        source_name=context.source.name,
-        file_path=context.rel_path,
-        line_number=line_number,
-        aliases={f"{method} {normalized_path}", normalized_path, path},
-        properties={
-            "method": method,
-            "path": path,
-            "normalized_path": normalized_path,
-            "project": context.project.name if context.project else None,
-        },
-    )
-    result.entities.append(route_entity)
+    route = route_entity(context, method, path, line_number, parser, operation_name=None)
+    result.entities.append(route)
     result.edges.append(
         resolved_edge(
             context.file_entity,
-            route_entity,
+            route,
             "DECLARES_ROUTE",
             context.source.name,
             context.rel_path,
@@ -924,7 +1111,7 @@ def add_route(context: FileScanContext, method: str, path: str, line_number: int
         result.edges.append(
             resolved_edge(
                 context.project.entity,
-                route_entity,
+                route,
                 "EXPOSES_ROUTE",
                 context.source.name,
                 context.rel_path,
@@ -933,6 +1120,35 @@ def add_route(context: FileScanContext, method: str, path: str, line_number: int
             )
         )
     return result
+
+
+def route_entity(
+    context: FileScanContext,
+    method: str,
+    path: str,
+    line_number: int,
+    parser: str,
+    operation_name: str | None,
+) -> Entity:
+    normalized_path = normalize_route_path(path)
+    properties = {
+        "method": method,
+        "path": path,
+        "normalized_path": normalized_path,
+        "project": context.project.name if context.project else None,
+        "parser": parser,
+    }
+    if operation_name:
+        properties["operation_name"] = operation_name
+    return Entity(
+        entity_type="api_route",
+        name=f"{method} {path}",
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        line_number=line_number,
+        aliases={f"{method} {normalized_path}", normalized_path, path},
+        properties=properties,
+    )
 
 
 def export_entities_and_edges(context: FileScanContext, line: str, line_number: int) -> ScanResult:
@@ -1494,6 +1710,20 @@ def dotnet_project_references(root: ET.Element) -> Iterable[dict[str, str | None
         }
 
 
+def packages_config_references(root: ET.Element) -> Iterable[dict[str, str | None]]:
+    for element in root.iter():
+        if xml_local_name(element.tag) != "package":
+            continue
+        package_name = string_value(element.attrib.get("id"))
+        if not package_name:
+            continue
+        yield {
+            "name": package_name,
+            "version": string_value(element.attrib.get("version")),
+            "raw_target": package_name,
+        }
+
+
 def solution_project_reference(line: str) -> dict[str, str | None] | None:
     match = SLN_PROJECT_RE.match(line)
     if not match:
@@ -1507,6 +1737,342 @@ def solution_project_reference(line: str) -> dict[str, str | None] | None:
         "raw_target": raw_path,
         "normalized_target": Path(raw_path).stem,
     }
+
+
+def config_file_entity(context: FileScanContext, config_kind: str) -> Entity:
+    name = Path(context.rel_path).name
+    return Entity(
+        entity_type="config_file",
+        name=name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        aliases={name, context.rel_path},
+        properties={
+            "config_kind": config_kind,
+            "ecosystem": "dotnet",
+            "path": context.rel_path,
+            "project": context.project.name if context.project else None,
+        },
+    )
+
+
+def framework_config_values(context: FileScanContext, root: ET.Element) -> Iterable[Entity]:
+    for section in root.iter():
+        section_name = xml_local_name(section.tag)
+        if section_name == "appSettings":
+            for child in section:
+                if xml_local_name(child.tag) == "add":
+                    key = string_value(child.attrib.get("key"))
+                    if key:
+                        yield config_value_entity(
+                            context,
+                            key,
+                            "app_setting",
+                            {
+                                "key": key,
+                                "has_value": string_value(child.attrib.get("value")) is not None,
+                                "target_url": url_value(child.attrib.get("value")),
+                            },
+                        )
+        elif section_name == "connectionStrings":
+            for child in section:
+                if xml_local_name(child.tag) == "add":
+                    name = string_value(child.attrib.get("name"))
+                    if name:
+                        yield config_value_entity(
+                            context,
+                            name,
+                            "connection_string",
+                            {
+                                "key": name,
+                                "provider_name": string_value(child.attrib.get("providerName")),
+                                "has_value": string_value(child.attrib.get("connectionString")) is not None,
+                            },
+                        )
+        elif section_name == "client":
+            for child in section:
+                if xml_local_name(child.tag) == "endpoint":
+                    name = string_value(child.attrib.get("name")) or string_value(child.attrib.get("contract"))
+                    address = url_value(child.attrib.get("address"))
+                    if name or address:
+                        yield config_value_entity(
+                            context,
+                            name or address or "endpoint",
+                            "wcf_endpoint",
+                            {
+                                "key": name,
+                                "contract": string_value(child.attrib.get("contract")),
+                                "binding": string_value(child.attrib.get("binding")),
+                                "target_url": address,
+                            },
+                        )
+
+
+def config_value_entity(
+    context: FileScanContext,
+    name: str,
+    value_kind: str,
+    properties: dict[str, Any],
+) -> Entity:
+    entity_name = f"{value_kind}:{name}"
+    return Entity(
+        entity_type="config_value",
+        name=entity_name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        aliases={name, entity_name},
+        properties={
+            "display_name": name,
+            "value_kind": value_kind,
+            "project": context.project.name if context.project else None,
+            **{key: value for key, value in properties.items() if value is not None},
+        },
+    )
+
+
+def config_service_edge(config_value: Entity, context: FileScanContext, parser: str) -> Edge | None:
+    raw_target = config_value.properties.get("target_url")
+    if not isinstance(raw_target, str):
+        return None
+    key = config_value.properties.get("key")
+    contract = config_value.properties.get("contract")
+    service_name = service_name_from_identifier(key or contract or service_name_from_url(raw_target))
+    target = http_target(raw_target, "GET")
+    target["service_name"] = service_name
+    return unresolved_edge(
+        config_value,
+        service_name,
+        "CONFIGURES_SERVICE",
+        context.source.name,
+        context.rel_path,
+        parser,
+        to_type="service",
+        properties=target,
+    )
+
+
+def url_value(value: object) -> str | None:
+    raw_value = string_value(value)
+    if not raw_value:
+        return None
+    parsed = urlparse(raw_value)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return raw_value
+    return None
+
+
+def service_name_from_url(raw_target: str) -> str:
+    host = urlparse(raw_target).hostname
+    if not host:
+        return "external-service"
+    first_label = host.split(".", 1)[0]
+    return service_name_from_identifier(first_label)
+
+
+def service_name_from_identifier(value: object) -> str:
+    raw_value = string_value(value) or "external-service"
+    normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", raw_value)
+    normalized = re.sub(r"(?:Base)?(?:Url|Uri|Endpoint|Host)$", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"[^A-Za-z0-9]+", "-", normalized).strip("-").lower()
+    return normalized or "external-service"
+
+
+def vb_symbol_result(
+    context: FileScanContext,
+    symbol_kind: str,
+    name: str,
+    namespace: str | None,
+    line_number: int,
+    parent_name: str | None = None,
+) -> ScanResult:
+    result = ScanResult()
+    entity_type = "function" if symbol_kind in {"function", "sub"} else symbol_kind
+    full_name = ".".join(part for part in (namespace, parent_name, name) if part)
+    symbol = Entity(
+        entity_type=entity_type,
+        name=full_name or name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        line_number=line_number,
+        aliases={name, full_name or name},
+        properties={
+            "symbol_kind": symbol_kind,
+            "namespace": namespace,
+            "parent": parent_name,
+            "project": context.project.name if context.project else None,
+        },
+    )
+    result.entities.append(symbol)
+    result.edges.append(
+        resolved_edge(
+            context.file_entity,
+            symbol,
+            "DECLARES_SYMBOL",
+            context.source.name,
+            context.rel_path,
+            "vb_symbol",
+            line_number,
+        )
+    )
+    return result
+
+
+def vb_contract_route_result(
+    context: FileScanContext,
+    method_name: str,
+    attributes: Sequence[str],
+    line_number: int,
+) -> ScanResult:
+    result = ScanResult()
+    framework = legacy_contract_framework(attributes)
+    if not framework:
+        return result
+    service_path = legacy_dotnet_service_path(context.rel_path, framework)
+    route = route_entity(
+        context,
+        "POST",
+        f"{service_path}/{method_name}",
+        line_number,
+        "vb_contract_route",
+        operation_name=method_name,
+    )
+    result.entities.append(route)
+    result.edges.append(
+        resolved_edge(
+            context.file_entity,
+            route,
+            "DECLARES_ROUTE",
+            context.source.name,
+            context.rel_path,
+            "vb_contract_route",
+            line_number,
+        )
+    )
+    if context.project:
+        result.edges.append(
+            resolved_edge(
+                context.project.entity,
+                route,
+                "EXPOSES_ROUTE",
+                context.source.name,
+                context.rel_path,
+                "vb_contract_route",
+                line_number,
+            )
+        )
+    return result
+
+
+def legacy_contract_framework(attributes: Sequence[str]) -> str | None:
+    names = {attribute.rsplit(".", 1)[-1].lower() for attribute in attributes}
+    if "webmethod" in names:
+        return "asmx"
+    if "operationcontract" in names:
+        return "wcf"
+    return None
+
+
+def legacy_dotnet_service_path(rel_path: str, framework: str) -> str:
+    path = rel_path.replace("\\", "/")
+    lower_path = path.lower()
+    if (framework == "asmx" and lower_path.endswith(".asmx.vb")) or (
+        framework == "wcf" and lower_path.endswith(".svc.vb")
+    ):
+        path = path[:-3]
+    elif lower_path.endswith(".vb"):
+        suffix = ".asmx" if framework == "asmx" else ".svc"
+        path = f"{path[:-3]}{suffix}"
+    return "/" + path
+
+
+def vb_service_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+    edges: list[Edge] = []
+    for match in VB_HTTP_LITERAL_RE.finditer(line):
+        edges.extend(legacy_http_edges_for_target(context, match.group(1), line_number, "vb_http"))
+    for match in VB_CONFIG_SETTING_RE.finditer(line):
+        key = match.group(1)
+        service_name = service_name_from_identifier(key)
+        edges.append(
+            unresolved_edge(
+                context.file_entity,
+                service_name,
+                "CALLS_SERVICE",
+                context.source.name,
+                context.rel_path,
+                "vb_config_service",
+                to_type="service",
+                line_number=line_number,
+                properties={
+                    "raw_target": key,
+                    "config_key": key,
+                    "service_name": service_name,
+                },
+            )
+        )
+    return edges
+
+
+def legacy_http_edges_for_target(
+    context: FileScanContext,
+    raw_target: str,
+    line_number: int,
+    parser: str,
+) -> list[Edge]:
+    parsed = urlparse(raw_target)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        target = http_target(raw_target, "GET")
+        target["service_name"] = service_name_from_url(raw_target)
+        return [
+            unresolved_edge(
+                context.file_entity,
+                target["service_name"],
+                "CALLS_SERVICE",
+                context.source.name,
+                context.rel_path,
+                parser,
+                to_type="service",
+                line_number=line_number,
+                properties=target,
+            )
+        ]
+    return http_edges_for_target(context, "GET", raw_target, line_number, parser)
+
+
+def vb_sql_command_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+    targets = [match.group(1) for match in VB_COMMAND_TEXT_RE.finditer(line)]
+    targets.extend(match.group(1) for match in VB_SQL_COMMAND_RE.finditer(line))
+    edges: list[Edge] = []
+    for target in targets:
+        normalized = stored_procedure_target(target)
+        if not normalized:
+            continue
+        edges.append(
+            unresolved_edge(
+                context.file_entity,
+                normalized,
+                "CALLS_SQL",
+                context.source.name,
+                context.rel_path,
+                "vb_sql_command",
+                to_type="stored_procedure",
+                line_number=line_number,
+                properties={
+                    "raw_target": target,
+                    "normalized_target": normalized,
+                },
+            )
+        )
+    return edges
+
+
+def stored_procedure_target(value: str) -> str | None:
+    exec_match = SQL_EXEC_RE.search(value)
+    if exec_match:
+        return normalize_sql_name(exec_match.group(1))
+    stripped = value.strip()
+    if re.fullmatch(r"[\[\]\w]+(?:\.[\[\]\w]+)+", stripped):
+        return normalize_sql_name(stripped)
+    return None
 
 
 def xml_root(content: str, context: FileScanContext) -> ET.Element:

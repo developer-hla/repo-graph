@@ -333,6 +333,152 @@ sources:
             )
         )
 
+    def test_build_graph_discovers_legacy_vb_dotnet_relationships(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            legacy_service = root / "legacy-service"
+            inventory_service = root / "inventory-service"
+            legacy_service.mkdir()
+            inventory_service.mkdir()
+
+            (inventory_service / "package.json").write_text(
+                '{"name": "@example/inventory-service"}',
+                encoding="utf-8",
+            )
+            (legacy_service / "Legacy.Service.vbproj").write_text(
+                """
+<Project ToolsVersion="15.0">
+  <PropertyGroup>
+    <RootNamespace>Example.Legacy</RootNamespace>
+    <AssemblyName>Legacy.Service</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+  </PropertyGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            (legacy_service / "packages.config").write_text(
+                """
+<packages>
+  <package id="Newtonsoft.Json" version="13.0.3" targetFramework="net48" />
+</packages>
+""",
+                encoding="utf-8",
+            )
+            (legacy_service / "Web.config").write_text(
+                """
+<configuration>
+  <appSettings>
+    <add key="InventoryServiceUrl" value="http://inventory-service/api" />
+  </appSettings>
+  <connectionStrings>
+    <add name="MainDb" connectionString="Server=example;Database=example;" providerName="System.Data.SqlClient" />
+  </connectionStrings>
+  <system.serviceModel>
+    <client>
+      <endpoint name="InventoryServiceUrl"
+                address="http://inventory-service/Inventory.svc"
+                binding="basicHttpBinding"
+                contract="Example.IInventory" />
+    </client>
+  </system.serviceModel>
+</configuration>
+""",
+                encoding="utf-8",
+            )
+            (legacy_service / "LegacyOrderService.asmx").write_text(
+                '<%@ WebService Language="VB" CodeBehind="LegacyOrderService.asmx.vb" '
+                'Class="Example.Legacy.LegacyOrderService" %>',
+                encoding="utf-8",
+            )
+            (legacy_service / "LegacyOrderService.asmx.vb").write_text(
+                """
+Imports System.Configuration
+Imports System.Data
+Imports System.Data.SqlClient
+Imports System.Net
+Imports System.Web.Services
+
+Namespace Example.Legacy
+  Public Class LegacyOrderService
+    <WebMethod()>
+    Public Function GetOrder(id As Integer) As String
+      Dim baseUrl = ConfigurationManager.AppSettings("InventoryServiceUrl")
+      Dim request = WebRequest.Create("http://inventory-service/api/orders/" & id)
+      Dim command As New SqlCommand("dbo.GetOrder")
+      command.CommandType = CommandType.StoredProcedure
+      Return baseUrl
+    End Function
+  End Class
+End Namespace
+""",
+                encoding="utf-8",
+            )
+            (legacy_service / "schema.sql").write_text(
+                "CREATE PROCEDURE dbo.GetOrder AS SELECT 1",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: legacy-service
+    path: legacy-service
+  - type: local_path
+    name: inventory-service
+    path: inventory-service
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 7)
+        self.assertIn("DECLARES_CONFIG_FILE", graph_data["edge_counts"])
+        self.assertIn("DECLARES_CONFIG", graph_data["edge_counts"])
+        self.assertIn("CONFIGURES_SERVICE", graph_data["edge_counts"])
+        self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
+        self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SQL", graph_data["edge_counts"])
+        self.assertIn("DEPENDS_ON_PACKAGE", graph_data["edge_counts"])
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "api_route" and entity["name"] == "POST /LegacyOrderService.asmx/GetOrder"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "function" and entity["name"] == "Example.Legacy.LegacyOrderService.GetOrder"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.GetOrder" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CONFIGURES_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
     def test_strict_build_raises_on_missing_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

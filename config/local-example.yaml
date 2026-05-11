@@ -28,11 +28,17 @@ sources:
     path: ../examples/dotnet-service
 
   - type: local_path
+    name: legacy-vb-service
+    path: ../examples/legacy-vb-service
+
+  - type: local_path
     name: database-project
     path: ../examples/database-project
 
 include:
   file_extensions:
+    - .asmx
+    - .config
     - .json
     - .csproj
     - .props
@@ -40,6 +46,8 @@ include:
     - .sql
     - .toml
     - .ts
+    - .vb
+    - .vbproj
 
 exclude:
   directories:

@@ -20,7 +20,7 @@ be loaded into different stores.
 ```json
 {
   "entity_id": "stable-id",
-  "entity_type": "repository | project | workspace | solution | build_config | file | package | api_route | function | class | sql_table | sql_view | sql_function | stored_procedure",
+  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | api_route | function | class | module | interface | sql_table | sql_view | sql_function | stored_procedure",
   "name": "display name",
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -41,7 +41,7 @@ be loaded into different stores.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | CALLS_HTTP | CALLS_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -60,11 +60,17 @@ be loaded into different stores.
 - `workspace`: a workspace manifest such as `pnpm-workspace.yaml`.
 - `solution`: a .NET solution manifest.
 - `build_config`: a shared build manifest such as `Directory.Build.props`.
+- `config_file`: a configuration manifest such as `Web.config`,
+  `App.config`, or `packages.config`.
+- `config_value`: a config key discovered from app settings, connection
+  strings, or WCF client endpoints. Sensitive values are not required for the
+  public schema, but generated graphs should still be treated as sensitive.
 - `file`: a scanned source file.
 - `package`: a package manifest declaration, such as `package.json` `name`,
   Python project name, or .NET package ID.
 - `api_route`: an HTTP route declared in source code.
-- `function` and `class`: exported JavaScript or TypeScript symbols.
+- `function`, `class`, `module`, and `interface`: exported JavaScript,
+  TypeScript, or legacy VB symbols.
 - `sql_table`, `sql_view`, `sql_function`, `stored_procedure`: SQL objects
   declared in SQL files.
 
@@ -75,6 +81,8 @@ be loaded into different stores.
 - `DECLARES_WORKSPACE`: file to workspace manifest.
 - `DECLARES_SOLUTION`: file to solution manifest.
 - `DECLARES_BUILD_CONFIG`: file to build config manifest.
+- `DECLARES_CONFIG_FILE`: file to config manifest.
+- `DECLARES_CONFIG`: config file to config value.
 - `DECLARES_PACKAGE`: file or project to package.
 - `DEPENDS_ON_PACKAGE`: package, project, build config, or manifest file to
   package target.
@@ -86,7 +94,9 @@ be loaded into different stores.
 - `DECLARES_SYMBOL`: file to exported function or class.
 - `CALLS_HTTP`: file to route target inferred from `fetch` or `axios`.
 - `CALLS_SERVICE`: file to a service-like target inferred from environment
-  URL names.
+  URL names, config keys, or legacy HTTP clients.
+- `CONFIGURES_SERVICE`: config value to a service-like target inferred from
+  URL settings or WCF endpoints.
 - `DEFINES`: SQL file to SQL object declaration.
 - `CALLS_SQL`: file to stored procedure target.
 - `READS_SQL_OBJECT`: file to table, view, function, or procedure target.

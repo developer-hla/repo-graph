@@ -11,6 +11,8 @@ import yaml
 DEFAULT_FILE_EXTENSIONS = {
     ".cs",
     ".csproj",
+    ".asmx",
+    ".config",
     ".fsproj",
     ".js",
     ".json",
@@ -18,6 +20,7 @@ DEFAULT_FILE_EXTENSIONS = {
     ".props",
     ".sln",
     ".sql",
+    ".svc",
     ".targets",
     ".toml",
     ".ts",
