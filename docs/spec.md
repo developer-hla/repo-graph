@@ -91,6 +91,10 @@ MVP storage should support:
 Neo4j is a good first graph database because it is easy to run in Docker and
 agents can express useful questions in Cypher.
 
+The initial Neo4j runtime stores `RepoGraphEntity` nodes, `RepoGraphTarget`
+nodes for unresolved references, a `RepoGraphGraph` metadata node, and typed
+relationships derived from graph edge types.
+
 ## API MVP
 
 - `GET /health`

@@ -57,9 +57,9 @@ curl http://localhost:8000/health
 curl http://localhost:8000/manifest
 ```
 
-The runtime currently exposes health and manifest endpoints. The manifest tells
-agents which API capabilities are available and which graph capabilities are
-still planned.
+The runtime exposes health, manifest, load, and stats endpoints. The manifest
+tells agents which API capabilities are available and which graph capabilities
+are still planned.
 
 ## Docker Runtime
 
@@ -82,6 +82,43 @@ database volumes into a public image.
 
 Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
 `REPO_GRAPH_NEO4J_BOLT_PORT` if those ports are already in use.
+
+Build and load the example graph into Neo4j:
+
+```bash
+docker compose exec repo-graph pixi run repo-graph build \
+  --config config/local-example.yaml \
+  --strict \
+  --output .repo-graph/output/graph.json
+
+curl -X POST http://localhost:8000/load \
+  -H "content-type: application/json" \
+  -d '{}'
+
+curl http://localhost:8000/stats
+```
+
+The API loads `.repo-graph/output/graph.json` by default based on the active
+config file. Pass `graph_path` in the request body to load a different graph
+inside the running container:
+
+```bash
+curl -X POST http://localhost:8000/load \
+  -H "content-type: application/json" \
+  -d '{"graph_path":"/app/.repo-graph/output/graph.json"}'
+```
+
+For local CLI loading against the Compose Neo4j service:
+
+```bash
+REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
+REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
+pixi run repo-graph load --graph .repo-graph/output/graph.json
+
+REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
+REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
+pixi run repo-graph stats
+```
 
 ## Repository Layout
 
@@ -121,6 +158,15 @@ examples outside this repository.
 Generated graphs can reveal private architecture even when the source code is
 not included. Treat generated output, graph database volumes, and local source
 configs as sensitive when scanning private repositories.
+
+Neo4j credentials are read from environment variables:
+
+- `REPO_GRAPH_NEO4J_URI`
+- `REPO_GRAPH_NEO4J_USER`
+- `REPO_GRAPH_NEO4J_PASSWORD`
+- `REPO_GRAPH_NEO4J_DATABASE`
+
+Do not commit `.env` files with private credentials.
 
 ## License
 

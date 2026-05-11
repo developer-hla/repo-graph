@@ -12,6 +12,7 @@ from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.sources import resolve_sources, sync_sources
+from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
@@ -67,6 +68,19 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_load(args: argparse.Namespace) -> int:
+    settings = RuntimeSettings.from_env().neo4j_settings()
+    summary = load_graph_path(args.graph, settings, clear_existing=not args.append)
+    print(json.dumps({"status": "loaded", "graph_path": str(args.graph), "summary": summary.to_dict()}, indent=2))
+    return 0
+
+
+def cmd_stats(args: argparse.Namespace) -> int:
+    settings = RuntimeSettings.from_env().neo4j_settings()
+    print(json.dumps(read_graph_stats(settings), indent=2, sort_keys=True))
+    return 0
+
+
 def resolve_output_path(config: RepoGraphConfig, output: Path | None) -> Path:
     if output is None:
         return config.output_dir / "graph.json"
@@ -100,6 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8000)
     serve_parser.set_defaults(func=cmd_serve)
+
+    load_parser = subparsers.add_parser("load", help="Load a graph JSON export into Neo4j.")
+    load_parser.add_argument("--graph", type=Path, required=True)
+    load_parser.add_argument("--append", action="store_true", help="Keep existing Repo Graph data in Neo4j.")
+    load_parser.set_defaults(func=cmd_load)
+
+    stats_parser = subparsers.add_parser("stats", help="Read Repo Graph counts from Neo4j.")
+    stats_parser.set_defaults(func=cmd_stats)
 
     return parser
 

@@ -63,3 +63,20 @@ If a target matches multiple possible entities, the edge remains unresolved and
 includes `properties.resolution_status = "ambiguous"` plus a bounded
 `resolution_candidates` list. This avoids silently linking a reference to the
 wrong repository or database object.
+
+## Neo4j Mapping
+
+The Neo4j loader stores graph exports with a small public-safe model:
+
+- `RepoGraphGraph`: one metadata node for the loaded graph.
+- `RepoGraphEntity`: one node per exported entity.
+- `RepoGraphTarget`: one node per unresolved target string.
+- Relationships use sanitized edge types such as `IMPORTS`, `CALLS_SQL`, and
+  `READS_SQL_OBJECT`.
+
+Each loaded node and relationship keeps the original graph fields as
+properties. Nested `properties` maps are preserved as `properties_json` and
+flattened into `property_*` fields where practical.
+
+Resolved edges point from a `RepoGraphEntity` to another `RepoGraphEntity`.
+Unresolved edges point from a `RepoGraphEntity` to a `RepoGraphTarget`.
