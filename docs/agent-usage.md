@@ -56,6 +56,34 @@ Useful fields:
 - `unresolved_edge_count`
 - `unresolved_target_count`
 
+## Scope And Sources
+
+Inspect the loaded graph scope:
+
+```bash
+curl http://localhost:8000/scope
+```
+
+The scope response includes graph metadata, summary counts, and the loaded
+source list. Use it before answering architecture questions so you can name the
+actual graph scope and avoid implying that repositories outside the loaded
+source set were scanned.
+
+List only loaded sources:
+
+```bash
+curl http://localhost:8000/sources
+```
+
+Useful source fields:
+
+- `name`
+- `type`
+- `path`
+- `url`
+- `ref`
+- `commit`
+
 ## Search Entities
 
 Find entities by name, file path, ID, alias, or full name:

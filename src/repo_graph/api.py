@@ -20,6 +20,7 @@ from repo_graph.storage.neo4j import (
     get_entity_neighbors,
     list_unresolved_edges,
     load_graph_path,
+    read_graph_scope,
     read_graph_stats,
     search_entities,
 )
@@ -124,6 +125,8 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "POST", "path": "/build-load", "available": True},
             {"method": "POST", "path": "/load", "available": True},
             {"method": "POST", "path": "/query", "available": False},
+            {"method": "GET", "path": "/scope", "available": True},
+            {"method": "GET", "path": "/sources", "available": True},
             {"method": "GET", "path": "/stats", "available": True},
             {"method": "GET", "path": "/entities/search", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}", "available": True},
@@ -136,6 +139,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "raw_cypher_status": "planned",
             "build_api_status": "available",
             "graph_loader_status": "available",
+            "scope_status": "available",
         },
     }
 
@@ -240,6 +244,24 @@ def search_entities_response(
     return {"items": items, "count": len(items)}
 
 
+def scope_response(settings: RuntimeSettings) -> dict[str, Any]:
+    return read_graph_scope(settings.neo4j_settings())
+
+
+def sources_response(settings: RuntimeSettings) -> dict[str, Any]:
+    scope = scope_response(settings)
+    items = scope.get("sources", [])
+    if not isinstance(items, list):
+        items = []
+    return {
+        "items": items,
+        "count": len(items),
+        "loaded": bool(scope.get("loaded")),
+        "scope_name": scope.get("scope_name"),
+        "generated_at": scope.get("generated_at"),
+    }
+
+
 def entity_response(settings: RuntimeSettings, entity_id: str) -> dict[str, Any]:
     entity = get_entity(settings.neo4j_settings(), entity_id)
     if entity is None:
@@ -342,6 +364,24 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Neo4j stats failed: {exc}") from exc
+
+    @app.get("/scope")
+    def scope() -> dict[str, Any]:
+        try:
+            return scope_response(runtime_settings)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Neo4j scope lookup failed: {exc}") from exc
+
+    @app.get("/sources")
+    def sources() -> dict[str, Any]:
+        try:
+            return sources_response(runtime_settings)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Neo4j source lookup failed: {exc}") from exc
 
     @app.get("/entities/search")
     def search_entities_endpoint(

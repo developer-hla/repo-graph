@@ -43,6 +43,7 @@ class Neo4jSettings:
 class LoadSummary:
     scope_name: str | None
     schema_version: str | None
+    source_count: int
     entity_count: int
     edge_count: int
     resolved_edge_count: int
@@ -80,6 +81,9 @@ def load_graph_data(
     settings: Neo4jSettings,
     clear_existing: bool = True,
 ) -> LoadSummary:
+    source_records = [
+        source_record(source, graph_data, index) for index, source in enumerate(graph_items(graph_data, "sources"))
+    ]
     entity_records = [entity_record(entity) for entity in graph_items(graph_data, "entities")]
     edge_records = [edge_record(edge) for edge in graph_items(graph_data, "edges")]
     target_records = unresolved_target_records(edge_records)
@@ -91,6 +95,8 @@ def load_graph_data(
             if clear_existing:
                 session.execute_write(clear_graph_tx)
             session.execute_write(write_graph_tx, graph_record(graph_data))
+            if source_records:
+                session.execute_write(write_sources_tx, source_records)
             if entity_records:
                 session.execute_write(write_entities_tx, entity_records)
             if target_records:
@@ -99,7 +105,7 @@ def load_graph_data(
                 session.execute_write(write_resolved_edges_tx, relationship_type, resolved_edges(records))
                 session.execute_write(write_unresolved_edges_tx, relationship_type, unresolved_edges(records))
 
-    return load_summary(graph_data, edge_records, target_records, clear_existing=clear_existing)
+    return load_summary(graph_data, source_records, edge_records, target_records, clear_existing=clear_existing)
 
 
 def read_graph_stats(settings: Neo4jSettings) -> dict[str, Any]:
@@ -146,6 +152,24 @@ def read_graph_stats(settings: Neo4jSettings) -> dict[str, Any]:
     if record is None:
         return {}
     return dict(record)
+
+
+def read_graph_scope(settings: Neo4jSettings) -> dict[str, Any]:
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            record = session.run(
+                """
+                OPTIONAL MATCH (graph:RepoGraphGraph {graph_id: "current"})
+                OPTIONAL MATCH (graph)-[:INCLUDES_SOURCE]->(source:RepoGraphSource)
+                WITH graph, source
+                ORDER BY source.index, source.name
+                RETURN graph, [item IN collect(source) WHERE item IS NOT NULL] AS sources
+                """
+            ).single()
+    if record is None or record["graph"] is None:
+        return unloaded_scope_payload()
+    return scope_payload(record["graph"], record["sources"])
 
 
 def search_entities(
@@ -351,6 +375,43 @@ def graph_node_payload(node: Mapping[str, Any], labels: Iterable[str]) -> dict[s
     return entity_payload(node)
 
 
+def source_payload(source: Mapping[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "source_id": source.get("source_id"),
+            "index": source.get("index"),
+            "name": source.get("name"),
+            "type": source.get("type"),
+            "path": source.get("path"),
+            "url": source.get("url"),
+            "ref": source.get("ref"),
+            "commit": source.get("commit"),
+        }
+    )
+
+
+def scope_payload(graph: Mapping[str, Any], sources: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    source_items = [source_payload(source) for source in sources]
+    return {
+        "loaded": True,
+        "scope_name": graph.get("scope_name"),
+        "schema_version": graph.get("schema_version"),
+        "generated_at": graph.get("generated_at"),
+        "tool": graph.get("tool"),
+        "summary": json_object(graph.get("summary_json")),
+        "source_count": len(source_items),
+        "sources": source_items,
+    }
+
+
+def unloaded_scope_payload() -> dict[str, Any]:
+    return {
+        "loaded": False,
+        "source_count": 0,
+        "sources": [],
+    }
+
+
 def json_object(value: Any) -> dict[str, Any]:
     if not isinstance(value, str) or not value:
         return {}
@@ -405,17 +466,42 @@ def graph_items(graph_data: Mapping[str, Any], key: str) -> list[Mapping[str, An
 def graph_record(graph_data: Mapping[str, Any]) -> dict[str, Any]:
     metadata = mapping_value(graph_data.get("metadata"))
     summary = mapping_value(graph_data.get("summary"))
+    sources = graph_items(graph_data, "sources")
     record = {
         "graph_id": "current",
         "tool": metadata.get("tool"),
         "schema_version": metadata.get("schema_version"),
         "scope_name": metadata.get("scope_name"),
         "generated_at": metadata.get("generated_at"),
+        "source_count": len(sources),
         "summary_json": json.dumps(summary, sort_keys=True),
+        "sources_json": json.dumps(sources, sort_keys=True),
     }
     for key, value in summary.items():
         record[f"summary_{safe_property_key(key)}"] = value
     return neo4j_properties(record)
+
+
+def source_record(source: Mapping[str, Any], graph_data: Mapping[str, Any], index: int) -> dict[str, Any]:
+    metadata = mapping_value(graph_data.get("metadata"))
+    name = required_string(source, "name")
+    source_id = stable_id("source", str(metadata.get("scope_name") or ""), name)
+    properties = neo4j_properties(
+        {
+            "source_id": source_id,
+            "index": index,
+            "name": name,
+            "type": source.get("type"),
+            "path": source.get("path"),
+            "url": source.get("url"),
+            "ref": source.get("ref"),
+            "commit": source.get("commit"),
+        }
+    )
+    return {
+        "source_id": source_id,
+        "properties": properties,
+    }
 
 
 def entity_record(entity: Mapping[str, Any]) -> dict[str, Any]:
@@ -496,6 +582,7 @@ def unresolved_target_id(edge: Mapping[str, Any]) -> str:
 
 def load_summary(
     graph_data: Mapping[str, Any],
+    source_records: list[dict[str, Any]],
     edge_records: list[dict[str, Any]],
     target_records: list[dict[str, Any]],
     clear_existing: bool,
@@ -506,6 +593,7 @@ def load_summary(
     return LoadSummary(
         scope_name=string_or_none(metadata.get("scope_name")),
         schema_version=string_or_none(metadata.get("schema_version")),
+        source_count=len(source_records),
         entity_count=len(graph_items(graph_data, "entities")),
         edge_count=len(edge_records),
         resolved_edge_count=resolved_count,
@@ -536,6 +624,8 @@ def initialize_schema(session: Any) -> None:
         "FOR (entity:RepoGraphEntity) REQUIRE entity.entity_id IS UNIQUE",
         "CREATE CONSTRAINT repo_graph_target_id IF NOT EXISTS "
         "FOR (target:RepoGraphTarget) REQUIRE target.target_id IS UNIQUE",
+        "CREATE CONSTRAINT repo_graph_source_id IF NOT EXISTS "
+        "FOR (source:RepoGraphSource) REQUIRE source.source_id IS UNIQUE",
         "CREATE CONSTRAINT repo_graph_graph_id IF NOT EXISTS "
         "FOR (graph:RepoGraphGraph) REQUIRE graph.graph_id IS UNIQUE",
     ):
@@ -546,7 +636,11 @@ def clear_graph_tx(tx: Any) -> None:
     tx.run(
         """
         MATCH (node)
-        WHERE node:RepoGraphEntity OR node:RepoGraphTarget OR node:RepoGraphGraph
+        WHERE
+          node:RepoGraphEntity
+          OR node:RepoGraphTarget
+          OR node:RepoGraphSource
+          OR node:RepoGraphGraph
         DETACH DELETE node
         """
     ).consume()
@@ -560,6 +654,21 @@ def write_graph_tx(tx: Any, graph: dict[str, Any]) -> None:
         """,
         graph_id=graph["graph_id"],
         properties=graph,
+    ).consume()
+
+
+def write_sources_tx(tx: Any, sources: list[dict[str, Any]]) -> None:
+    tx.run(
+        """
+        UNWIND $sources AS source
+        MERGE (node:RepoGraphSource {source_id: source.source_id})
+        SET node += source.properties
+        WITH node, source
+        MATCH (graph:RepoGraphGraph {graph_id: "current"})
+        MERGE (graph)-[relationship:INCLUDES_SOURCE {source_id: source.source_id}]->(node)
+        SET relationship.source_id = source.source_id
+        """,
+        sources=sources,
     ).consume()
 
 

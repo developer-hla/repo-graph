@@ -14,7 +14,11 @@ from repo_graph.storage.neo4j import (
     normalize_direction,
     normalize_limit,
     sanitize_relationship_type,
+    scope_payload,
+    source_payload,
+    source_record,
     target_payload,
+    unloaded_scope_payload,
     unresolved_target_records,
 )
 
@@ -83,18 +87,79 @@ class Neo4jStorageTests(unittest.TestCase):
     def test_load_summary_counts_edges_and_targets(self) -> None:
         graph_data = {
             "metadata": {"scope_name": "example", "schema_version": "0.1"},
+            "sources": [{"name": "api-service"}],
             "entities": [{"entity_id": "entity-1"}],
             "edges": [],
         }
         resolved = {"resolved": True}
         unresolved = {"resolved": False}
-        summary = load_summary(graph_data, [resolved, unresolved], [{"target_id": "target-1"}], clear_existing=True)
+        source = {"source_id": "source-1"}
+        summary = load_summary(
+            graph_data,
+            [source],
+            [resolved, unresolved],
+            [{"target_id": "target-1"}],
+            clear_existing=True,
+        )
 
         self.assertEqual(summary.scope_name, "example")
+        self.assertEqual(summary.source_count, 1)
         self.assertEqual(summary.entity_count, 1)
         self.assertEqual(summary.edge_count, 2)
         self.assertEqual(summary.resolved_edge_count, 1)
         self.assertEqual(summary.unresolved_target_count, 1)
+
+    def test_source_record_uses_scope_and_source_name_for_id(self) -> None:
+        record = source_record(
+            {"name": "api-service", "type": "local_path", "path": "/repo/examples/api-service", "ref": "default"},
+            {"metadata": {"scope_name": "example"}},
+            0,
+        )
+
+        self.assertEqual(record["properties"]["name"], "api-service")
+        self.assertEqual(record["properties"]["index"], 0)
+        self.assertTrue(record["source_id"])
+
+    def test_source_payload_returns_public_source_fields(self) -> None:
+        payload = source_payload(
+            {
+                "source_id": "source-1",
+                "index": 0,
+                "name": "api-service",
+                "type": "git",
+                "url": "https://github.com/example/api-service.git",
+                "ref": "main",
+                "commit": "abc123",
+            }
+        )
+
+        self.assertEqual(payload["name"], "api-service")
+        self.assertEqual(payload["type"], "git")
+        self.assertEqual(payload["commit"], "abc123")
+
+    def test_scope_payload_includes_summary_and_sources(self) -> None:
+        payload = scope_payload(
+            {
+                "scope_name": "example",
+                "schema_version": "0.1",
+                "generated_at": "2026-05-11T00:00:00+00:00",
+                "tool": "RepoGraph",
+                "summary_json": '{"entity_count": 1}',
+            },
+            [{"source_id": "source-1", "name": "api-service"}],
+        )
+
+        self.assertTrue(payload["loaded"])
+        self.assertEqual(payload["source_count"], 1)
+        self.assertEqual(payload["sources"][0]["name"], "api-service")
+        self.assertEqual(payload["summary"]["entity_count"], 1)
+
+    def test_unloaded_scope_payload_has_no_sources(self) -> None:
+        payload = unloaded_scope_payload()
+
+        self.assertFalse(payload["loaded"])
+        self.assertEqual(payload["source_count"], 0)
+        self.assertEqual(payload["sources"], [])
 
     def test_entity_payload_restores_nested_properties(self) -> None:
         payload = entity_payload(

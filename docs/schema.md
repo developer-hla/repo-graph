@@ -69,8 +69,12 @@ wrong repository or database object.
 The Neo4j loader stores graph exports with a small public-safe model:
 
 - `RepoGraphGraph`: one metadata node for the loaded graph.
+- `RepoGraphSource`: one node per configured source recorded in the graph
+  export.
 - `RepoGraphEntity`: one node per exported entity.
 - `RepoGraphTarget`: one node per unresolved target string.
+- `(:RepoGraphGraph)-[:INCLUDES_SOURCE]->(:RepoGraphSource)` records the
+  source set used by the loaded graph.
 - Relationships use sanitized edge types such as `IMPORTS`, `CALLS_SQL`, and
   `READS_SQL_OBJECT`.
 

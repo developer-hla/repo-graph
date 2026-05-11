@@ -19,7 +19,9 @@ from repo_graph.api import (
     load_response,
     manifest_payload,
     neighbors_response,
+    scope_response,
     search_entities_response,
+    sources_response,
     unresolved_edges_response,
 )
 from repo_graph.storage.neo4j import LoadSummary
@@ -48,6 +50,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "POST", "path": "/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build-load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/scope", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/sources", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/stats", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/{entity_id}", "available": True}, payload["endpoints"])
@@ -67,6 +71,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/build", route_paths)
         self.assertIn("/build-load", route_paths)
         self.assertIn("/load", route_paths)
+        self.assertIn("/scope", route_paths)
+        self.assertIn("/sources", route_paths)
         self.assertIn("/stats", route_paths)
         self.assertIn("/entities/search", route_paths)
         self.assertIn("/entities/{entity_id}", route_paths)
@@ -83,6 +89,7 @@ class ApiTests(unittest.TestCase):
         summary = LoadSummary(
             scope_name="example",
             schema_version="0.1",
+            source_count=1,
             entity_count=1,
             edge_count=1,
             resolved_edge_count=1,
@@ -137,6 +144,27 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["load"], load_payload)
         build.assert_called_once()
         load.assert_called_once()
+
+    def test_scope_response_returns_loaded_scope(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        scope = {"loaded": True, "scope_name": "example", "sources": [{"name": "api-service"}]}
+        with patch("repo_graph.api.read_graph_scope", return_value=scope):
+            self.assertEqual(scope_response(settings), scope)
+
+    def test_sources_response_wraps_scope_sources(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        scope = {
+            "loaded": True,
+            "scope_name": "example",
+            "generated_at": "2026-05-11T00:00:00+00:00",
+            "sources": [{"name": "api-service"}],
+        }
+        with patch("repo_graph.api.read_graph_scope", return_value=scope):
+            payload = sources_response(settings)
+
+        self.assertEqual(payload["items"], [{"name": "api-service"}])
+        self.assertEqual(payload["count"], 1)
+        self.assertTrue(payload["loaded"])
 
     def test_search_entities_response_wraps_items(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

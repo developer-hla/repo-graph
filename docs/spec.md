@@ -104,6 +104,8 @@ relationships derived from graph edge types.
 - `POST /load`
 - `POST /query`
 - `GET /stats`
+- `GET /scope`
+- `GET /sources`
 - `GET /entities/search`
 - `GET /entities/neighbors`
 - `GET /manifest`
@@ -119,6 +121,12 @@ load orchestration:
 - `POST /load`
 
 For large source sets, background jobs and job status should come later.
+
+The API should expose graph scope metadata so agents can state which sources,
+refs, and commits were loaded:
+
+- `GET /scope`
+- `GET /sources`
 
 The first public query surface should use purpose-built read endpoints:
 
