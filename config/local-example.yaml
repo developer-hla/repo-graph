@@ -16,13 +16,29 @@ sources:
     path: ../examples/inventory-service
 
   - type: local_path
+    name: python-shared
+    path: ../examples/python-shared
+
+  - type: local_path
+    name: python-worker
+    path: ../examples/python-worker
+
+  - type: local_path
+    name: dotnet-service
+    path: ../examples/dotnet-service
+
+  - type: local_path
     name: database-project
     path: ../examples/database-project
 
 include:
   file_extensions:
     - .json
+    - .csproj
+    - .props
+    - .sln
     - .sql
+    - .toml
     - .ts
 
 exclude:

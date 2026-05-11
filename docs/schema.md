@@ -20,7 +20,7 @@ be loaded into different stores.
 ```json
 {
   "entity_id": "stable-id",
-  "entity_type": "repository | project | file | package | api_route | function | class | sql_table | sql_view | sql_function | stored_procedure",
+  "entity_type": "repository | project | workspace | solution | build_config | file | package | api_route | function | class | sql_table | sql_view | sql_function | stored_procedure",
   "name": "display name",
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -41,7 +41,7 @@ be loaded into different stores.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | CALLS_HTTP | CALLS_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | CALLS_HTTP | CALLS_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -55,9 +55,14 @@ be loaded into different stores.
 ## Core Entity Types
 
 - `repository`: one configured source.
-- `project`: a package or workspace discovered inside a repository.
+- `project`: a package, workspace project, Python project, .NET project, or
+  solution-level project discovered inside a repository.
+- `workspace`: a workspace manifest such as `pnpm-workspace.yaml`.
+- `solution`: a .NET solution manifest.
+- `build_config`: a shared build manifest such as `Directory.Build.props`.
 - `file`: a scanned source file.
-- `package`: a package manifest declaration, such as `package.json` `name`.
+- `package`: a package manifest declaration, such as `package.json` `name`,
+  Python project name, or .NET package ID.
 - `api_route`: an HTTP route declared in source code.
 - `function` and `class`: exported JavaScript or TypeScript symbols.
 - `sql_table`, `sql_view`, `sql_function`, `stored_procedure`: SQL objects
@@ -67,8 +72,14 @@ be loaded into different stores.
 
 - `CONTAINS_PROJECT`: repository to discovered project.
 - `CONTAINS_FILE`: repository or project to file.
+- `DECLARES_WORKSPACE`: file to workspace manifest.
+- `DECLARES_SOLUTION`: file to solution manifest.
+- `DECLARES_BUILD_CONFIG`: file to build config manifest.
 - `DECLARES_PACKAGE`: file or project to package.
-- `DEPENDS_ON_PACKAGE`: package or manifest file to package target.
+- `DEPENDS_ON_PACKAGE`: package, project, build config, or manifest file to
+  package target.
+- `DEPENDS_ON_PROJECT`: project to project target, such as a .NET
+  `ProjectReference`.
 - `IMPORTS`: file to imported package or relative module target.
 - `DECLARES_ROUTE`: file to route.
 - `EXPOSES_ROUTE`: project to route.
@@ -81,8 +92,8 @@ be loaded into different stores.
 - `READS_SQL_OBJECT`: file to table, view, function, or procedure target.
 
 Scanner-derived reference edges include evidence in `properties`, such as
-`raw_target`, `normalized_target`, dependency type, HTTP method, target path,
-target environment variable, or SQL object name.
+`raw_target`, `normalized_target`, dependency type, ecosystem, package version,
+HTTP method, target path, target environment variable, or SQL object name.
 
 ## Unresolved Edges
 

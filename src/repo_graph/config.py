@@ -10,13 +10,20 @@ import yaml
 
 DEFAULT_FILE_EXTENSIONS = {
     ".cs",
+    ".csproj",
+    ".fsproj",
     ".js",
     ".json",
     ".jsx",
+    ".props",
+    ".sln",
     ".sql",
+    ".targets",
+    ".toml",
     ".ts",
     ".tsx",
     ".vb",
+    ".vbproj",
     ".yaml",
     ".yml",
 }

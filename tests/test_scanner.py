@@ -145,6 +145,194 @@ sources:
             )
         )
 
+    def test_build_graph_discovers_python_and_dotnet_manifest_relationships(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_shared = root / "python-shared"
+            python_service = root / "python-service"
+            dotnet_service = root / "dotnet-service"
+            (dotnet_service / "src" / "Example.Service").mkdir(parents=True)
+            (dotnet_service / "src" / "Example.Shared").mkdir(parents=True)
+            python_shared.mkdir()
+            python_service.mkdir()
+
+            (python_shared / "pyproject.toml").write_text(
+                """
+[project]
+name = "example-python-shared"
+version = "0.1.0"
+""",
+                encoding="utf-8",
+            )
+            (python_service / "pyproject.toml").write_text(
+                """
+[project]
+name = "example-python-service"
+version = "0.1.0"
+dependencies = [
+  "example-python-shared==0.1.0",
+  "requests>=2.31",
+]
+""",
+                encoding="utf-8",
+            )
+            (python_service / "requirements.txt").write_text("httpx==0.27.0\n", encoding="utf-8")
+            (dotnet_service / "Example.sln").write_text(
+                """
+Project("{TYPE}") = "Example.Service", "src\\Example.Service\\Example.Service.csproj", "{SERVICE}"
+EndProject
+Project("{TYPE}") = "Example.Shared", "src\\Example.Shared\\Example.Shared.csproj", "{SHARED}"
+EndProject
+""",
+                encoding="utf-8",
+            )
+            (dotnet_service / "Directory.Build.props").write_text(
+                """
+<Project>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+  </ItemGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            (dotnet_service / "src" / "Example.Shared" / "Example.Shared.csproj").write_text(
+                """
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>Example.Shared</PackageId>
+  </PropertyGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            (dotnet_service / "src" / "Example.Service" / "Example.Service.csproj").write_text(
+                """
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>Example.Service</PackageId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Example.Shared" Version="0.1.0" />
+    <ProjectReference Include="../Example.Shared/Example.Shared.csproj" />
+  </ItemGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: python-shared
+    path: python-shared
+  - type: local_path
+    name: python-service
+    path: python-service
+  - type: local_path
+    name: dotnet-service
+    path: dotnet-service
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 7)
+        self.assertIn("DECLARES_BUILD_CONFIG", graph_data["edge_counts"])
+        self.assertIn("DECLARES_SOLUTION", graph_data["edge_counts"])
+        self.assertIn("DEPENDS_ON_PROJECT", graph_data["edge_counts"])
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "project" and entity["properties"].get("ecosystem") == "python"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "project" and entity["properties"].get("ecosystem") == "dotnet"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "DEPENDS_ON_PACKAGE"
+                and edge["to_name"] == "example-python-shared"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "DEPENDS_ON_PACKAGE" and edge["to_name"] == "Example.Shared" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "DEPENDS_ON_PROJECT" and edge["to_name"] == "Example.Shared" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
+    def test_build_graph_discovers_workspace_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "workspace"
+            (repo / "packages" / "shared").mkdir(parents=True)
+            (repo / "services" / "api").mkdir(parents=True)
+            (repo / "package.json").write_text(
+                '{"name": "@example/root", "workspaces": ["packages/*"]}',
+                encoding="utf-8",
+            )
+            (repo / "pnpm-workspace.yaml").write_text(
+                """
+packages:
+  - packages/*
+  - services/*
+""",
+                encoding="utf-8",
+            )
+            (repo / "packages" / "shared" / "package.json").write_text(
+                '{"name": "@example/shared"}',
+                encoding="utf-8",
+            )
+            (repo / "services" / "api" / "package.json").write_text(
+                '{"name": "@example/api", "dependencies": {"@example/shared": "0.1.0"}}',
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: workspace
+    path: workspace
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 4)
+        self.assertIn("DECLARES_WORKSPACE", graph_data["edge_counts"])
+        self.assertTrue(any(entity["entity_type"] == "workspace" for entity in graph_data["entities"]))
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "DEPENDS_ON_PACKAGE" and edge["to_name"] == "@example/shared" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
     def test_strict_build_raises_on_missing_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

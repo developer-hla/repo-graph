@@ -1,0 +1,12 @@
+[project]
+name = "example-python-worker"
+version = "0.1.0"
+dependencies = [
+  "example-python-shared==0.1.0",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]

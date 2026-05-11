@@ -5,17 +5,30 @@ from __future__ import annotations
 import json
 import os
 import re
+import tomllib
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
+import yaml
+
 from repo_graph.config import RepoGraphConfig
 from repo_graph.graph import Edge, Entity, Graph
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 
 MAX_FILE_BYTES = 1_000_000
+DOTNET_PROJECT_SUFFIXES = {".csproj", ".fsproj", ".vbproj"}
+DOTNET_BUILD_SUFFIXES = {".props", ".targets"}
+MANIFEST_FILENAMES = {
+    "Directory.Build.props",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pyproject.toml",
+    "requirements.txt",
+}
 
 IMPORT_RE = re.compile(
     r"(?:import\s+(?:.+?\s+from\s+)?|export\s+.+?\s+from\s+|require\s*\()\s*[\"']([^\"']+)[\"']",
@@ -40,6 +53,8 @@ AXIOS_RE = re.compile(
     re.IGNORECASE,
 )
 ENV_URL_RE = re.compile(r"(?:process\.env\.|import\.meta\.env\.)([A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST))")
+REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)")
+SLN_PROJECT_RE = re.compile(r'^Project\("[^"]+"\)\s*=\s*"([^"]+)",\s*"([^"]+)"')
 SQL_OBJECT_RE = re.compile(
     r"\bCREATE\s+(?:OR\s+ALTER\s+)?(?:PROCEDURE|PROC|TABLE|VIEW|FUNCTION)\s+([\[\]\w.]+)",
     re.IGNORECASE,
@@ -69,6 +84,7 @@ class ProjectInfo:
     name: str
     path: Path
     entity: Entity
+    ecosystem: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +130,12 @@ def build_graph(
 def default_extractors() -> list[FileExtractor]:
     return [
         PackageJsonExtractor(),
+        PythonProjectExtractor(),
+        PythonRequirementsExtractor(),
+        DotnetProjectExtractor(),
+        DotnetBuildConfigExtractor(),
+        DotnetSolutionExtractor(),
+        PnpmWorkspaceExtractor(),
         JavaScriptExtractor(),
         SqlExtractor(),
         SqlReferenceExtractor(),
@@ -132,7 +154,7 @@ def scan_source(
         return
 
     repo_entity = graph.add_entity(repository_entity(source))
-    projects = discover_projects(source, repo_entity)
+    projects = discover_projects(config, source, repo_entity)
     for project in projects:
         graph.add_entity(project.entity)
         graph.add_edge(
@@ -167,21 +189,134 @@ def repository_entity(source: ResolvedSource) -> Entity:
     )
 
 
-def discover_projects(source: ResolvedSource, repo_entity: Entity) -> list[ProjectInfo]:
-    root_package = read_json_object(source.path / "package.json")
-    workspace_dirs = discover_workspace_dirs(source.path, root_package or {})
+def discover_projects(config: RepoGraphConfig, source: ResolvedSource, repo_entity: Entity) -> list[ProjectInfo]:
     projects: list[ProjectInfo] = []
 
-    if root_package:
-        root_name = string_value(root_package.get("name")) or source.name
-        projects.append(project_info(source, repo_entity, root_name, source.path, root_package, "root"))
-
-    for workspace_dir in workspace_dirs:
-        package = read_json_object(workspace_dir / "package.json") or {}
-        name = string_value(package.get("name")) or workspace_dir.name
-        projects.append(project_info(source, repo_entity, name, workspace_dir, package, "workspace"))
+    for manifest_path in iter_project_manifest_paths(config, source.path):
+        project = project_info_for_manifest(source, repo_entity, manifest_path)
+        if project:
+            projects.append(project)
 
     return dedupe_projects(projects)
+
+
+def iter_project_manifest_paths(config: RepoGraphConfig, root: Path) -> Iterable[Path]:
+    for dirpath, dirnames, filenames in os.walk(root):
+        current = Path(dirpath)
+        dirnames[:] = [
+            dirname for dirname in dirnames if dirname not in config.exclude.directories and not dirname.startswith(".")
+        ]
+        for filename in filenames:
+            file_path = current / filename
+            if is_project_manifest(file_path):
+                yield file_path
+
+
+def project_info_for_manifest(
+    source: ResolvedSource,
+    repo_entity: Entity,
+    manifest_path: Path,
+) -> ProjectInfo | None:
+    if manifest_path.name == "package.json":
+        return javascript_project_info(source, repo_entity, manifest_path)
+    if manifest_path.name == "pyproject.toml":
+        return python_project_info(source, repo_entity, manifest_path)
+    if is_requirements_file(manifest_path) and not (manifest_path.parent / "pyproject.toml").exists():
+        return requirements_project_info(source, repo_entity, manifest_path)
+    if manifest_path.suffix.lower() in DOTNET_PROJECT_SUFFIXES:
+        return dotnet_project_info(source, repo_entity, manifest_path)
+    if manifest_path.suffix.lower() == ".sln":
+        return dotnet_solution_project_info(source, repo_entity, manifest_path)
+    return None
+
+
+def javascript_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo | None:
+    package = read_json_object(manifest_path) or {}
+    package_name = string_value(package.get("name"))
+    name = package_name or project_name_from_path(source, manifest_path.parent)
+    project_type = "javascript_root" if manifest_path.parent == source.path else "javascript_package"
+    return project_info(
+        source,
+        repo_entity,
+        name,
+        manifest_path.parent,
+        project_type,
+        "javascript",
+        package_name=package_name,
+        version=string_value(package.get("version")),
+        manifest_path=manifest_path,
+        aliases={package_name} if package_name else set(),
+    )
+
+
+def python_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo | None:
+    pyproject = read_toml_object(manifest_path) or {}
+    metadata = pyproject_metadata(pyproject)
+    name = metadata["name"] or project_name_from_path(source, manifest_path.parent)
+    package_name = metadata["name"] or None
+    return project_info(
+        source,
+        repo_entity,
+        name,
+        manifest_path.parent,
+        "python_project",
+        "python",
+        package_name=package_name,
+        version=metadata["version"],
+        manifest_path=manifest_path,
+        aliases={normalize_python_package_name(package_name)} if package_name else set(),
+    )
+
+
+def requirements_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo:
+    name = project_name_from_path(source, manifest_path.parent)
+    return project_info(
+        source,
+        repo_entity,
+        name,
+        manifest_path.parent,
+        "python_requirements",
+        "python",
+        manifest_path=manifest_path,
+    )
+
+
+def dotnet_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo:
+    try:
+        content = manifest_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        content = ""
+    metadata = dotnet_project_metadata(content)
+    name = metadata["package_id"] or metadata["assembly_name"] or manifest_path.stem
+    aliases = {manifest_path.stem}
+    for value in (metadata["package_id"], metadata["assembly_name"], metadata["root_namespace"]):
+        if value:
+            aliases.add(value)
+    return project_info(
+        source,
+        repo_entity,
+        name,
+        manifest_path.parent,
+        "dotnet_project",
+        "dotnet",
+        package_name=metadata["package_id"] or metadata["assembly_name"],
+        version=metadata["version"],
+        manifest_path=manifest_path,
+        aliases=aliases,
+    )
+
+
+def dotnet_solution_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo:
+    return project_info(
+        source,
+        repo_entity,
+        manifest_path.stem,
+        manifest_path.parent,
+        "dotnet_solution",
+        "dotnet",
+        manifest_path=manifest_path,
+        aliases={manifest_path.stem},
+    )
 
 
 def project_info(
@@ -189,55 +324,42 @@ def project_info(
     repo_entity: Entity,
     name: str,
     path: Path,
-    package: dict[str, Any],
     project_type: str,
+    ecosystem: str,
+    package_name: str | None = None,
+    version: str | None = None,
+    manifest_path: Path | None = None,
+    aliases: set[str] | None = None,
 ) -> ProjectInfo:
     rel_path = safe_relative_path(source.path, path)
-    aliases = {name, path.name}
-    package_name = string_value(package.get("name"))
+    manifest_rel_path = safe_relative_path(source.path, manifest_path) if manifest_path else None
+    project_aliases = {name, path.name, *(aliases or set())}
     if package_name:
-        aliases.add(package_name)
+        project_aliases.add(package_name)
     entity = Entity(
         entity_type="project",
         name=name,
         source_name=source.name,
-        aliases=aliases,
+        file_path=manifest_rel_path,
+        aliases=project_aliases,
         properties={
             "path": rel_path,
+            "manifest_path": manifest_rel_path,
             "package_name": package_name,
-            "version": package.get("version"),
+            "version": version,
+            "ecosystem": ecosystem,
             "project_type": project_type,
             "repository_entity_id": repo_entity.entity_id,
         },
     )
-    return ProjectInfo(name=name, path=path, entity=entity)
+    return ProjectInfo(name=name, path=path, entity=entity, ecosystem=ecosystem)
 
 
 def dedupe_projects(projects: list[ProjectInfo]) -> list[ProjectInfo]:
-    deduped: dict[Path, ProjectInfo] = {}
+    deduped: dict[str, ProjectInfo] = {}
     for project in projects:
-        deduped[project.path] = project
+        deduped[project.entity.entity_id] = project
     return list(deduped.values())
-
-
-def discover_workspace_dirs(root: Path, package: dict[str, Any]) -> list[Path]:
-    raw_workspaces = package.get("workspaces")
-    patterns: list[str] = []
-    if isinstance(raw_workspaces, list):
-        patterns = [item for item in raw_workspaces if isinstance(item, str)]
-    elif isinstance(raw_workspaces, dict):
-        raw_packages = raw_workspaces.get("packages")
-        if isinstance(raw_packages, list):
-            patterns = [item for item in raw_packages if isinstance(item, str)]
-
-    dirs: list[Path] = []
-    for pattern in patterns:
-        if pattern.startswith("!"):
-            continue
-        for path in root.glob(pattern):
-            if path.is_dir() and (path / "package.json").exists():
-                dirs.append(path)
-    return sorted(set(dirs))
 
 
 def scan_file_path(
@@ -359,26 +481,324 @@ class PackageJsonExtractor:
                     )
                 )
 
-        dependency_source = package_entity or context.file_entity
+        dependency_source = dependency_source_entity(context, package_entity)
         for dependency in package_dependencies(package):
             result.edges.append(
-                unresolved_edge(
+                package_dependency_edge(
                     dependency_source,
                     dependency["name"],
-                    "DEPENDS_ON_PACKAGE",
+                    "javascript",
+                    dependency["dependency_type"],
+                    dependency["version"],
+                    dependency["raw_target"],
                     context.source.name,
                     context.rel_path,
                     self.name,
-                    to_type="package",
-                    properties={
-                        "dependency_type": dependency["dependency_type"],
-                        "version": dependency["version"],
-                        "raw_target": dependency["name"],
-                        "normalized_target": package_root(dependency["name"]),
-                    },
                 )
             )
 
+        return result
+
+
+class PythonProjectExtractor:
+    name = "pyproject"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).name == "pyproject.toml"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        try:
+            pyproject = tomllib.loads(content)
+        except tomllib.TOMLDecodeError as exc:
+            result.errors.append(f"Invalid pyproject.toml {context.source.name}/{context.rel_path}: {exc}")
+            return result
+        if not isinstance(pyproject, dict):
+            result.errors.append(
+                f"Invalid pyproject.toml {context.source.name}/{context.rel_path}: root must be object"
+            )
+            return result
+
+        metadata = pyproject_metadata(pyproject)
+        package_entity = python_package_entity(context, metadata["name"], metadata["version"])
+        if package_entity:
+            result.entities.append(package_entity)
+            result.edges.append(
+                resolved_edge(
+                    context.file_entity,
+                    package_entity,
+                    "DECLARES_PACKAGE",
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+            if context.project:
+                result.edges.append(
+                    resolved_edge(
+                        context.project.entity,
+                        package_entity,
+                        "DECLARES_PACKAGE",
+                        context.source.name,
+                        context.rel_path,
+                        self.name,
+                    )
+                )
+
+        dependency_source = dependency_source_entity(context, package_entity)
+        for dependency in pyproject_dependencies(pyproject):
+            result.edges.append(
+                package_dependency_edge(
+                    dependency_source,
+                    dependency["name"],
+                    "python",
+                    dependency["dependency_type"],
+                    dependency["version"],
+                    dependency["raw_target"],
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+        return result
+
+
+class PythonRequirementsExtractor:
+    name = "requirements"
+
+    def can_process(self, rel_path: str) -> bool:
+        return is_requirements_file(Path(rel_path))
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        dependency_source = context.project.entity if context.project else context.file_entity
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            dependency = requirement_dependency(line)
+            if not dependency:
+                continue
+            result.edges.append(
+                package_dependency_edge(
+                    dependency_source,
+                    dependency["name"],
+                    "python",
+                    "requirements",
+                    dependency["version"],
+                    dependency["raw_target"],
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                    line_number=line_number,
+                )
+            )
+        return result
+
+
+class DotnetProjectExtractor:
+    name = "dotnet_project"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).suffix.lower() in DOTNET_PROJECT_SUFFIXES
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        root = xml_root(content, context)
+        if root is None:
+            return result
+
+        metadata = dotnet_project_metadata_from_root(root, Path(context.rel_path).stem)
+        package_entity = dotnet_package_entity(context, metadata)
+        if package_entity:
+            result.entities.append(package_entity)
+            result.edges.append(
+                resolved_edge(
+                    context.file_entity,
+                    package_entity,
+                    "DECLARES_PACKAGE",
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+            if context.project:
+                result.edges.append(
+                    resolved_edge(
+                        context.project.entity,
+                        package_entity,
+                        "DECLARES_PACKAGE",
+                        context.source.name,
+                        context.rel_path,
+                        self.name,
+                    )
+                )
+
+        dependency_source = dependency_source_entity(context, package_entity)
+        for dependency in dotnet_package_references(root):
+            result.edges.append(
+                package_dependency_edge(
+                    dependency_source,
+                    dependency["name"],
+                    "dotnet",
+                    "PackageReference",
+                    dependency["version"],
+                    dependency["raw_target"],
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+        for reference in dotnet_project_references(root):
+            result.edges.append(
+                unresolved_edge(
+                    context.project.entity if context.project else context.file_entity,
+                    reference["name"],
+                    "DEPENDS_ON_PROJECT",
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                    to_type="project",
+                    properties=reference,
+                )
+            )
+        return result
+
+
+class DotnetBuildConfigExtractor:
+    name = "dotnet_build_config"
+
+    def can_process(self, rel_path: str) -> bool:
+        path = Path(rel_path)
+        return path.name == "Directory.Build.props" or path.suffix.lower() in DOTNET_BUILD_SUFFIXES
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        root = xml_root(content, context)
+        if root is None:
+            return result
+
+        config_entity = Entity(
+            entity_type="build_config",
+            name=Path(context.rel_path).name,
+            source_name=context.source.name,
+            file_path=context.rel_path,
+            aliases={Path(context.rel_path).name},
+            properties={
+                "ecosystem": "dotnet",
+                "path": context.rel_path,
+                "project": context.project.name if context.project else None,
+            },
+        )
+        result.entities.append(config_entity)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                config_entity,
+                "DECLARES_BUILD_CONFIG",
+                context.source.name,
+                context.rel_path,
+                self.name,
+            )
+        )
+        for dependency in dotnet_package_references(root):
+            result.edges.append(
+                package_dependency_edge(
+                    config_entity,
+                    dependency["name"],
+                    "dotnet",
+                    "PackageReference",
+                    dependency["version"],
+                    dependency["raw_target"],
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                )
+            )
+        return result
+
+
+class DotnetSolutionExtractor:
+    name = "dotnet_solution"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).suffix.lower() == ".sln"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        solution = Entity(
+            entity_type="solution",
+            name=Path(context.rel_path).stem,
+            source_name=context.source.name,
+            file_path=context.rel_path,
+            aliases={Path(context.rel_path).stem},
+            properties={
+                "ecosystem": "dotnet",
+                "path": context.rel_path,
+                "project": context.project.name if context.project else None,
+            },
+        )
+        result.entities.append(solution)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                solution,
+                "DECLARES_SOLUTION",
+                context.source.name,
+                context.rel_path,
+                self.name,
+            )
+        )
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            reference = solution_project_reference(line)
+            if not reference:
+                continue
+            result.edges.append(
+                unresolved_edge(
+                    solution,
+                    reference["name"],
+                    "CONTAINS_PROJECT",
+                    context.source.name,
+                    context.rel_path,
+                    self.name,
+                    to_type="project",
+                    line_number=line_number,
+                    properties=reference,
+                )
+            )
+        return result
+
+
+class PnpmWorkspaceExtractor:
+    name = "pnpm_workspace"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).name == "pnpm-workspace.yaml"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        data = read_yaml_object(content)
+        package_patterns = data.get("packages") if data else None
+        workspace = Entity(
+            entity_type="workspace",
+            name=f"{context.source.name} workspace",
+            source_name=context.source.name,
+            file_path=context.rel_path,
+            aliases={context.source.name},
+            properties={
+                "ecosystem": "javascript",
+                "path": context.rel_path,
+                "package_patterns": package_patterns if isinstance(package_patterns, list) else [],
+            },
+        )
+        result.entities.append(workspace)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                workspace,
+                "DECLARES_WORKSPACE",
+                context.source.name,
+                context.rel_path,
+                self.name,
+            )
+        )
         return result
 
 
@@ -428,7 +848,12 @@ def package_dependencies(package: dict[str, Any]) -> Iterable[dict[str, Any]]:
         if isinstance(deps, dict):
             for dep_name, version in deps.items():
                 if isinstance(dep_name, str):
-                    yield {"name": package_root(dep_name), "version": version, "dependency_type": dependency_type}
+                    yield {
+                        "name": package_root(dep_name),
+                        "version": version if isinstance(version, str) else None,
+                        "dependency_type": dependency_type,
+                        "raw_target": dep_name,
+                    }
 
 
 def import_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
@@ -798,7 +1223,7 @@ def iter_scannable_files(config: RepoGraphConfig, root: Path, max_file_bytes: in
             if filename in config.exclude.files:
                 continue
             file_path = current / filename
-            if file_path.suffix.lower() not in config.include.file_extensions:
+            if not is_scannable_file(config, file_path):
                 continue
             try:
                 if file_path.stat().st_size > max_file_bytes:
@@ -829,11 +1254,330 @@ def read_json_object(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def read_toml_object(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def read_yaml_object(content: str) -> dict[str, Any] | None:
+    data = yaml.safe_load(content) or {}
+    return data if isinstance(data, dict) else None
+
+
+def is_project_manifest(path: Path) -> bool:
+    return (
+        path.name in MANIFEST_FILENAMES
+        or is_requirements_file(path)
+        or path.suffix.lower() in DOTNET_PROJECT_SUFFIXES
+        or path.suffix.lower() in DOTNET_BUILD_SUFFIXES
+        or path.suffix.lower() == ".sln"
+    )
+
+
+def is_requirements_file(path: Path) -> bool:
+    return path.name == "requirements.txt" or (path.name.startswith("requirements-") and path.suffix == ".txt")
+
+
+def is_scannable_file(config: RepoGraphConfig, path: Path) -> bool:
+    return path.suffix.lower() in config.include.file_extensions or is_project_manifest(path)
+
+
+def project_name_from_path(source: ResolvedSource, path: Path) -> str:
+    return source.name if path == source.path else path.name
+
+
 def string_value(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def pyproject_metadata(pyproject: dict[str, Any]) -> dict[str, str | None]:
+    project = object_mapping(pyproject.get("project"))
+    poetry = object_mapping(object_mapping(pyproject.get("tool")).get("poetry"))
+    name = string_value(project.get("name")) or string_value(poetry.get("name"))
+    version = string_value(project.get("version")) or string_value(poetry.get("version"))
+    return {"name": name, "version": version}
+
+
+def pyproject_dependencies(pyproject: dict[str, Any]) -> Iterable[dict[str, str | None]]:
+    project = object_mapping(pyproject.get("project"))
+    raw_dependencies = project.get("dependencies")
+    if isinstance(raw_dependencies, list):
+        for raw_dependency in raw_dependencies:
+            if isinstance(raw_dependency, str):
+                dependency = requirement_dependency(raw_dependency)
+                if dependency:
+                    dependency["dependency_type"] = "project.dependencies"
+                    yield dependency
+
+    optional_dependencies = object_mapping(project.get("optional-dependencies"))
+    for group_name, dependencies in optional_dependencies.items():
+        if not isinstance(dependencies, list):
+            continue
+        for raw_dependency in dependencies:
+            if isinstance(raw_dependency, str):
+                dependency = requirement_dependency(raw_dependency)
+                if dependency:
+                    dependency["dependency_type"] = f"project.optional-dependencies.{group_name}"
+                    yield dependency
+
+    poetry = object_mapping(object_mapping(pyproject.get("tool")).get("poetry"))
+    for dependency_type, dependencies in poetry_dependency_groups(poetry):
+        for package_name, version in dependencies.items():
+            if not isinstance(package_name, str) or package_name.lower() == "python":
+                continue
+            yield {
+                "name": normalize_python_package_name(package_name),
+                "version": dependency_version(version),
+                "dependency_type": dependency_type,
+                "raw_target": package_name,
+            }
+
+
+def poetry_dependency_groups(poetry: dict[str, Any]) -> Iterable[tuple[str, dict[str, Any]]]:
+    dependencies = object_mapping(poetry.get("dependencies"))
+    if dependencies:
+        yield "tool.poetry.dependencies", dependencies
+
+    dev_dependencies = object_mapping(poetry.get("dev-dependencies"))
+    if dev_dependencies:
+        yield "tool.poetry.dev-dependencies", dev_dependencies
+
+    groups = object_mapping(poetry.get("group"))
+    for group_name, group_data in groups.items():
+        group_dependencies = object_mapping(object_mapping(group_data).get("dependencies"))
+        if group_dependencies:
+            yield f"tool.poetry.group.{group_name}.dependencies", group_dependencies
+
+
+def dependency_version(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        version = value.get("version")
+        return version if isinstance(version, str) else None
+    return None
+
+
+def requirement_dependency(line: str) -> dict[str, str | None] | None:
+    raw_target = line.strip()
+    if not raw_target or raw_target.startswith("#") or raw_target.startswith(("-", "--")):
+        return None
+    raw_target = raw_target.split(" #", 1)[0].strip()
+    match = REQUIREMENT_NAME_RE.match(raw_target)
+    if not match:
+        return None
+    name = normalize_python_package_name(match.group(1))
+    version = raw_target[match.end() :].strip() or None
+    return {
+        "name": name,
+        "version": version,
+        "dependency_type": None,
+        "raw_target": raw_target,
+    }
+
+
+def normalize_python_package_name(value: str) -> str:
+    return value.strip().lower().replace("_", "-")
+
+
+def python_package_entity(context: FileScanContext, name: str | None, version: str | None) -> Entity | None:
+    if not name:
+        return None
+    normalized = normalize_python_package_name(name)
+    return Entity(
+        entity_type="package",
+        name=name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        aliases={name, normalized},
+        properties={
+            "ecosystem": "python",
+            "version": version,
+            "project": context.project.name if context.project else None,
+        },
+    )
+
+
+def dotnet_project_metadata(content: str) -> dict[str, str | None]:
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return dotnet_metadata_defaults()
+    return dotnet_project_metadata_from_root(root)
+
+
+def dotnet_project_metadata_from_root(root: ET.Element, default_name: str | None = None) -> dict[str, str | None]:
+    package_id = first_xml_text(root, "PackageId")
+    assembly_name = first_xml_text(root, "AssemblyName") or default_name
+    root_namespace = first_xml_text(root, "RootNamespace")
+    version = first_xml_text(root, "Version")
+    return {
+        "package_id": package_id,
+        "assembly_name": assembly_name,
+        "root_namespace": root_namespace,
+        "version": version,
+        "target_framework": first_xml_text(root, "TargetFramework"),
+        "target_frameworks": first_xml_text(root, "TargetFrameworks"),
+        "output_type": first_xml_text(root, "OutputType"),
+    }
+
+
+def dotnet_metadata_defaults() -> dict[str, str | None]:
+    return {
+        "package_id": None,
+        "assembly_name": None,
+        "root_namespace": None,
+        "version": None,
+        "target_framework": None,
+        "target_frameworks": None,
+        "output_type": None,
+    }
+
+
+def dotnet_package_entity(context: FileScanContext, metadata: dict[str, str | None]) -> Entity | None:
+    package_name = metadata["package_id"] or metadata["assembly_name"]
+    if not package_name:
+        return None
+    aliases = {package_name}
+    if metadata["assembly_name"]:
+        aliases.add(metadata["assembly_name"])
+    return Entity(
+        entity_type="package",
+        name=package_name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        aliases=aliases,
+        properties={
+            "ecosystem": "dotnet",
+            "version": metadata["version"],
+            "target_framework": metadata["target_framework"],
+            "target_frameworks": metadata["target_frameworks"],
+            "output_type": metadata["output_type"],
+            "project": context.project.name if context.project else None,
+        },
+    )
+
+
+def dotnet_package_references(root: ET.Element) -> Iterable[dict[str, str | None]]:
+    for element in root.iter():
+        if xml_local_name(element.tag) != "PackageReference":
+            continue
+        package_name = string_value(element.attrib.get("Include")) or string_value(element.attrib.get("Update"))
+        if not package_name:
+            continue
+        yield {
+            "name": package_name,
+            "version": string_value(element.attrib.get("Version")) or first_child_text(element, "Version"),
+            "raw_target": package_name,
+        }
+
+
+def dotnet_project_references(root: ET.Element) -> Iterable[dict[str, str | None]]:
+    for element in root.iter():
+        if xml_local_name(element.tag) != "ProjectReference":
+            continue
+        raw_target = string_value(element.attrib.get("Include"))
+        if not raw_target:
+            continue
+        yield {
+            "name": Path(raw_target).stem,
+            "raw_target": raw_target,
+            "normalized_target": Path(raw_target).stem,
+        }
+
+
+def solution_project_reference(line: str) -> dict[str, str | None] | None:
+    match = SLN_PROJECT_RE.match(line)
+    if not match:
+        return None
+    raw_path = match.group(2)
+    if Path(raw_path).suffix.lower() not in DOTNET_PROJECT_SUFFIXES:
+        return None
+    return {
+        "name": Path(raw_path).stem,
+        "display_name": match.group(1),
+        "raw_target": raw_path,
+        "normalized_target": Path(raw_path).stem,
+    }
+
+
+def xml_root(content: str, context: FileScanContext) -> ET.Element:
+    try:
+        return ET.fromstring(content)
+    except ET.ParseError as exc:
+        raise ValueError(f"Invalid XML {context.source.name}/{context.rel_path}: {exc}") from exc
+
+
+def first_xml_text(root: ET.Element, name: str) -> str | None:
+    for element in root.iter():
+        if xml_local_name(element.tag) == name:
+            value = string_value(element.text)
+            if value:
+                return value
+    return None
+
+
+def first_child_text(root: ET.Element, name: str) -> str | None:
+    for child in root:
+        if xml_local_name(child.tag) == name:
+            return string_value(child.text)
+    return None
+
+
+def xml_local_name(name: str) -> str:
+    return name.rsplit("}", 1)[-1]
+
+
+def object_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def dependency_source_entity(context: FileScanContext, package_entity: Entity | None = None) -> Entity:
+    if package_entity:
+        return package_entity
+    if context.project:
+        return context.project.entity
+    return context.file_entity
+
+
+def package_dependency_edge(
+    from_entity: Entity,
+    name: str | None,
+    ecosystem: str,
+    dependency_type: str | None,
+    version: str | None,
+    raw_target: str | None,
+    source_name: str,
+    file_path: str,
+    parser: str,
+    line_number: int | None = None,
+) -> Edge:
+    target_name = name or raw_target or ""
+    return unresolved_edge(
+        from_entity,
+        target_name,
+        "DEPENDS_ON_PACKAGE",
+        source_name,
+        file_path,
+        parser,
+        to_type="package",
+        line_number=line_number,
+        properties={
+            "ecosystem": ecosystem,
+            "dependency_type": dependency_type,
+            "version": version,
+            "raw_target": raw_target,
+            "normalized_target": target_name,
+        },
+    )
 
 
 def package_root(value: str) -> str:

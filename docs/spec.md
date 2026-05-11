@@ -183,7 +183,8 @@ Start with parsers that are useful across many codebases:
 
 - Git metadata
 - project discovery from package manifests and workspaces
-- package manifests and dependency declarations
+- JavaScript, Python, and .NET package manifests and dependency declarations
+- .NET solution, project reference, and shared build config manifests
 - TypeScript and JavaScript imports, exports, and route declarations
 - HTTP calls from `fetch` and common client libraries
 - SQL tables, views, functions, and stored procedures
@@ -197,7 +198,7 @@ than replace rich initial extraction.
 Future parser slices should add:
 
 - Python imports, FastAPI or Flask routes, and exported application symbols
-- .NET project files, package references, controllers, and service calls
+- .NET controllers, minimal APIs, service calls, and deeper MSBuild metadata
 - Kubernetes manifests for service and deployment topology
 - optional LLM-assisted documentation discovery that emits evidence-backed
   candidate entities and edges
@@ -223,8 +224,8 @@ Private local config:
 
 1. Config loader and source model.
 2. Git sync into a local cache.
-3. JSON graph builder with repository, project, and file entities.
-4. Package, import, export, HTTP, route, and SQL parsers.
+3. JSON graph builder with repository, project, package, and file entities.
+4. JavaScript, Python, .NET, HTTP, route, and SQL parser slices.
 5. Neo4j loader.
 6. FastAPI query service.
 7. Docker Compose runtime.

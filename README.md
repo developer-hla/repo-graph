@@ -12,13 +12,15 @@ Repo Graph is alpha software. The current implementation can inspect source
 configs, sync Git sources, scan local repositories, export a portable JSON
 graph, load Neo4j, and expose a local HTTP runtime with safe read endpoints.
 The scanner discovers repository, project, file, package, route, exported
-symbol, HTTP call, and SQL relationships from local source files.
+symbol, HTTP call, Python manifest, .NET manifest, and SQL relationships from
+local source files.
 
 ## Goals
 
 - Clone or update repositories into a local cache.
-- Parse code, package manifests, API routes, HTTP calls, SQL, and database
-  objects without requiring users to define relationships up front.
+- Parse code, package manifests, API routes, HTTP calls, Python project
+  metadata, .NET project metadata, SQL, and database objects without requiring
+  users to define relationships up front.
 - Emit an entity/edge graph with source provenance.
 - Load the graph into a queryable store.
 - Expose a local API that agents and developers can query.
@@ -32,8 +34,8 @@ pixi run repo-graph build --config config/local-example.yaml --strict
 ```
 
 The example config scans only synthetic repositories under `examples/`. It
-includes an API service, shared package, inventory service, and database
-project so package, HTTP, and SQL relationships can resolve locally.
+includes API, shared package, inventory, Python, .NET, and database projects so
+package, HTTP, project reference, and SQL relationships can resolve locally.
 
 To scan your own repositories, create a local config outside this repository or
 use an ignored local file. Keep real organization names, repository URLs, and
