@@ -101,6 +101,10 @@ relationships derived from graph edge types.
 - `POST /sync`
 - `POST /build`
 - `POST /build-load`
+- `POST /jobs/build`
+- `POST /jobs/build-load`
+- `GET /jobs`
+- `GET /jobs/{job_id}`
 - `POST /load`
 - `POST /query`
 - `GET /stats`
@@ -120,7 +124,14 @@ load orchestration:
 - `POST /build-load`
 - `POST /load`
 
-For large source sets, background jobs and job status should come later.
+For large source sets, an in-memory local job API should support:
+
+- `POST /jobs/build`
+- `POST /jobs/build-load`
+- `GET /jobs`
+- `GET /jobs/{job_id}`
+
+Jobs are not durable. If the API process restarts, job history is lost.
 
 The API should expose graph scope metadata so agents can state which sources,
 refs, and commits were loaded:

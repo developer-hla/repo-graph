@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.jobs import JobRegistry
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.storage.neo4j import (
     Neo4jSettings,
@@ -123,6 +124,10 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/manifest", "available": True},
             {"method": "POST", "path": "/build", "available": True},
             {"method": "POST", "path": "/build-load", "available": True},
+            {"method": "POST", "path": "/jobs/build", "available": True},
+            {"method": "POST", "path": "/jobs/build-load", "available": True},
+            {"method": "GET", "path": "/jobs", "available": True},
+            {"method": "GET", "path": "/jobs/{job_id}", "available": True},
             {"method": "POST", "path": "/load", "available": True},
             {"method": "POST", "path": "/query", "available": False},
             {"method": "GET", "path": "/scope", "available": True},
@@ -138,6 +143,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "query_api_status": "safe read endpoints available",
             "raw_cypher_status": "planned",
             "build_api_status": "available",
+            "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
             "scope_status": "available",
         },
@@ -227,6 +233,47 @@ def build_load_response(settings: RuntimeSettings, request: BuildLoadRequest) ->
     }
 
 
+def submit_build_job(
+    registry: JobRegistry,
+    settings: RuntimeSettings,
+    request: BuildRequest,
+) -> dict[str, Any]:
+    return registry.submit(
+        "build",
+        request.model_dump(),
+        lambda: build_response(settings, request),
+    )
+
+
+def submit_build_load_job(
+    registry: JobRegistry,
+    settings: RuntimeSettings,
+    request: BuildLoadRequest,
+) -> dict[str, Any]:
+    return registry.submit(
+        "build-load",
+        request.model_dump(),
+        lambda: build_load_response(settings, request),
+    )
+
+
+def job_response(registry: JobRegistry, job_id: str) -> dict[str, Any]:
+    return registry.get(job_id)
+
+
+def jobs_response(
+    registry: JobRegistry,
+    status: str | None,
+    kind: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    items = registry.list_jobs(status=status, kind=kind, limit=limit)
+    return {
+        "items": items,
+        "count": len(items),
+    }
+
+
 def search_entities_response(
     settings: RuntimeSettings,
     query: str | None,
@@ -313,8 +360,9 @@ def neo4j_http_exception(operation: str, exc: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail=f"Neo4j {operation} failed: {exc}")
 
 
-def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
+def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistry | None = None) -> FastAPI:
     runtime_settings = settings or RuntimeSettings.from_env()
+    registry = job_registry or JobRegistry()
     app = FastAPI(title="Repo Graph", version=__version__)
 
     @app.get("/health")
@@ -344,6 +392,32 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Graph build-load failed: {exc}") from exc
+
+    @app.post("/jobs/build", status_code=202)
+    def submit_build(request: BuildRequest) -> dict[str, Any]:
+        return submit_build_job(registry, runtime_settings, request)
+
+    @app.post("/jobs/build-load", status_code=202)
+    def submit_build_load(request: BuildLoadRequest) -> dict[str, Any]:
+        return submit_build_load_job(registry, runtime_settings, request)
+
+    @app.get("/jobs")
+    def list_jobs(
+        status: str | None = None,
+        kind: str | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return jobs_response(registry, status, kind, limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/jobs/{job_id}")
+    def get_job(job_id: str) -> dict[str, Any]:
+        try:
+            return job_response(registry, job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Job not found: {exc.args[0]}") from exc
 
     @app.post("/load")
     def load(request: LoadRequest) -> dict[str, Any]:

@@ -40,6 +40,39 @@ curl -X POST http://localhost:8000/build \
   -d '{"strict":true}'
 ```
 
+For larger source sets, use the job API:
+
+```bash
+curl -X POST http://localhost:8000/jobs/build-load \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+```
+
+Poll the returned `job_id`:
+
+```bash
+curl http://localhost:8000/jobs/<job_id>
+```
+
+List recent jobs:
+
+```bash
+curl http://localhost:8000/jobs
+curl "http://localhost:8000/jobs?status=running"
+curl "http://localhost:8000/jobs?kind=build-load"
+```
+
+Job statuses are:
+
+- `queued`
+- `running`
+- `succeeded`
+- `failed`
+
+Jobs are in-memory and local to the running API process. If the API container
+restarts, job history is lost. Agents should use jobs for long-running local
+work, not as durable audit history.
+
 ## Load Status
 
 Check graph counts:

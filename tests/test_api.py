@@ -16,14 +16,19 @@ from repo_graph.api import (
     create_app,
     entity_response,
     health_payload,
+    job_response,
+    jobs_response,
     load_response,
     manifest_payload,
     neighbors_response,
     scope_response,
     search_entities_response,
     sources_response,
+    submit_build_job,
+    submit_build_load_job,
     unresolved_edges_response,
 )
+from repo_graph.jobs import JobRegistry
 from repo_graph.storage.neo4j import LoadSummary
 
 
@@ -49,6 +54,10 @@ class ApiTests(unittest.TestCase):
         self.assertIsNone(payload["graph_store"]["database"])
         self.assertIn({"method": "POST", "path": "/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/jobs/build", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/jobs/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/jobs", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/jobs/{job_id}", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/scope", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/sources", "available": True}, payload["endpoints"])
@@ -70,6 +79,10 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/manifest", route_paths)
         self.assertIn("/build", route_paths)
         self.assertIn("/build-load", route_paths)
+        self.assertIn("/jobs/build", route_paths)
+        self.assertIn("/jobs/build-load", route_paths)
+        self.assertIn("/jobs", route_paths)
+        self.assertIn("/jobs/{job_id}", route_paths)
         self.assertIn("/load", route_paths)
         self.assertIn("/scope", route_paths)
         self.assertIn("/sources", route_paths)
@@ -144,6 +157,43 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["load"], load_payload)
         build.assert_called_once()
         load.assert_called_once()
+
+    def test_submit_build_job_runs_through_registry(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        registry = JobRegistry(run_inline=True)
+        with patch("repo_graph.api.build_response", return_value={"status": "built"}):
+            job = submit_build_job(registry, settings, BuildRequest(strict=True))
+
+        self.assertEqual(job["kind"], "build")
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(job["request"]["strict"], True)
+        self.assertEqual(job["result"], {"status": "built"})
+
+    def test_submit_build_load_job_runs_through_registry(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        registry = JobRegistry(run_inline=True)
+        with patch("repo_graph.api.build_load_response", return_value={"status": "built_and_loaded"}):
+            job = submit_build_load_job(registry, settings, BuildLoadRequest(clear_existing=False))
+
+        self.assertEqual(job["kind"], "build-load")
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(job["request"]["clear_existing"], False)
+        self.assertEqual(job["result"], {"status": "built_and_loaded"})
+
+    def test_job_response_reads_registry_job(self) -> None:
+        registry = JobRegistry(run_inline=True)
+        created = registry.submit("build", {}, lambda: {"status": "built"})
+
+        self.assertEqual(job_response(registry, created["job_id"]), created)
+
+    def test_jobs_response_wraps_registry_jobs(self) -> None:
+        registry = JobRegistry(run_inline=True)
+        registry.submit("build", {}, lambda: {"status": "built"})
+
+        payload = jobs_response(registry, "succeeded", "build", 10)
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["items"][0]["kind"], "build")
 
     def test_scope_response_returns_loaded_scope(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

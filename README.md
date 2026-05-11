@@ -92,6 +92,20 @@ curl -X POST http://localhost:8000/build-load \
 curl http://localhost:8000/stats
 ```
 
+For larger source sets, use the in-memory job API and poll until the job
+finishes:
+
+```bash
+curl -X POST http://localhost:8000/jobs/build-load \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+
+curl http://localhost:8000/jobs/<job_id>
+```
+
+Job history is local to the running API process. If the container restarts,
+jobs disappear.
+
 Build without loading:
 
 ```bash
