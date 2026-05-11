@@ -8,11 +8,14 @@ from pathlib import Path
 
 import uvicorn
 
+from repo_graph import __version__
 from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.sources import resolve_sources, sync_sources
 from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
+
+DEFAULT_API_URL = "http://localhost:8000"
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
@@ -81,6 +84,42 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_agent_instructions(args: argparse.Namespace) -> int:
+    print(agent_instructions_markdown(args.api_url, args.config))
+    return 0
+
+
+def agent_instructions_markdown(api_url: str, config_path: Path | None = None) -> str:
+    lines = [
+        "## Repo Graph",
+        "",
+        "Repo Graph may be available as a local architecture graph for this codebase.",
+        "Treat the runtime manifest as the source of truth for supported endpoints.",
+        "",
+        f"- API base URL: `{api_url}`",
+        f"- Manifest: `{api_url}/manifest`",
+    ]
+    if config_path is not None:
+        lines.append(f"- Expected config path: `{config_path}`")
+    lines.extend(
+        [
+            f"- Configured source status: `{api_url}/sources/configured`",
+            f"- Loaded graph scope: `{api_url}/scope`",
+            f"- Loaded sources: `{api_url}/sources`",
+            f"- Entity search: `{api_url}/entities/search`",
+            f"- Unresolved edges: `{api_url}/edges/unresolved`",
+            f"- Repo Graph version used to generate these instructions: `{__version__}`",
+            "",
+            "Before answering architecture questions, call the manifest, then check `/scope`",
+            "and `/sources`. Use `/sources/configured` when you need to know which",
+            "repositories are configured or missing locally before a graph has been loaded.",
+            "Unresolved edges are discovered references that were not linked in the current",
+            "graph scope; do not treat them as unused code by default.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def resolve_output_path(config: RepoGraphConfig, output: Path | None) -> Path:
     if output is None:
         return config.output_dir / "graph.json"
@@ -122,6 +161,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     stats_parser = subparsers.add_parser("stats", help="Read Repo Graph counts from Neo4j.")
     stats_parser.set_defaults(func=cmd_stats)
+
+    agent_parser = subparsers.add_parser("agent-instructions", help="Print a Markdown Repo Graph agent snippet.")
+    agent_parser.add_argument("--api-url", default=DEFAULT_API_URL)
+    agent_parser.add_argument("--config", type=Path)
+    agent_parser.set_defaults(func=cmd_agent_instructions)
 
     return parser
 

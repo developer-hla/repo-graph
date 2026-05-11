@@ -13,6 +13,22 @@ The manifest lists available endpoints, graph store configuration, and planned
 capabilities. Agents should prefer the documented read endpoints below instead
 of trying to execute raw Cypher.
 
+## Project AGENTS.md Snippet
+
+Generate a short Markdown snippet for a repository that should point agents at
+Repo Graph:
+
+```bash
+pixi run repo-graph agent-instructions \
+  --api-url http://localhost:8000 \
+  --config ../my-repo-graph-sources.yaml
+```
+
+Add the output to that repository's private `AGENTS.md` or equivalent agent
+instructions. The snippet is intentionally Markdown, not a second JSON
+discovery schema. Agents should still call `/manifest` to discover the live API
+surface.
+
 ## Config And Source Status
 
 Inspect the active config without building the graph:

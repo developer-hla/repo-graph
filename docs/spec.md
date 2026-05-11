@@ -174,6 +174,7 @@ repo-graph build --config path/to/sources.yaml --output graph.json
 repo-graph build --config path/to/sources.yaml --strict
 repo-graph load --graph graph.json
 repo-graph serve --config path/to/sources.yaml
+repo-graph agent-instructions --api-url http://localhost:8000 --config path/to/sources.yaml
 ```
 
 ## Parser MVP

@@ -62,6 +62,17 @@ The runtime exposes health, manifest, config, source status, sync, build, load,
 job, and read-only graph endpoints. The manifest tells agents which API
 capabilities are available and which graph capabilities are still planned.
 
+Print a Markdown snippet for another repository's `AGENTS.md`:
+
+```bash
+pixi run repo-graph agent-instructions \
+  --api-url http://localhost:8000 \
+  --config ../my-repo-graph-sources.yaml
+```
+
+The snippet points agents at `/manifest` as the runtime source of truth. It is
+intended for private working repositories, not as a generated public artifact.
+
 ## Docker Runtime
 
 Start Repo Graph with Neo4j:
