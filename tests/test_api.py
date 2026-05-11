@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,8 +12,11 @@ from repo_graph.api import (
     BuildRequest,
     LoadRequest,
     RuntimeSettings,
+    SyncRequest,
     build_load_response,
     build_response,
+    config_response,
+    configured_sources_response,
     create_app,
     entity_response,
     health_payload,
@@ -26,8 +30,11 @@ from repo_graph.api import (
     sources_response,
     submit_build_job,
     submit_build_load_job,
+    submit_sync_job,
+    sync_response,
     unresolved_edges_response,
 )
+from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.jobs import JobRegistry
 from repo_graph.storage.neo4j import LoadSummary
 
@@ -52,8 +59,12 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["config"]["path"], "config/local-example.yaml")
         self.assertEqual(payload["graph_store"]["type"], "neo4j")
         self.assertIsNone(payload["graph_store"]["database"])
+        self.assertIn({"method": "GET", "path": "/config", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/sources/configured", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/sync", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/jobs/sync", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/build-load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs", "available": True}, payload["endpoints"])
@@ -77,8 +88,12 @@ class ApiTests(unittest.TestCase):
 
         self.assertIn("/health", route_paths)
         self.assertIn("/manifest", route_paths)
+        self.assertIn("/config", route_paths)
+        self.assertIn("/sources/configured", route_paths)
+        self.assertIn("/sync", route_paths)
         self.assertIn("/build", route_paths)
         self.assertIn("/build-load", route_paths)
+        self.assertIn("/jobs/sync", route_paths)
         self.assertIn("/jobs/build", route_paths)
         self.assertIn("/jobs/build-load", route_paths)
         self.assertIn("/jobs", route_paths)
@@ -91,6 +106,61 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/entities/{entity_id}", route_paths)
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
         self.assertIn("/edges/unresolved", route_paths)
+
+    def test_config_response_returns_summary(self) -> None:
+        root = Path("/repo")
+        config = RepoGraphConfig(
+            name="test",
+            config_path=root / "repo-graph.yaml",
+            cache_dir=root / ".repo-graph/cache/repos",
+            output_dir=root / ".repo-graph/output",
+            sources=(Source(name="service", source_type="local_path", path=root / "service"),),
+        )
+        with patch("repo_graph.api.load_config", return_value=config) as load_config:
+            payload = config_response(RuntimeSettings(config_path=root / "repo-graph.yaml"))
+
+        self.assertEqual(payload["name"], "test")
+        self.assertEqual(payload["source_count"], 1)
+        load_config.assert_called_once()
+
+    def test_configured_sources_response_wraps_source_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "service"
+            source_dir.mkdir()
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(Source(name="service", source_type="local_path", path=source_dir),),
+            )
+            with patch("repo_graph.api.load_config", return_value=config):
+                payload = configured_sources_response(RuntimeSettings(config_path=config.config_path))
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["ready_count"], 1)
+        self.assertEqual(payload["problem_count"], 0)
+        self.assertEqual(payload["items"][0]["name"], "service")
+        self.assertTrue(payload["items"][0]["ready"])
+
+    def test_sync_response_reports_source_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(Source(name="missing", source_type="local_path", path=root / "missing"),),
+            )
+            with patch("repo_graph.api.load_config", return_value=config):
+                payload = sync_response(RuntimeSettings(config_path=config.config_path), SyncRequest())
+
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["failed_count"], 1)
+        self.assertEqual(payload["items"][0]["sync"]["status"], "failed")
+        self.assertIn("path_missing", payload["items"][0]["problems"])
 
     def test_load_response_uses_requested_graph_path(self) -> None:
         settings = RuntimeSettings(
@@ -168,6 +238,17 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(job["status"], "succeeded")
         self.assertEqual(job["request"]["strict"], True)
         self.assertEqual(job["result"], {"status": "built"})
+
+    def test_submit_sync_job_runs_through_registry(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        registry = JobRegistry(run_inline=True)
+        with patch("repo_graph.api.sync_response", return_value={"status": "synced"}):
+            job = submit_sync_job(registry, settings, SyncRequest(config_path="config/local-example.yaml"))
+
+        self.assertEqual(job["kind"], "sync")
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(job["request"]["config_path"], "config/local-example.yaml")
+        self.assertEqual(job["result"], {"status": "synced"})
 
     def test_submit_build_load_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))

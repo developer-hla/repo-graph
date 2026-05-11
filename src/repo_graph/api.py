@@ -15,6 +15,7 @@ from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.jobs import JobRegistry
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
+from repo_graph.sources import config_summary, inspect_sources, sync_sources_with_status
 from repo_graph.storage.neo4j import (
     Neo4jSettings,
     get_entity,
@@ -81,6 +82,12 @@ class BuildLoadRequest(BuildRequest):
     clear_existing: bool = True
 
 
+class SyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    config_path: str | None = None
+
+
 def env_value(name: str, default: str | None) -> str | None:
     value = os.getenv(name)
     if value is None or not value.strip():
@@ -122,8 +129,12 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
         "endpoints": [
             {"method": "GET", "path": "/health", "available": True},
             {"method": "GET", "path": "/manifest", "available": True},
+            {"method": "GET", "path": "/config", "available": True},
+            {"method": "GET", "path": "/sources/configured", "available": True},
+            {"method": "POST", "path": "/sync", "available": True},
             {"method": "POST", "path": "/build", "available": True},
             {"method": "POST", "path": "/build-load", "available": True},
+            {"method": "POST", "path": "/jobs/sync", "available": True},
             {"method": "POST", "path": "/jobs/build", "available": True},
             {"method": "POST", "path": "/jobs/build-load", "available": True},
             {"method": "GET", "path": "/jobs", "available": True},
@@ -142,6 +153,8 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "purpose": "Discover the local Repo Graph runtime and supported API surface.",
             "query_api_status": "safe read endpoints available",
             "raw_cypher_status": "planned",
+            "source_status": "available",
+            "sync_status": "available",
             "build_api_status": "available",
             "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
@@ -186,6 +199,52 @@ def validate_max_file_bytes(value: int) -> int:
     if value < 1:
         raise ValueError("max_file_bytes must be at least 1.")
     return value
+
+
+def load_runtime_config(settings: RuntimeSettings, config_path: str | None = None) -> RepoGraphConfig:
+    return load_config(resolve_config_path(settings, config_path))
+
+
+def config_response(settings: RuntimeSettings, config_path: str | None = None) -> dict[str, Any]:
+    return config_summary(load_runtime_config(settings, config_path))
+
+
+def configured_sources_response(settings: RuntimeSettings, config_path: str | None = None) -> dict[str, Any]:
+    config = load_runtime_config(settings, config_path)
+    items = inspect_sources(config)
+    return {
+        "config": config_summary(config),
+        "items": items,
+        "count": len(items),
+        "ready_count": sum(1 for item in items if item["ready"]),
+        "problem_count": sum(1 for item in items if item["problems"]),
+    }
+
+
+def sync_response(settings: RuntimeSettings, request: SyncRequest) -> dict[str, Any]:
+    config = load_runtime_config(settings, request.config_path)
+    items = sync_sources_with_status(config)
+    failed_count = sum(1 for item in items if item.get("sync", {}).get("status") == "failed")
+    return {
+        "status": "failed" if failed_count else "synced",
+        "config": config_summary(config),
+        "items": items,
+        "count": len(items),
+        "synced_count": len(items) - failed_count,
+        "failed_count": failed_count,
+    }
+
+
+def submit_sync_job(
+    registry: JobRegistry,
+    settings: RuntimeSettings,
+    request: SyncRequest,
+) -> dict[str, Any]:
+    return registry.submit(
+        "sync",
+        request.model_dump(),
+        lambda: sync_response(settings, request),
+    )
 
 
 def build_response(settings: RuntimeSettings, request: BuildRequest) -> dict[str, Any]:
@@ -373,6 +432,33 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
     def manifest() -> dict[str, Any]:
         return manifest_payload(runtime_settings)
 
+    @app.get("/config")
+    def config(config_path: str | None = None) -> dict[str, Any]:
+        try:
+            return config_response(runtime_settings, config_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/sources/configured")
+    def configured_sources(config_path: str | None = None) -> dict[str, Any]:
+        try:
+            return configured_sources_response(runtime_settings, config_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post("/sync")
+    def sync(request: SyncRequest) -> dict[str, Any]:
+        try:
+            return sync_response(runtime_settings, request)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.post("/build")
     def build(request: BuildRequest) -> dict[str, Any]:
         try:
@@ -400,6 +486,10 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
     @app.post("/jobs/build-load", status_code=202)
     def submit_build_load(request: BuildLoadRequest) -> dict[str, Any]:
         return submit_build_load_job(registry, runtime_settings, request)
+
+    @app.post("/jobs/sync", status_code=202)
+    def submit_sync(request: SyncRequest) -> dict[str, Any]:
+        return submit_sync_job(registry, runtime_settings, request)
 
     @app.get("/jobs")
     def list_jobs(

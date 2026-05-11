@@ -98,9 +98,12 @@ relationships derived from graph edge types.
 ## API MVP
 
 - `GET /health`
+- `GET /config`
+- `GET /sources/configured`
 - `POST /sync`
 - `POST /build`
 - `POST /build-load`
+- `POST /jobs/sync`
 - `POST /jobs/build`
 - `POST /jobs/build-load`
 - `GET /jobs`
@@ -120,12 +123,16 @@ loaded.
 The first public runtime surface should support synchronous local build and
 load orchestration:
 
+- `GET /config`
+- `GET /sources/configured`
+- `POST /sync`
 - `POST /build`
 - `POST /build-load`
 - `POST /load`
 
 For large source sets, an in-memory local job API should support:
 
+- `POST /jobs/sync`
 - `POST /jobs/build`
 - `POST /jobs/build-load`
 - `GET /jobs`
@@ -138,6 +145,16 @@ refs, and commits were loaded:
 
 - `GET /scope`
 - `GET /sources`
+
+The configured source API should expose source readiness before graph load:
+
+- source name and type
+- configured path, URL, and ref
+- resolved local path
+- exists/missing status
+- Git repository presence
+- current commit when known
+- sync outcome and per-source errors when `/sync` or `/jobs/sync` is used
 
 The first public query surface should use purpose-built read endpoints:
 

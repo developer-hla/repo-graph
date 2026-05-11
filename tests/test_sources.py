@@ -5,11 +5,77 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repo_graph.config import Source
-from repo_graph.sources import get_default_branch, git_cache_path, sync_git_source
+from repo_graph.config import RepoGraphConfig, Source
+from repo_graph.sources import (
+    config_summary,
+    get_default_branch,
+    git_cache_path,
+    inspect_sources,
+    sync_git_source,
+    sync_sources_with_status,
+)
 
 
 class SourceSyncTests(unittest.TestCase):
+    def test_config_summary_describes_source_profile(self) -> None:
+        root = Path("/repo")
+        config = RepoGraphConfig(
+            name="test",
+            config_path=root / "repo-graph.yaml",
+            cache_dir=root / ".repo-graph/cache/repos",
+            output_dir=root / ".repo-graph/output",
+            sources=(Source(name="service", source_type="local_path", path=root / "service"),),
+        )
+
+        payload = config_summary(config)
+
+        self.assertEqual(payload["name"], "test")
+        self.assertEqual(payload["config_path"], "/repo/repo-graph.yaml")
+        self.assertEqual(payload["source_count"], 1)
+        self.assertIn(".ts", payload["include"]["file_extensions"])
+
+    def test_inspect_sources_reports_local_source_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "service"
+            source_dir.mkdir()
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(
+                    Source(name="service", source_type="local_path", path=source_dir),
+                    Source(name="missing", source_type="local_path", path=root / "missing"),
+                ),
+            )
+
+            payload = inspect_sources(config)
+
+        self.assertEqual(len(payload), 2)
+        self.assertTrue(payload[0]["exists"])
+        self.assertTrue(payload[0]["ready"])
+        self.assertFalse(payload[1]["exists"])
+        self.assertFalse(payload[1]["ready"])
+        self.assertIn("path_missing", payload[1]["problems"])
+
+    def test_sync_sources_with_status_captures_source_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(Source(name="missing", source_type="local_path", path=root / "missing"),),
+            )
+
+            payload = sync_sources_with_status(config)
+
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["sync"]["status"], "failed")
+        self.assertIn("Local source path does not exist", payload[0]["sync"]["error"])
+
     def test_git_cache_path_includes_url_identity(self) -> None:
         cache_dir = Path("/tmp/repo-graph-cache")
         source_a = Source(

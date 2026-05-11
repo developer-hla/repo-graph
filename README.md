@@ -54,11 +54,13 @@ Then check:
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/manifest
+curl http://localhost:8000/config
+curl http://localhost:8000/sources/configured
 ```
 
-The runtime exposes health, manifest, load, and stats endpoints. The manifest
-tells agents which API capabilities are available and which graph capabilities
-are still planned.
+The runtime exposes health, manifest, config, source status, sync, build, load,
+job, and read-only graph endpoints. The manifest tells agents which API
+capabilities are available and which graph capabilities are still planned.
 
 ## Docker Runtime
 
@@ -85,6 +87,13 @@ Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
 Build and load the example graph into Neo4j:
 
 ```bash
+curl http://localhost:8000/config
+curl http://localhost:8000/sources/configured
+
+curl -X POST http://localhost:8000/sync \
+  -H "content-type: application/json" \
+  -d '{}'
+
 curl -X POST http://localhost:8000/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
@@ -96,6 +105,10 @@ For larger source sets, use the in-memory job API and poll until the job
 finishes:
 
 ```bash
+curl -X POST http://localhost:8000/jobs/sync \
+  -H "content-type: application/json" \
+  -d '{}'
+
 curl -X POST http://localhost:8000/jobs/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'

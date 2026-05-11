@@ -13,6 +13,52 @@ The manifest lists available endpoints, graph store configuration, and planned
 capabilities. Agents should prefer the documented read endpoints below instead
 of trying to execute raw Cypher.
 
+## Config And Source Status
+
+Inspect the active config without building the graph:
+
+```bash
+curl http://localhost:8000/config
+```
+
+Inspect configured sources and local readiness:
+
+```bash
+curl http://localhost:8000/sources/configured
+```
+
+Useful source status fields:
+
+- `name`
+- `type`
+- `configured`
+- `resolved_path`
+- `exists`
+- `git_repo_present`
+- `current_commit`
+- `ref`
+- `ready`
+- `problems`
+
+Sync configured sources before building:
+
+```bash
+curl -X POST http://localhost:8000/sync \
+  -H "content-type: application/json" \
+  -d '{}'
+```
+
+For larger source sets, submit sync as a job:
+
+```bash
+curl -X POST http://localhost:8000/jobs/sync \
+  -H "content-type: application/json" \
+  -d '{}'
+```
+
+`/sources/configured` describes what the runtime can see on disk. `/sources`
+describes what was loaded into Neo4j from the most recent graph load.
+
 ## Build And Load
 
 Build the active config and load the result into Neo4j:

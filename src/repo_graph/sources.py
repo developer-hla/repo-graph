@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from repo_graph.config import RepoGraphConfig, Source
 
@@ -19,6 +20,123 @@ class ResolvedSource:
     url: str | None
     ref: str
     commit: str | None
+
+
+def config_summary(config: RepoGraphConfig) -> dict[str, Any]:
+    return {
+        "name": config.name,
+        "config_path": str(config.config_path),
+        "cache_dir": str(config.cache_dir),
+        "output_dir": str(config.output_dir),
+        "source_count": len(config.sources),
+        "include": {"file_extensions": sorted(config.include.file_extensions)},
+        "exclude": {
+            "directories": sorted(config.exclude.directories),
+            "files": sorted(config.exclude.files),
+        },
+    }
+
+
+def inspect_sources(config: RepoGraphConfig) -> list[dict[str, Any]]:
+    return [source_status(config, source) for source in config.sources]
+
+
+def sync_sources_with_status(config: RepoGraphConfig) -> list[dict[str, Any]]:
+    config.cache_dir.mkdir(parents=True, exist_ok=True)
+    statuses: list[dict[str, Any]] = []
+    for source in config.sources:
+        try:
+            sync_one_source(config, source)
+        except Exception as exc:
+            status = source_status(config, source)
+            status["sync"] = {"status": "failed", "error": str(exc)}
+            statuses.append(status)
+            continue
+        status = source_status(config, source)
+        status["sync"] = {"status": "succeeded"}
+        statuses.append(status)
+    return statuses
+
+
+def sync_one_source(config: RepoGraphConfig, source: Source) -> None:
+    if source.source_type == "git":
+        sync_git_source(config.cache_dir, source)
+        return
+    if source.source_type == "local_path":
+        if source.path is None or not source.path.exists():
+            raise FileNotFoundError(f"Local source path does not exist: {source.path}")
+        return
+    raise ValueError(f"Unsupported source type: {source.source_type}")
+
+
+def source_status(config: RepoGraphConfig, source: Source) -> dict[str, Any]:
+    path = source_path(config, source)
+    status: dict[str, Any] = {
+        "name": source.name,
+        "type": source.source_type,
+        "ref": source.ref,
+        "configured": configured_source_payload(source),
+        "resolved_path": str(path) if path is not None else None,
+        "exists": path.exists() if path is not None else False,
+        "git_repo_present": git_repo_present(path),
+        "current_commit": git_commit(path) if path is not None else None,
+    }
+    if source.url is not None:
+        status["url"] = source.url
+    if path is not None and git_repo_present(path):
+        status["origin_url"] = safe_git_origin_url(path)
+    status["ready"] = source_ready(status, source)
+    status["problems"] = source_problems(status, source)
+    return status
+
+
+def configured_source_payload(source: Source) -> dict[str, str | None]:
+    return {
+        "path": str(source.path) if source.path is not None else None,
+        "url": source.url,
+        "ref": source.ref,
+    }
+
+
+def source_path(config: RepoGraphConfig, source: Source) -> Path | None:
+    if source.source_type == "local_path":
+        return source.path
+    if source.source_type == "git":
+        return git_cache_path(config.cache_dir, source)
+    return None
+
+
+def git_repo_present(path: Path | None) -> bool:
+    return path is not None and (path / ".git").exists()
+
+
+def safe_git_origin_url(path: Path) -> str | None:
+    try:
+        return git_origin_url(path)
+    except RuntimeError:
+        return None
+
+
+def source_ready(status: dict[str, Any], source: Source) -> bool:
+    if source.source_type == "local_path":
+        return bool(status["exists"])
+    if source.source_type == "git":
+        return bool(status["exists"] and status["git_repo_present"] and status.get("current_commit"))
+    return False
+
+
+def source_problems(status: dict[str, Any], source: Source) -> list[str]:
+    problems: list[str] = []
+    if not status["exists"]:
+        problems.append("path_missing")
+    if source.source_type == "git":
+        if status["exists"] and not status["git_repo_present"]:
+            problems.append("path_exists_but_not_git_repo")
+        if source.url and status.get("origin_url") and status["origin_url"] != source.url:
+            problems.append("origin_url_mismatch")
+        if not status.get("current_commit"):
+            problems.append("commit_unknown")
+    return problems
 
 
 def resolve_sources(config: RepoGraphConfig) -> list[ResolvedSource]:
