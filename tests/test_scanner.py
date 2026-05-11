@@ -170,8 +170,10 @@ version = "0.1.0"
 name = "example-python-service"
 version = "0.1.0"
 dependencies = [
+  "fastapi>=0.110",
   "example-python-shared==0.1.0",
   "requests>=2.31",
+  "sqlalchemy>=2",
 ]
 """,
                 encoding="utf-8",
@@ -277,6 +279,155 @@ sources:
         self.assertTrue(
             any(
                 edge["edge_type"] == "DEPENDS_ON_PROJECT" and edge["to_name"] == "Example.Shared" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
+    def test_build_graph_discovers_python_code_relationships(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_shared = root / "python-shared"
+            python_service = root / "python-service"
+            inventory_service = root / "inventory-service"
+            database_project = root / "database-project"
+            (python_shared / "example_python_shared").mkdir(parents=True)
+            (python_service / "example_python_worker").mkdir(parents=True)
+            inventory_service.mkdir()
+            database_project.mkdir()
+
+            (python_shared / "pyproject.toml").write_text(
+                """
+[project]
+name = "example-python-shared"
+version = "0.1.0"
+""",
+                encoding="utf-8",
+            )
+            (python_shared / "example_python_shared" / "__init__.py").write_text(
+                "from example_python_shared.formatting import format_thing\n",
+                encoding="utf-8",
+            )
+            (python_shared / "example_python_shared" / "formatting.py").write_text(
+                """
+class ThingFormatter:
+    def format(self, value: str) -> dict[str, str]:
+        return {"label": value}
+
+
+def format_thing(value: str) -> dict[str, str]:
+    return ThingFormatter().format(value)
+""",
+                encoding="utf-8",
+            )
+            (python_service / "pyproject.toml").write_text(
+                """
+[project]
+name = "example-python-worker"
+version = "0.1.0"
+dependencies = [
+  "fastapi>=0.110",
+  "example-python-shared==0.1.0",
+  "requests>=2.31",
+  "sqlalchemy>=2",
+]
+""",
+                encoding="utf-8",
+            )
+            (python_service / "example_python_worker" / "app.py").write_text(
+                """
+import os
+
+import requests
+from fastapi import APIRouter, FastAPI
+from sqlalchemy import text
+
+from example_python_shared import format_thing
+
+app = FastAPI()
+router = APIRouter()
+
+
+class Worker:
+    def fetch_inventory(self, thing_id: str) -> dict[str, str]:
+        response = requests.get(f"{os.environ['INVENTORY_SERVICE_URL']}/inventory/{thing_id}")
+        return response.json()
+
+
+@router.get("/things/{thing_id}")
+async def read_thing(thing_id: str) -> dict[str, str]:
+    Worker().fetch_inventory(thing_id)
+    query = text("EXEC dbo.get_thing_by_id")
+    return format_thing(str(query))
+""",
+                encoding="utf-8",
+            )
+            (inventory_service / "package.json").write_text(
+                '{"name": "@example/inventory-service"}',
+                encoding="utf-8",
+            )
+            (database_project / "schema.sql").write_text(
+                "CREATE PROCEDURE dbo.get_thing_by_id AS SELECT 1",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: python-shared
+    path: python-shared
+  - type: local_path
+    name: python-service
+    path: python-service
+  - type: local_path
+    name: inventory-service
+    path: inventory-service
+  - type: local_path
+    name: database-project
+    path: database-project
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 7)
+        self.assertIn("IMPORTS", graph_data["edge_counts"])
+        self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
+        self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("EXPOSES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SQL", graph_data["edge_counts"])
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "api_route" and entity["name"] == "GET /things/{thing_id}"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "function" and entity["name"] == "example_python_worker.app.read_thing"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "IMPORTS" and edge["to_name"] == "example-python-shared" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.get_thing_by_id" and edge["resolved"]
                 for edge in graph_data["edges"]
             )
         )

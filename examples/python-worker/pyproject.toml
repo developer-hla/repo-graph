@@ -2,8 +2,10 @@
 name = "example-python-worker"
 version = "0.1.0"
 dependencies = [
+  "fastapi>=0.110",
   "example-python-shared==0.1.0",
   "requests>=2.31",
+  "sqlalchemy>=2",
 ]
 
 [project.optional-dependencies]

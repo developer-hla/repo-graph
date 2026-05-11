@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -22,6 +23,7 @@ from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 MAX_FILE_BYTES = 1_000_000
 DOTNET_PROJECT_SUFFIXES = {".csproj", ".fsproj", ".vbproj"}
 DOTNET_BUILD_SUFFIXES = {".props", ".targets"}
+HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 MANIFEST_FILENAMES = {
     "App.config",
     "Directory.Build.props",
@@ -56,6 +58,7 @@ AXIOS_RE = re.compile(
     re.IGNORECASE,
 )
 ENV_URL_RE = re.compile(r"(?:process\.env\.|import\.meta\.env\.)([A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST))")
+ENV_NAME_RE = re.compile(r"\b([A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST))\b")
 REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)")
 SLN_PROJECT_RE = re.compile(r'^Project\("[^"]+"\)\s*=\s*"([^"]+)",\s*"([^"]+)"')
 VB_ATTRIBUTE_RE = re.compile(r"^\s*<\s*([A-Za-z_][\w.]*)", re.IGNORECASE)
@@ -155,6 +158,7 @@ def default_extractors() -> list[FileExtractor]:
         PackageJsonExtractor(),
         PythonProjectExtractor(),
         PythonRequirementsExtractor(),
+        PythonCodeExtractor(),
         DotnetProjectExtractor(),
         DotnetPackagesConfigExtractor(),
         DotnetFrameworkConfigExtractor(),
@@ -283,6 +287,9 @@ def python_project_info(source: ResolvedSource, repo_entity: Entity, manifest_pa
     metadata = pyproject_metadata(pyproject)
     name = metadata["name"] or project_name_from_path(source, manifest_path.parent)
     package_name = metadata["name"] or None
+    project_aliases = (
+        {normalize_python_package_name(package_name), python_import_name(package_name)} if package_name else set()
+    )
     return project_info(
         source,
         repo_entity,
@@ -293,7 +300,7 @@ def python_project_info(source: ResolvedSource, repo_entity: Entity, manifest_pa
         package_name=package_name,
         version=metadata["version"],
         manifest_path=manifest_path,
-        aliases={normalize_python_package_name(package_name)} if package_name else set(),
+        aliases=project_aliases,
     )
 
 
@@ -620,6 +627,64 @@ class PythonRequirementsExtractor:
                 )
             )
         return result
+
+
+class PythonCodeExtractor:
+    name = "python"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).suffix.lower() == ".py"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        try:
+            tree = ast.parse(content)
+        except SyntaxError as exc:
+            result.errors.append(f"Invalid Python {context.source.name}/{context.rel_path}: {exc}")
+            return result
+
+        visitor = PythonAstVisitor(context)
+        visitor.visit(tree)
+        return visitor.result
+
+
+class PythonAstVisitor(ast.NodeVisitor):
+    def __init__(self, context: FileScanContext) -> None:
+        self.context = context
+        self.result = ScanResult()
+        self.class_stack: list[str] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            self.result.edges.append(python_import_edge(self.context, alias.name, 0, node.lineno))
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        raw_target = "." * node.level + (node.module or "")
+        self.result.edges.append(python_import_edge(self.context, raw_target, node.level, node.lineno))
+        self.generic_visit(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.result.extend(python_symbol_result(self.context, "class", node.name, node.lineno, self.class_stack))
+        self.class_stack.append(node.name)
+        self.generic_visit(node)
+        self.class_stack.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.visit_python_function(node, "function")
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.visit_python_function(node, "async_function")
+
+    def visit_python_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef, symbol_kind: str) -> None:
+        self.result.extend(python_symbol_result(self.context, symbol_kind, node.name, node.lineno, self.class_stack))
+        self.result.extend(python_route_result(self.context, node.name, node.decorator_list, node.lineno))
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        self.result.edges.extend(python_http_call_edges(self.context, node))
+        self.result.edges.extend(python_sql_call_edges(self.context, node))
+        self.generic_visit(node)
 
 
 class DotnetProjectExtractor:
@@ -1037,7 +1102,7 @@ class SqlReferenceExtractor:
     name = "sql_reference"
 
     def can_process(self, rel_path: str) -> bool:
-        return Path(rel_path).suffix.lower() in {".cs", ".js", ".jsx", ".ts", ".tsx", ".vb"}
+        return Path(rel_path).suffix.lower() in {".cs", ".js", ".jsx", ".py", ".ts", ".tsx", ".vb"}
 
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         return scan_sql_references(context, content)
@@ -1235,7 +1300,7 @@ def http_edges_for_target(
 
 
 def http_target(raw_target: str, method: str) -> dict[str, Any]:
-    env_match = ENV_URL_RE.search(raw_target)
+    env_match = ENV_URL_RE.search(raw_target) or ENV_NAME_RE.search(raw_target)
     endpoint = extract_endpoint(raw_target)
     normalized_path = normalize_route_path(endpoint or raw_target)
     parsed = urlparse(raw_target)
@@ -1608,18 +1673,273 @@ def python_package_entity(context: FileScanContext, name: str | None, version: s
     if not name:
         return None
     normalized = normalize_python_package_name(name)
+    import_name = python_import_name(name)
     return Entity(
         entity_type="package",
         name=name,
         source_name=context.source.name,
         file_path=context.rel_path,
-        aliases={name, normalized},
+        aliases={name, normalized, import_name},
         properties={
             "ecosystem": "python",
             "version": version,
             "project": context.project.name if context.project else None,
         },
     )
+
+
+def python_import_name(value: str) -> str:
+    return normalize_python_package_name(value).replace("-", "_")
+
+
+def python_import_edge(context: FileScanContext, raw_target: str, level: int, line_number: int) -> Edge:
+    is_relative = level > 0 or raw_target.startswith(".")
+    target_name = raw_target if is_relative else normalize_python_package_name(raw_target.split(".", 1)[0])
+    return unresolved_edge(
+        context.file_entity,
+        target_name,
+        "IMPORTS",
+        context.source.name,
+        context.rel_path,
+        "python_import",
+        to_type="module" if is_relative else "package",
+        line_number=line_number,
+        properties={
+            "raw_target": raw_target,
+            "normalized_target": target_name,
+            "import_kind": "relative" if is_relative else "package",
+        },
+    )
+
+
+def python_symbol_result(
+    context: FileScanContext,
+    symbol_kind: str,
+    name: str,
+    line_number: int,
+    class_stack: Sequence[str],
+) -> ScanResult:
+    result = ScanResult()
+    module_name = python_module_name(context.rel_path)
+    parent_name = ".".join(class_stack) or None
+    full_name = ".".join(part for part in (module_name, parent_name, name) if part)
+    entity_type = "function" if symbol_kind in {"function", "async_function"} else symbol_kind
+    symbol = Entity(
+        entity_type=entity_type,
+        name=full_name or name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        line_number=line_number,
+        aliases={name, full_name or name},
+        properties={
+            "symbol_kind": symbol_kind,
+            "module": module_name or None,
+            "parent": parent_name,
+            "project": context.project.name if context.project else None,
+        },
+    )
+    result.entities.append(symbol)
+    result.edges.append(
+        resolved_edge(
+            context.file_entity,
+            symbol,
+            "DECLARES_SYMBOL",
+            context.source.name,
+            context.rel_path,
+            "python_symbol",
+            line_number,
+        )
+    )
+    return result
+
+
+def python_module_name(rel_path: str) -> str:
+    path = Path(rel_path).with_suffix("")
+    parts = list(path.parts)
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def python_route_result(
+    context: FileScanContext,
+    operation_name: str,
+    decorators: Sequence[ast.expr],
+    line_number: int,
+) -> ScanResult:
+    result = ScanResult()
+    for decorator in decorators:
+        if not isinstance(decorator, ast.Call):
+            continue
+        path = python_string_arg(decorator, 0) or python_keyword_string(decorator, "path")
+        if not path:
+            continue
+        for method in python_route_methods(decorator):
+            result.extend(python_add_route(context, method, path, line_number, operation_name))
+    return result
+
+
+def python_route_methods(decorator: ast.Call) -> list[str]:
+    callee = python_attribute_name(decorator.func)
+    if callee in HTTP_METHODS:
+        return [callee.upper()]
+    if callee not in {"route", "api_route"}:
+        return []
+    methods = python_keyword_strings(decorator, "methods")
+    return [method.upper() for method in methods] if methods else ["GET"]
+
+
+def python_add_route(
+    context: FileScanContext,
+    method: str,
+    path: str,
+    line_number: int,
+    operation_name: str,
+) -> ScanResult:
+    result = ScanResult()
+    route = route_entity(context, method, path, line_number, "python_route", operation_name)
+    result.entities.append(route)
+    result.edges.append(
+        resolved_edge(
+            context.file_entity,
+            route,
+            "DECLARES_ROUTE",
+            context.source.name,
+            context.rel_path,
+            "python_route",
+            line_number,
+        )
+    )
+    if context.project:
+        result.edges.append(
+            resolved_edge(
+                context.project.entity,
+                route,
+                "EXPOSES_ROUTE",
+                context.source.name,
+                context.rel_path,
+                "python_route",
+                line_number,
+            )
+        )
+    return result
+
+
+def python_http_call_edges(context: FileScanContext, call: ast.Call) -> list[Edge]:
+    callee = python_attribute_name(call.func)
+    root_name = python_call_root_name(call.func)
+    if root_name not in {"httpx", "requests"}:
+        return []
+    if callee in HTTP_METHODS:
+        raw_target = python_string_arg(call, 0) or python_keyword_string(call, "url")
+        return python_http_edges_for_target(context, callee.upper(), raw_target, call.lineno)
+    if callee == "request":
+        method = python_string_arg(call, 0) or python_keyword_string(call, "method") or "GET"
+        raw_target = python_string_arg(call, 1) or python_keyword_string(call, "url")
+        return python_http_edges_for_target(context, method.upper(), raw_target, call.lineno)
+    return []
+
+
+def python_http_edges_for_target(
+    context: FileScanContext,
+    method: str,
+    raw_target: str | None,
+    line_number: int,
+) -> list[Edge]:
+    if not raw_target:
+        return []
+    parsed = urlparse(raw_target)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        target = http_target(raw_target, method)
+        target["service_name"] = service_name_from_url(raw_target)
+        return [
+            unresolved_edge(
+                context.file_entity,
+                target["service_name"],
+                "CALLS_SERVICE",
+                context.source.name,
+                context.rel_path,
+                "python_http",
+                to_type="service",
+                line_number=line_number,
+                properties=target,
+            )
+        ]
+    return http_edges_for_target(context, method, raw_target, line_number, "python_http")
+
+
+def python_sql_call_edges(context: FileScanContext, call: ast.Call) -> list[Edge]:
+    callee = python_attribute_name(call.func)
+    if callee not in {"execute", "executemany", "exec_driver_sql", "text"}:
+        return []
+    raw_sql = python_string_arg(call, 0)
+    if not raw_sql:
+        return []
+    return [*sql_call_edges(context, raw_sql, call.lineno), *sql_object_reference_edges(context, raw_sql, call.lineno)]
+
+
+def python_attribute_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Attribute):
+        return node.attr.lower()
+    if isinstance(node, ast.Name):
+        return node.id.lower()
+    return None
+
+
+def python_call_root_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return python_call_root_name(node.value)
+    if isinstance(node, ast.Call):
+        return python_call_root_name(node.func)
+    return None
+
+
+def python_string_arg(call: ast.Call, index: int) -> str | None:
+    if index >= len(call.args):
+        return None
+    return python_string_value(call.args[index])
+
+
+def python_keyword_string(call: ast.Call, keyword_name: str) -> str | None:
+    for keyword in call.keywords:
+        if keyword.arg == keyword_name:
+            return python_string_value(keyword.value)
+    return None
+
+
+def python_keyword_strings(call: ast.Call, keyword_name: str) -> list[str]:
+    for keyword in call.keywords:
+        if keyword.arg == keyword_name:
+            return python_string_values(keyword.value)
+    return []
+
+
+def python_string_values(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.List | ast.Tuple | ast.Set):
+        return [value for item in node.elts if (value := python_string_value(item))]
+    value = python_string_value(node)
+    return [value] if value else []
+
+
+def python_string_value(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(python_joined_string_part(value) for value in node.values)
+    return None
+
+
+def python_joined_string_part(node: ast.AST) -> str:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.FormattedValue):
+        try:
+            return "${" + ast.unparse(node.value).strip() + "}"
+        except ValueError:
+            return "${expr}"
+    return ""
 
 
 def dotnet_project_metadata(content: str) -> dict[str, str | None]:

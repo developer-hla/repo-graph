@@ -17,6 +17,7 @@ DEFAULT_FILE_EXTENSIONS = {
     ".js",
     ".json",
     ".jsx",
+    ".py",
     ".props",
     ".sln",
     ".sql",

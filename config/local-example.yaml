@@ -41,6 +41,7 @@ include:
     - .config
     - .json
     - .csproj
+    - .py
     - .props
     - .sln
     - .sql
