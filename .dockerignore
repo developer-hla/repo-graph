@@ -1,0 +1,13 @@
+.git/
+.pixi/
+.repo-graph/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+.DS_Store
+.coverage
+.pytest_cache/
+build/
+dist/
+htmlcov/
+*.egg-info/

@@ -9,9 +9,9 @@ names, branch choices, and private conventions live in local config files, not
 in the tool.
 
 Repo Graph is alpha software. The current implementation can inspect source
-configs, sync Git sources, scan local repositories, and export a portable JSON
-graph. Graph database loading, the HTTP API, and Docker runtime are planned
-next.
+configs, sync Git sources, scan local repositories, export a portable JSON
+graph, and start a local HTTP runtime. Graph database loading and query
+endpoints are planned next.
 
 ## Goals
 
@@ -42,13 +42,56 @@ pixi run repo-graph sync --config ../my-repo-graph-sources.yaml
 pixi run repo-graph build --config ../my-repo-graph-sources.yaml --sync --strict
 ```
 
+## Local API Runtime
+
+Run the API directly with Pixi:
+
+```bash
+pixi run serve
+```
+
+Then check:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/manifest
+```
+
+The runtime currently exposes health and manifest endpoints. The manifest tells
+agents which API capabilities are available and which graph capabilities are
+still planned.
+
+## Docker Runtime
+
+Start Repo Graph with Neo4j:
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- Repo Graph API: `http://localhost:8000`
+- Neo4j browser: `http://localhost:7475`
+- Neo4j Bolt: `bolt://localhost:7688`
+
+The default Compose file scans only the synthetic examples in this repository.
+Mount your own config and source/cache locations when scanning private
+repositories. Do not bake private source configs, tokens, generated graphs, or
+database volumes into a public image.
+
+Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
+`REPO_GRAPH_NEO4J_BOLT_PORT` if those ports are already in use.
+
 ## Repository Layout
 
 ```text
 AGENTS.md               Canonical agent and review standards
 CONTRIBUTING.md         Contributor setup and pull request expectations
+Dockerfile              Repo Graph API container image
 SECURITY.md             Vulnerability reporting and sensitive data handling
 config/                 Example source profiles
+docker-compose.yaml     Local API plus Neo4j runtime
 docs/spec.md            MVP planning spec
 docs/schema.md          Current JSON graph shape
 docs/public-release.md  Public release checklist

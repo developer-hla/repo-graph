@@ -6,6 +6,9 @@ import argparse
 import json
 from pathlib import Path
 
+import uvicorn
+
+from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.sources import resolve_sources, sync_sources
@@ -58,6 +61,12 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    settings = RuntimeSettings.from_env(config_path=args.config)
+    uvicorn.run(create_app(settings), host=args.host, port=args.port)
+    return 0
+
+
 def resolve_output_path(config: RepoGraphConfig, output: Path | None) -> Path:
     if output is None:
         return config.output_dir / "graph.json"
@@ -85,6 +94,12 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--strict", action="store_true", help="Fail if any configured source cannot be scanned.")
     build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
     build_parser.set_defaults(func=cmd_build)
+
+    serve_parser = subparsers.add_parser("serve", help="Run the local Repo Graph HTTP API.")
+    serve_parser.add_argument("--config", type=Path)
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.set_defaults(func=cmd_serve)
 
     return parser
 
