@@ -1,0 +1,26 @@
+name: local-example
+cache_dir: ../.repo-graph/cache/repos
+output_dir: ../.repo-graph/output
+
+sources:
+  - type: local_path
+    name: api-service
+    path: ../examples/api-service
+
+  - type: local_path
+    name: database-project
+    path: ../examples/database-project
+
+include:
+  file_extensions:
+    - .json
+    - .sql
+    - .ts
+
+exclude:
+  directories:
+    - .git
+    - node_modules
+    - dist
+    - build
+    - coverage

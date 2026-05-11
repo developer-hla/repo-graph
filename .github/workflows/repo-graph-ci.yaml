@@ -1,0 +1,23 @@
+name: repo-graph-ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          pixi-version: v0.53.0
+      - run: pixi run audit

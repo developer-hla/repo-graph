@@ -1,0 +1,38 @@
+name: example-domain
+cache_dir: ../.repo-graph/cache/repos
+output_dir: ../.repo-graph/output
+
+sources:
+  - type: git
+    name: api-service
+    url: https://github.com/example/api-service.git
+    ref: default
+
+  - type: git
+    name: database-project
+    url: https://github.com/example/database-project.git
+    ref: main
+
+  - type: local_path
+    name: local-library
+    path: ../local-library
+
+include:
+  file_extensions:
+    - .cs
+    - .js
+    - .json
+    - .sql
+    - .ts
+    - .tsx
+    - .vb
+    - .yaml
+    - .yml
+
+exclude:
+  directories:
+    - .git
+    - node_modules
+    - dist
+    - build
+    - coverage

@@ -1,0 +1,99 @@
+"""Command line entrypoint for RepoGraph."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.scanner import MAX_FILE_BYTES, build_graph
+from repo_graph.sources import resolve_sources, sync_sources
+
+
+def cmd_inspect(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    sources = resolve_sources(config)
+    print(
+        json.dumps(
+            {
+                "name": config.name,
+                "cache_dir": str(config.cache_dir),
+                "output_dir": str(config.output_dir),
+                "source_count": len(sources),
+                "sources": [
+                    {
+                        "name": source.name,
+                        "type": source.source_type,
+                        "ref": source.ref,
+                        "path": str(source.path),
+                        "url": source.url,
+                        "commit": source.commit,
+                    }
+                    for source in sources
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    sources = sync_sources(config)
+    print(json.dumps({"count": len(sources), "synced": [source.name for source in sources]}, indent=2))
+    return 0
+
+
+def cmd_build(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    graph = build_graph(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes, strict=args.strict)
+    output_path = resolve_output_path(config, args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    graph_data = graph.to_dict()
+    output_path.write_text(json.dumps(graph_data, indent=2, sort_keys=True), encoding="utf-8")
+    print(json.dumps({"output": str(output_path), "summary": graph_data["summary"]}, indent=2, sort_keys=True))
+    return 0
+
+
+def resolve_output_path(config: RepoGraphConfig, output: Path | None) -> Path:
+    if output is None:
+        return config.output_dir / "graph.json"
+    if output.is_absolute():
+        return output
+    return (Path.cwd() / output).resolve()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Build and query repository interaction graphs.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    inspect_parser = subparsers.add_parser("inspect", help="Validate and summarize a source config.")
+    inspect_parser.add_argument("--config", type=Path, required=True)
+    inspect_parser.set_defaults(func=cmd_inspect)
+
+    sync_parser = subparsers.add_parser("sync", help="Clone or update Git sources into the local cache.")
+    sync_parser.add_argument("--config", type=Path, required=True)
+    sync_parser.set_defaults(func=cmd_sync)
+
+    build_parser = subparsers.add_parser("build", help="Build a portable graph JSON file.")
+    build_parser.add_argument("--config", type=Path, required=True)
+    build_parser.add_argument("--output", type=Path)
+    build_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
+    build_parser.add_argument("--strict", action="store_true", help="Fail if any configured source cannot be scanned.")
+    build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    build_parser.set_defaults(func=cmd_build)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

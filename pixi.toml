@@ -1,0 +1,27 @@
+[workspace]
+authors = ["Repo Graph contributors"]
+channels = ["conda-forge"]
+name = "repo-graph"
+platforms = ["osx-arm64", "osx-64", "linux-64"]
+version = "0.1.0"
+
+[activation.env]
+PYTHONPATH = "src"
+
+[tasks]
+repo-graph = "python -m repo_graph.cli"
+build-example = "python -m repo_graph.cli build --config config/local-example.yaml --output .repo-graph/output/graph.json"
+build-example-strict = "python -m repo_graph.cli build --config config/local-example.yaml --strict --output .repo-graph/output/graph.json"
+test = "python -m unittest discover -s tests -p 'test_*.py'"
+check = "python -m compileall -q src tests"
+lint = "ruff check src tests"
+format-check = "ruff format --check src tests"
+pre-commit = "pre-commit run --all-files"
+setup = "pre-commit install"
+audit = { depends-on = ["check", "lint", "format-check", "test", "build-example-strict"] }
+
+[dependencies]
+pre-commit = ">=4,<5"
+python = "==3.11.14"
+pyyaml = ">=6,<7"
+ruff = ">=0.14,<1"

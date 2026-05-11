@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from repo_graph.config import load_config
+
+
+class ConfigTests(unittest.TestCase):
+    def test_load_config_reads_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "service"
+            source_dir.mkdir()
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+cache_dir: cache/repos
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.name, "test")
+        self.assertEqual(len(config.sources), 1)
+        self.assertEqual(config.sources[0].name, "service")
+
+    def test_load_config_rejects_duplicate_source_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+sources:
+  - type: git
+    name: service
+    url: https://github.com/example/service.git
+  - type: git
+    name: service
+    url: https://github.com/example/other.git
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Duplicate source name"):
+                load_config(config_path)
+
+
+if __name__ == "__main__":
+    unittest.main()
