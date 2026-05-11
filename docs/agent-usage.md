@@ -13,6 +13,33 @@ The manifest lists available endpoints, graph store configuration, and planned
 capabilities. Agents should prefer the documented read endpoints below instead
 of trying to execute raw Cypher.
 
+## Build And Load
+
+Build the active config and load the result into Neo4j:
+
+```bash
+curl -X POST http://localhost:8000/build-load \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+```
+
+Useful request fields:
+
+- `config_path`: optional config path inside the running API environment.
+- `output_path`: optional graph JSON output path.
+- `sync`: clone or update Git sources before scanning.
+- `strict`: fail the build when scanner errors are present.
+- `max_file_bytes`: skip files larger than this size.
+- `clear_existing`: clear prior Repo Graph data before loading.
+
+Build without loading:
+
+```bash
+curl -X POST http://localhost:8000/build \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+```
+
 ## Load Status
 
 Check graph counts:

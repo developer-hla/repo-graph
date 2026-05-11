@@ -10,8 +10,7 @@ in the tool.
 
 Repo Graph is alpha software. The current implementation can inspect source
 configs, sync Git sources, scan local repositories, export a portable JSON
-graph, and start a local HTTP runtime. Graph database loading and query
-endpoints are planned next.
+graph, load Neo4j, and expose a local HTTP runtime with safe read endpoints.
 
 ## Goals
 
@@ -86,16 +85,27 @@ Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
 Build and load the example graph into Neo4j:
 
 ```bash
-docker compose exec repo-graph pixi run repo-graph build \
-  --config config/local-example.yaml \
-  --strict \
-  --output .repo-graph/output/graph.json
+curl -X POST http://localhost:8000/build-load \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
 
+curl http://localhost:8000/stats
+```
+
+Build without loading:
+
+```bash
+curl -X POST http://localhost:8000/build \
+  -H "content-type: application/json" \
+  -d '{"strict":true,"output_path":".repo-graph/output/graph.json"}'
+```
+
+Load an existing graph:
+
+```bash
 curl -X POST http://localhost:8000/load \
   -H "content-type: application/json" \
   -d '{}'
-
-curl http://localhost:8000/stats
 ```
 
 The API loads `.repo-graph/output/graph.json` by default based on the active

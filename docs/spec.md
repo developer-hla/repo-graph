@@ -100,6 +100,7 @@ relationships derived from graph edge types.
 - `GET /health`
 - `POST /sync`
 - `POST /build`
+- `POST /build-load`
 - `POST /load`
 - `POST /query`
 - `GET /stats`
@@ -109,6 +110,15 @@ relationships derived from graph edge types.
 
 The manifest tells agents how to use the running graph and what scope was
 loaded.
+
+The first public runtime surface should support synchronous local build and
+load orchestration:
+
+- `POST /build`
+- `POST /build-load`
+- `POST /load`
+
+For large source sets, background jobs and job status should come later.
 
 The first public query surface should use purpose-built read endpoints:
 

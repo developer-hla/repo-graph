@@ -7,8 +7,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from repo_graph.api import (
+    BuildLoadRequest,
+    BuildRequest,
     LoadRequest,
     RuntimeSettings,
+    build_load_response,
+    build_response,
     create_app,
     entity_response,
     health_payload,
@@ -41,6 +45,8 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["config"]["path"], "config/local-example.yaml")
         self.assertEqual(payload["graph_store"]["type"], "neo4j")
         self.assertIsNone(payload["graph_store"]["database"])
+        self.assertIn({"method": "POST", "path": "/build", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/build-load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/stats", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
@@ -58,6 +64,8 @@ class ApiTests(unittest.TestCase):
 
         self.assertIn("/health", route_paths)
         self.assertIn("/manifest", route_paths)
+        self.assertIn("/build", route_paths)
+        self.assertIn("/build-load", route_paths)
         self.assertIn("/load", route_paths)
         self.assertIn("/stats", route_paths)
         self.assertIn("/entities/search", route_paths)
@@ -91,6 +99,44 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "loaded")
         self.assertEqual(payload["summary"]["scope_name"], "example")
         load_graph.assert_called_once()
+
+    def test_build_response_writes_graph_output(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        graph_data = {"summary": {"entity_count": 1}, "entities": [], "edges": []}
+        with (
+            patch("repo_graph.api.load_config") as load_config,
+            patch("repo_graph.api.build_graph") as build_graph,
+            patch("pathlib.Path.write_text") as write_text,
+            patch("pathlib.Path.mkdir") as mkdir,
+        ):
+            config = load_config.return_value
+            config.config_path = Path("/repo/config/local-example.yaml")
+            config.output_dir = Path("/repo/.repo-graph/output")
+            build_graph.return_value.to_dict.return_value = graph_data
+
+            payload = build_response(settings, BuildRequest(output_path="graph.json", strict=True))
+
+        self.assertEqual(payload["status"], "built")
+        self.assertEqual(payload["summary"], {"entity_count": 1})
+        build_graph.assert_called_once()
+        mkdir.assert_called_once()
+        write_text.assert_called_once()
+
+    def test_build_load_response_builds_then_loads_output(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        build_payload = {"status": "built", "output_path": "/repo/.repo-graph/output/graph.json", "summary": {}}
+        load_payload = {"status": "loaded", "graph_path": "/repo/.repo-graph/output/graph.json", "summary": {}}
+        with (
+            patch("repo_graph.api.build_response", return_value=build_payload) as build,
+            patch("repo_graph.api.load_response", return_value=load_payload) as load,
+        ):
+            payload = build_load_response(settings, BuildLoadRequest(clear_existing=False))
+
+        self.assertEqual(payload["status"], "built_and_loaded")
+        self.assertEqual(payload["build"], build_payload)
+        self.assertEqual(payload["load"], load_payload)
+        build.assert_called_once()
+        load.assert_called_once()
 
     def test_search_entities_response_wraps_items(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +12,8 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from repo_graph import __version__
-from repo_graph.config import load_config
+from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.storage.neo4j import (
     Neo4jSettings,
     get_entity,
@@ -63,6 +65,20 @@ class LoadRequest(BaseModel):
     clear_existing: bool = True
 
 
+class BuildRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    config_path: str | None = None
+    output_path: str | None = None
+    sync: bool = False
+    strict: bool = False
+    max_file_bytes: int = MAX_FILE_BYTES
+
+
+class BuildLoadRequest(BuildRequest):
+    clear_existing: bool = True
+
+
 def env_value(name: str, default: str | None) -> str | None:
     value = os.getenv(name)
     if value is None or not value.strip():
@@ -104,7 +120,8 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
         "endpoints": [
             {"method": "GET", "path": "/health", "available": True},
             {"method": "GET", "path": "/manifest", "available": True},
-            {"method": "POST", "path": "/build", "available": False},
+            {"method": "POST", "path": "/build", "available": True},
+            {"method": "POST", "path": "/build-load", "available": True},
             {"method": "POST", "path": "/load", "available": True},
             {"method": "POST", "path": "/query", "available": False},
             {"method": "GET", "path": "/stats", "available": True},
@@ -117,9 +134,18 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "purpose": "Discover the local Repo Graph runtime and supported API surface.",
             "query_api_status": "safe read endpoints available",
             "raw_cypher_status": "planned",
+            "build_api_status": "available",
             "graph_loader_status": "available",
         },
     }
+
+
+def resolve_config_path(settings: RuntimeSettings, config_path: str | None) -> Path:
+    if config_path:
+        return Path(config_path).expanduser().resolve()
+    if settings.config_path is None:
+        raise ValueError("No config path provided.")
+    return settings.config_path.resolve()
 
 
 def default_graph_path(settings: RuntimeSettings) -> Path:
@@ -129,10 +155,47 @@ def default_graph_path(settings: RuntimeSettings) -> Path:
     return config.output_dir / "graph.json"
 
 
-def resolve_graph_path(settings: RuntimeSettings, graph_path: str | None) -> Path:
-    if graph_path:
-        return Path(graph_path).expanduser().resolve()
-    return default_graph_path(settings)
+def resolve_graph_path(
+    settings: RuntimeSettings,
+    graph_path: str | None,
+    config: RepoGraphConfig | None = None,
+) -> Path:
+    if graph_path is None:
+        if config is not None:
+            return config.output_dir / "graph.json"
+        return default_graph_path(settings)
+    path = Path(graph_path).expanduser()
+    if path.is_absolute():
+        return path
+    if config is not None:
+        return (config.config_path.parent / path).resolve()
+    return path.resolve()
+
+
+def validate_max_file_bytes(value: int) -> int:
+    if value < 1:
+        raise ValueError("max_file_bytes must be at least 1.")
+    return value
+
+
+def build_response(settings: RuntimeSettings, request: BuildRequest) -> dict[str, Any]:
+    config = load_config(resolve_config_path(settings, request.config_path))
+    output_path = resolve_graph_path(settings, request.output_path, config=config)
+    graph = build_graph(
+        config,
+        sync_first=request.sync,
+        max_file_bytes=validate_max_file_bytes(request.max_file_bytes),
+        strict=request.strict,
+    )
+    graph_data = graph.to_dict()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(graph_data, indent=2, sort_keys=True), encoding="utf-8")
+    return {
+        "status": "built",
+        "config_path": str(config.config_path),
+        "output_path": str(output_path),
+        "summary": graph_data["summary"],
+    }
 
 
 def load_response(settings: RuntimeSettings, request: LoadRequest) -> dict[str, Any]:
@@ -144,6 +207,19 @@ def load_response(settings: RuntimeSettings, request: LoadRequest) -> dict[str, 
         "status": "loaded",
         "graph_path": str(graph_path),
         "summary": summary.to_dict(),
+    }
+
+
+def build_load_response(settings: RuntimeSettings, request: BuildLoadRequest) -> dict[str, Any]:
+    build_result = build_response(settings, request)
+    load_result = load_response(
+        settings,
+        LoadRequest(graph_path=build_result["output_path"], clear_existing=request.clear_existing),
+    )
+    return {
+        "status": "built_and_loaded",
+        "build": build_result,
+        "load": load_result,
     }
 
 
@@ -226,6 +302,26 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.get("/manifest")
     def manifest() -> dict[str, Any]:
         return manifest_payload(runtime_settings)
+
+    @app.post("/build")
+    def build(request: BuildRequest) -> dict[str, Any]:
+        try:
+            return build_response(runtime_settings, request)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Graph build failed: {exc}") from exc
+
+    @app.post("/build-load")
+    def build_load(request: BuildLoadRequest) -> dict[str, Any]:
+        try:
+            return build_load_response(runtime_settings, request)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Graph build-load failed: {exc}") from exc
 
     @app.post("/load")
     def load(request: LoadRequest) -> dict[str, Any]:
