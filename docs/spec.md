@@ -280,9 +280,9 @@ Start with parsers that are useful across many codebases:
 - SQL references from application code
 
 The default extractor pass should do useful discovery without asking users to
-predefine relationships. Configurable patterns can come later for organization
-or framework-specific conventions, but they should extend the scanner rather
-than replace rich initial extraction.
+predefine relationships. Configurable dependency filters should run after
+global graph resolution so they can reduce third-party package noise without
+discarding relationships discovered from the scanned sources.
 
 Future parser slices should add:
 

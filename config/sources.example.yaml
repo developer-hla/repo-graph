@@ -2,6 +2,16 @@ name: example-domain
 cache_dir: ../.repo-graph/cache/repos
 output_dir: ../.repo-graph/output
 
+# Optional. When include patterns are present, unresolved package dependency
+# and package import edges are kept only if they match these patterns. Edges
+# that resolve to packages in the scanned sources are always kept.
+dependency_filter:
+  package_include_patterns:
+    - "^@example/"
+    - "^example-"
+    - "^Example\\."
+  include_relative_imports: true
+
 sources:
   - type: github_org
     name: example-org

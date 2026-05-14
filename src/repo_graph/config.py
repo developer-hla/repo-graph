@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,13 @@ class ExcludeRules:
 
 
 @dataclass(frozen=True)
+class DependencyFilter:
+    package_include_patterns: tuple[str, ...] = ()
+    package_exclude_patterns: tuple[str, ...] = ()
+    include_relative_imports: bool = True
+
+
+@dataclass(frozen=True)
 class RepoGraphConfig:
     name: str
     config_path: Path
@@ -86,6 +94,7 @@ class RepoGraphConfig:
     sources: tuple[Source, ...]
     include: IncludeRules = field(default_factory=IncludeRules)
     exclude: ExcludeRules = field(default_factory=ExcludeRules)
+    dependency_filter: DependencyFilter = field(default_factory=DependencyFilter)
 
 
 def load_raw_config(path: Path) -> dict[str, Any]:
@@ -118,6 +127,7 @@ def load_config(path: Path) -> RepoGraphConfig:
     sources = parse_sources(raw.get("sources"), config_dir)
     include = parse_include(raw.get("include"))
     exclude = parse_exclude(raw.get("exclude"))
+    dependency_filter = parse_dependency_filter(raw.get("dependency_filter"))
 
     return RepoGraphConfig(
         name=name,
@@ -127,6 +137,7 @@ def load_config(path: Path) -> RepoGraphConfig:
         sources=tuple(sources),
         include=include,
         exclude=exclude,
+        dependency_filter=dependency_filter,
     )
 
 
@@ -257,6 +268,38 @@ def parse_exclude(raw_exclude: Any) -> ExcludeRules:
     return ExcludeRules(directories=directories, files=files)
 
 
+def parse_dependency_filter(raw_filter: Any) -> DependencyFilter:
+    if raw_filter is None:
+        return DependencyFilter()
+    if not isinstance(raw_filter, dict):
+        raise ValueError("Config 'dependency_filter' must be a mapping.")
+
+    include_patterns = string_tuple(
+        raw_filter.get("package_include_patterns"),
+        field_name="dependency_filter.package_include_patterns",
+    )
+    exclude_patterns = string_tuple(
+        raw_filter.get("package_exclude_patterns"),
+        field_name="dependency_filter.package_exclude_patterns",
+    )
+    validate_regex_patterns(include_patterns, "dependency_filter.package_include_patterns")
+    validate_regex_patterns(exclude_patterns, "dependency_filter.package_exclude_patterns")
+
+    return DependencyFilter(
+        package_include_patterns=include_patterns,
+        package_exclude_patterns=exclude_patterns,
+        include_relative_imports=bool_value(raw_filter.get("include_relative_imports"), default=True),
+    )
+
+
+def validate_regex_patterns(patterns: tuple[str, ...], field_name: str) -> None:
+    for pattern in patterns:
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise ValueError(f"{field_name} contains invalid regex '{pattern}': {exc}") from exc
+
+
 def normalize_extension(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("File extensions must be non-empty strings.")
@@ -274,15 +317,15 @@ def object_mapping(value: Any, field_name: str) -> dict[str, Any]:
     raise ValueError(f"{field_name} must be a mapping.")
 
 
-def string_tuple(value: Any) -> tuple[str, ...]:
+def string_tuple(value: Any, field_name: str = "Name patterns") -> tuple[str, ...]:
     if value is None:
         return ()
     if not isinstance(value, list | tuple | set):
-        raise ValueError("Name patterns must be a list.")
+        raise ValueError(f"{field_name} must be a list.")
     items: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item.strip():
-            raise ValueError("Name patterns must be non-empty strings.")
+            raise ValueError(f"{field_name} must contain non-empty strings.")
         items.append(item.strip())
     return tuple(items)
 

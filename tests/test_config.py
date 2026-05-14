@@ -86,6 +86,46 @@ sources:
         self.assertEqual(config.sources[0].include_name_patterns, ("^api-",))
         self.assertEqual(config.sources[0].exclude_name_patterns, ("-experiment$",))
 
+    def test_load_config_reads_dependency_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+dependency_filter:
+  package_include_patterns:
+    - "^@example/"
+  package_exclude_patterns:
+    - "-test$"
+  include_relative_imports: false
+sources: []
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.dependency_filter.package_include_patterns, ("^@example/",))
+        self.assertEqual(config.dependency_filter.package_exclude_patterns, ("-test$",))
+        self.assertFalse(config.dependency_filter.include_relative_imports)
+
+    def test_load_config_rejects_invalid_dependency_filter_pattern(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+dependency_filter:
+  package_include_patterns:
+    - "["
+sources: []
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "invalid regex"):
+                load_config(config_path)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -145,6 +145,113 @@ sources:
             )
         )
 
+    def test_dependency_filter_keeps_internal_like_unresolved_package_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            service = root / "service"
+            service.mkdir()
+            (service / "package.json").write_text(
+                '{"name": "@example/service", "dependencies": {"@example/missing": "1.0.0", "lodash": "4.0.0"}}',
+                encoding="utf-8",
+            )
+            (service / "api.ts").write_text(
+                """
+import { missing } from '@example/missing';
+import lodash from 'lodash';
+import { local } from './local';
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+dependency_filter:
+  package_include_patterns:
+    - "^@example/"
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "DEPENDS_ON_PACKAGE" and edge["to_name"] == "@example/missing"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "IMPORTS" and edge["to_name"] == "@example/missing" for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(edge["edge_type"] == "IMPORTS" and edge["to_name"] == "./local" for edge in graph_data["edges"])
+        )
+        self.assertFalse(any(edge["to_name"] == "lodash" for edge in graph_data["edges"]))
+
+    def test_dependency_filter_keeps_resolved_package_references_without_pattern_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            service = root / "service"
+            shared = root / "shared"
+            service.mkdir()
+            shared.mkdir()
+            (service / "package.json").write_text(
+                '{"name": "service", "dependencies": {"local-lib": "1.0.0", "lodash": "4.0.0"}}',
+                encoding="utf-8",
+            )
+            (service / "api.ts").write_text(
+                """
+import { helper } from 'local-lib';
+import lodash from 'lodash';
+""",
+                encoding="utf-8",
+            )
+            (shared / "package.json").write_text('{"name": "local-lib"}', encoding="utf-8")
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+dependency_filter:
+  package_include_patterns:
+    - "^@example/"
+sources:
+  - type: local_path
+    name: service
+    path: service
+  - type: local_path
+    name: shared
+    path: shared
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "DEPENDS_ON_PACKAGE" and edge["to_name"] == "local-lib" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "IMPORTS" and edge["to_name"] == "local-lib" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertFalse(any(edge["to_name"] == "lodash" for edge in graph_data["edges"]))
+
     def test_build_graph_discovers_python_and_dotnet_manifest_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

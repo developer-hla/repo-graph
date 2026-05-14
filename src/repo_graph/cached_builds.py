@@ -10,7 +10,7 @@ from typing import Any
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.graph import Edge, Entity, Graph
-from repo_graph.scanner import MAX_FILE_BYTES, source_to_dict
+from repo_graph.scanner import MAX_FILE_BYTES, apply_dependency_filter, source_to_dict
 from repo_graph.snapshots import (
     compare_source_snapshot,
     snapshot_root,
@@ -39,6 +39,7 @@ def build_cached_graph(
     graph_payloads = [graph_data for _item, graph_data in source_results]
     graph = merge_source_graphs(config.name, [source_to_dict(source) for source in sources], graph_payloads)
     graph.resolve_edges()
+    apply_dependency_filter(graph, config)
     if strict and graph.errors:
         error_summary = "; ".join(graph.errors[:5])
         raise RuntimeError(f"Cached graph build failed with {len(graph.errors)} scanner errors: {error_summary}")

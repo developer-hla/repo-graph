@@ -189,7 +189,51 @@ def build_graph(
         error_summary = "; ".join(graph.errors[:5])
         raise RuntimeError(f"Graph build failed with {len(graph.errors)} scanner errors: {error_summary}")
     graph.resolve_edges()
+    apply_dependency_filter(graph, config)
     return graph
+
+
+def apply_dependency_filter(graph: Graph, config: RepoGraphConfig) -> None:
+    dependency_filter = config.dependency_filter
+    if (
+        not dependency_filter.package_include_patterns
+        and not dependency_filter.package_exclude_patterns
+        and dependency_filter.include_relative_imports
+    ):
+        return
+
+    graph.edges = {edge_id: edge for edge_id, edge in graph.edges.items() if keep_dependency_edge(edge, config)}
+
+
+def keep_dependency_edge(edge: Edge, config: RepoGraphConfig) -> bool:
+    if edge.edge_type == "IMPORTS" and edge.properties.get("import_kind") == "relative":
+        return config.dependency_filter.include_relative_imports
+    if edge.edge_type not in {"DEPENDS_ON_PACKAGE", "IMPORTS"}:
+        return True
+    if edge.edge_type == "IMPORTS" and edge.to_type != "package":
+        return True
+    if package_reference_matches(edge, config.dependency_filter.package_exclude_patterns):
+        return False
+    if edge.resolved:
+        return True
+    include_patterns = config.dependency_filter.package_include_patterns
+    return not include_patterns or package_reference_matches(edge, include_patterns)
+
+
+def package_reference_matches(edge: Edge, patterns: tuple[str, ...]) -> bool:
+    if not patterns:
+        return False
+    candidates = package_reference_candidates(edge)
+    return any(re.search(pattern, candidate) for pattern in patterns for candidate in candidates)
+
+
+def package_reference_candidates(edge: Edge) -> tuple[str, ...]:
+    candidates = [edge.to_name]
+    for key in ("raw_target", "normalized_target"):
+        value = edge.properties.get(key)
+        if isinstance(value, str) and value:
+            candidates.append(value)
+    return tuple(dict.fromkeys(candidates))
 
 
 def default_extractors() -> list[FileExtractor]:

@@ -51,6 +51,21 @@ GitHub organization query that expands to matching repositories through the
 GitHub REST API. Keep real organization names, repository URLs, and generated
 graphs out of public commits.
 
+Use `dependency_filter` when third-party package edges would drown out the
+organization graph. Repo Graph still extracts all sources first and resolves
+package references globally. Resolved package/import edges are kept even when
+they do not match the patterns; unresolved package references are kept only
+when they look organization-owned.
+
+```yaml
+dependency_filter:
+  package_include_patterns:
+    - "^@example/"
+    - "^example-"
+    - "^Example\\."
+  include_relative_imports: true
+```
+
 ```bash
 pixi run repo-graph inspect --config ../my-repo-graph-sources.yaml
 pixi run repo-graph sync --config ../my-repo-graph-sources.yaml

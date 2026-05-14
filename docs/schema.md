@@ -114,6 +114,28 @@ Scanner-derived reference edges include evidence in `properties`, such as
 `raw_target`, `normalized_target`, dependency type, ecosystem, package version,
 HTTP method, target path, target environment variable, or SQL object name.
 
+## Dependency Filtering
+
+Configs may define `dependency_filter` to reduce third-party package noise in
+final graph exports:
+
+```yaml
+dependency_filter:
+  package_include_patterns:
+    - "^@example/"
+    - "^example-"
+  package_exclude_patterns:
+    - "-test$"
+  include_relative_imports: true
+```
+
+The filter applies after global edge resolution. Resolved `DEPENDS_ON_PACKAGE`
+and package `IMPORTS` edges are retained because they point to packages found
+inside the scanned source set. Unresolved package references are retained only
+when they match `package_include_patterns`, unless no include patterns are
+configured. `package_exclude_patterns` removes matching package references.
+Relative import edges are controlled by `include_relative_imports`.
+
 ## Unresolved Edges
 
 An unresolved edge is a discovered reference that could not be mapped to an

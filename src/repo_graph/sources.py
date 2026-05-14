@@ -40,6 +40,11 @@ def config_summary(config: RepoGraphConfig) -> dict[str, Any]:
             "directories": sorted(config.exclude.directories),
             "files": sorted(config.exclude.files),
         },
+        "dependency_filter": {
+            "package_include_patterns": list(config.dependency_filter.package_include_patterns),
+            "package_exclude_patterns": list(config.dependency_filter.package_exclude_patterns),
+            "include_relative_imports": config.dependency_filter.include_relative_imports,
+        },
     }
 
 
