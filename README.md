@@ -114,6 +114,12 @@ Mount your own config and source/cache locations when scanning private
 repositories. Do not bake private source configs, tokens, generated graphs, or
 database volumes into a public image.
 
+For private GitHub repositories, copy `.env.example` to `.env` and set
+`GITHUB_TOKEN`. Docker Compose reads `.env` automatically. Repo Graph uses the
+token for GitHub org discovery and HTTPS clone/fetch through temporary Git
+environment config, without writing the token into source configs, generated
+graphs, or cloned repository remotes.
+
 Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
 `REPO_GRAPH_NEO4J_BOLT_PORT` if those ports are already in use.
 

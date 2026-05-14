@@ -22,4 +22,6 @@ exports, or other sensitive data in public issues.
 - Do not commit generated graphs from private repositories.
 - Do not publish graph database volumes created from private code.
 - Do not put credentials in Repo Graph config files.
+- Keep local `.env` files uncommitted. Use `.env.example` only for empty
+  placeholders.
 - Prefer read-only credentials for Git providers when scanning private sources.

@@ -12,8 +12,10 @@ from repo_graph.sources import (
     expand_sources,
     get_default_branch,
     git_cache_path,
+    github_api_headers,
     github_next_link,
     inspect_sources,
+    run_git,
     sync_git_source,
     sync_sources_with_status,
 )
@@ -216,6 +218,46 @@ class SourceSyncTests(unittest.TestCase):
         )
 
         self.assertEqual(next_url, "https://api.github.com/orgs/example/repos?page=2")
+
+    def test_github_api_headers_use_token_from_environment(self) -> None:
+        with patch.dict("os.environ", {"GITHUB_TOKEN": "secret-token"}):
+            headers = github_api_headers()
+
+        self.assertEqual(headers["Authorization"], "Bearer secret-token")
+
+    def test_run_git_injects_github_token_through_environment_config(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["git", "fetch"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with (
+            patch.dict("os.environ", {"GITHUB_TOKEN": "secret-token", "GIT_CONFIG_COUNT": "0"}),
+            patch("subprocess.run", return_value=completed) as subprocess_run,
+        ):
+            run_git(["fetch", "origin", "--prune"], cwd=Path("/repo"))
+
+        args = subprocess_run.call_args.args[0]
+        env = subprocess_run.call_args.kwargs["env"]
+        self.assertNotIn("secret-token", args)
+        self.assertEqual(env["GIT_CONFIG_KEY_0"], "http.https://github.com/.extraheader")
+        self.assertEqual(env["GIT_CONFIG_VALUE_0"], "AUTHORIZATION: bearer secret-token")
+        self.assertEqual(env["GIT_CONFIG_COUNT"], "1")
+
+    def test_run_git_redacts_github_token_from_error_messages(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["git", "fetch"],
+            returncode=1,
+            stdout="",
+            stderr="fatal: secret-token rejected",
+        )
+        with (
+            patch.dict("os.environ", {"GITHUB_TOKEN": "secret-token"}),
+            patch("subprocess.run", return_value=completed),
+            self.assertRaisesRegex(RuntimeError, r"\[redacted\] rejected"),
+        ):
+            run_git(["fetch", "origin", "--prune"], cwd=Path("/repo"))
 
 
 def run(args: list[str], cwd: Path | None = None) -> None:

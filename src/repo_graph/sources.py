@@ -314,10 +314,17 @@ def github_api_headers() -> dict[str, str]:
         "User-Agent": "repo-graph",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    token = github_token()
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def github_token() -> str | None:
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token is None or not token.strip():
+        return None
+    return token.strip()
 
 
 def github_next_link(link_header: str | None) -> str | None:
@@ -483,8 +490,37 @@ def run_git(args: list[str], cwd: Path | None) -> str:
         check=False,
         text=True,
         capture_output=True,
+        env=git_command_env(),
     )
     if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip()
+        message = redact_github_token(result.stderr.strip() or result.stdout.strip())
         raise RuntimeError("git {} failed: {}".format(" ".join(args), message))
     return result.stdout + result.stderr
+
+
+def git_command_env() -> dict[str, str] | None:
+    token = github_token()
+    if token is None:
+        return None
+
+    env = os.environ.copy()
+    config_index = next_git_config_index(env)
+    env[f"GIT_CONFIG_KEY_{config_index}"] = "http.https://github.com/.extraheader"
+    env[f"GIT_CONFIG_VALUE_{config_index}"] = f"AUTHORIZATION: bearer {token}"
+    env["GIT_CONFIG_COUNT"] = str(config_index + 1)
+    return env
+
+
+def next_git_config_index(env: dict[str, str]) -> int:
+    try:
+        value = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
+    except ValueError:
+        return 0
+    return max(value, 0)
+
+
+def redact_github_token(message: str) -> str:
+    token = github_token()
+    if token is None:
+        return message
+    return message.replace(token, "[redacted]")

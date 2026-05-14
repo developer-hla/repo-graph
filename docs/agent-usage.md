@@ -75,6 +75,11 @@ curl -X POST http://localhost:8000/jobs/sync \
 `/sources/configured` describes what the runtime can see on disk. `/sources`
 describes what was loaded into Neo4j from the most recent graph load.
 
+For private GitHub repositories in Docker, operators should put `GITHUB_TOKEN`
+in local `.env`; that file is ignored and must not be committed. The token is
+used for GitHub org discovery and HTTPS clone/fetch. Agents should not ask
+users to place tokens in source config files.
+
 ## Change Preview
 
 Preview changed sources before running an incremental refresh:

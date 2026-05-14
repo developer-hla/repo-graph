@@ -7,6 +7,8 @@ services:
       REPO_GRAPH_NEO4J_URI: bolt://neo4j:7687
       REPO_GRAPH_NEO4J_USER: neo4j
       REPO_GRAPH_NEO4J_PASSWORD: repo-graph-password
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GH_TOKEN: ${GH_TOKEN:-}
     ports:
       - "8000:8000"
     volumes:
