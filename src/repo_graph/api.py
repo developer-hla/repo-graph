@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.jobs import JobRegistry
+from repo_graph.reports import unresolved_report_from_items
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.sources import config_summary, inspect_sources, sync_sources_with_status
 from repo_graph.storage.neo4j import (
@@ -30,6 +31,7 @@ from repo_graph.storage.neo4j import (
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
 DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
 DEFAULT_NEO4J_PASSWORD = "repo-graph-password"
+UNRESOLVED_REPORT_EDGE_LIMIT = 1000
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/entities/{entity_id}", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
             {"method": "GET", "path": "/edges/unresolved", "available": True},
+            {"method": "GET", "path": "/reports/unresolved", "available": True},
         ],
         "agent_guidance": {
             "purpose": "Discover the local Repo Graph runtime and supported API surface.",
@@ -159,6 +162,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
             "scope_status": "available",
+            "unresolved_report_status": "available",
         },
     }
 
@@ -411,6 +415,31 @@ def unresolved_edges_response(
     return {"items": items, "count": len(items)}
 
 
+def unresolved_report_response(
+    settings: RuntimeSettings,
+    source_name: str | None,
+    edge_type: str | None,
+    limit: int,
+    examples: int,
+) -> dict[str, Any]:
+    items = list_unresolved_edges(
+        settings.neo4j_settings(),
+        source_name=source_name,
+        edge_type=edge_type,
+        limit=UNRESOLVED_REPORT_EDGE_LIMIT,
+    )
+    report = unresolved_report_from_items(
+        items,
+        source_name=source_name,
+        edge_type=edge_type,
+        group_limit=limit,
+        examples_per_group=examples,
+    )
+    report["edge_sample_limit"] = UNRESOLVED_REPORT_EDGE_LIMIT
+    report["edge_sample_truncated"] = len(items) >= UNRESOLVED_REPORT_EDGE_LIMIT
+    return report
+
+
 def neo4j_http_exception(operation: str, exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
@@ -589,6 +618,18 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             return unresolved_edges_response(runtime_settings, source, edge_type, limit)
         except Exception as exc:
             raise neo4j_http_exception("unresolved edge lookup", exc) from exc
+
+    @app.get("/reports/unresolved")
+    def get_unresolved_report_endpoint(
+        source: str | None = None,
+        edge_type: str | None = Query(default=None, alias="type"),
+        limit: int = Query(default=50, ge=1, le=200),
+        examples: int = Query(default=3, ge=1, le=10),
+    ) -> dict[str, Any]:
+        try:
+            return unresolved_report_response(runtime_settings, source, edge_type, limit, examples)
+        except Exception as exc:
+            raise neo4j_http_exception("unresolved report lookup", exc) from exc
 
     return app
 

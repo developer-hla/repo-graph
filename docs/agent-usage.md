@@ -256,6 +256,33 @@ curl "http://localhost:8000/edges/unresolved?type=CALLS_SQL"
 Agents should mention unresolved edges as missing scope or unresolved parser
 coverage, not automatically as unused code.
 
+## Unresolved Report
+
+Use the grouped unresolved report before deciding which repositories or parser
+slices are missing:
+
+```bash
+curl "http://localhost:8000/reports/unresolved"
+```
+
+Filter by source or edge type:
+
+```bash
+curl "http://localhost:8000/reports/unresolved?source=api-service"
+curl "http://localhost:8000/reports/unresolved?type=CALLS_SQL"
+```
+
+Report groups include:
+
+- `classification`: a hint such as `likely_missing_source`,
+  `ambiguous_target`, `likely_parser_gap`, or `needs_review`
+- `count`: how many unresolved edges matched the same target
+- `source_names`: which sources reference that target
+- `examples`: bounded file and line evidence
+
+Treat classifications as triage hints. They are not proof that code is unused
+or that a repository is definitely missing.
+
 ## Common Agent Workflows
 
 Find API routes:
@@ -280,10 +307,10 @@ Explain what a file touches:
 
 Find missing graph scope:
 
-1. Call `/edges/unresolved`.
-2. Group unresolved edges by `source_name`, `edge_type`, and `target.target_type`.
-3. Treat frequent unresolved targets as candidates for adding sources or parser
-   coverage.
+1. Call `/reports/unresolved`.
+2. Review high-count `likely_missing_source` groups first.
+3. Check `ambiguous_target` groups before trusting cross-source answers.
+4. Treat `likely_parser_gap` groups as candidates for deeper extraction.
 
 ## Raw Cypher
 

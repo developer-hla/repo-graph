@@ -262,7 +262,7 @@ def list_unresolved_edges(
     params = {
         "source_name": optional_filter(source_name),
         "edge_type": optional_filter(edge_type),
-        "limit": normalize_limit(limit, maximum=200),
+        "limit": normalize_limit(limit, maximum=1000),
     }
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()

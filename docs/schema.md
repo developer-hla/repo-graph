@@ -132,6 +132,58 @@ such as `INVENTORY_SERVICE_URL` resolve to a discovered project named or
 aliased `inventory-service` without being treated as an ambiguous match with
 its parent repository.
 
+## Unresolved Report
+
+The unresolved report groups unresolved edges by `edge_type`, `to_type`, target
+name, and classification hint. It is available from graph JSON through the CLI
+and from the loaded graph through the API.
+
+```json
+{
+  "summary": {
+    "unresolved_edge_count": 12,
+    "group_count": 3,
+    "returned_group_count": 3,
+    "classification_edge_counts": {
+      "likely_missing_source": 2,
+      "likely_parser_gap": 1
+    },
+    "classification_group_counts": {
+      "likely_missing_source": 2,
+      "likely_parser_gap": 1
+    }
+  },
+  "items": [
+    {
+      "edge_type": "CALLS_SQL",
+      "to_type": "stored_procedure",
+      "to_name": "dbo.load",
+      "classification": "likely_missing_source",
+      "count": 4,
+      "source_names": ["api-service"],
+      "parsers": ["sql_reference"],
+      "examples": [
+        {
+          "source_name": "api-service",
+          "file_path": "src/app.py",
+          "line_number": 42
+        }
+      ]
+    }
+  ]
+}
+```
+
+Classification values are triage hints:
+
+- `likely_missing_source`: usually means the referenced package, service,
+  project, or database object lives outside the current graph scope.
+- `ambiguous_target`: multiple graph entities matched, so RepoGraph did not
+  guess.
+- `likely_parser_gap`: source scope may be correct, but extraction likely needs
+  deeper parser support.
+- `needs_review`: no heuristic matched.
+
 ## Neo4j Mapping
 
 The Neo4j loader stores graph exports with a small public-safe model:

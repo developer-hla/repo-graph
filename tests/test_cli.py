@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import json
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -36,6 +38,40 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertIn("http://repo-graph:8000/sources/configured", output.getvalue())
+
+    def test_unresolved_report_command_prints_grouped_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            graph_path = Path(tmpdir) / "graph.json"
+            graph_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {"scope_name": "test-scope"},
+                        "edges": [
+                            {
+                                "edge_id": "edge-1",
+                                "edge_type": "CALLS_SERVICE",
+                                "to_type": "service",
+                                "to_name": "inventory-service",
+                                "source_name": "api-service",
+                                "resolved": False,
+                                "properties": {},
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["report", "unresolved", "--graph", str(graph_path)])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual(payload["scope_name"], "test-scope")
+        self.assertEqual(payload["items"][0]["classification"], "likely_missing_source")
 
 
 if __name__ == "__main__":

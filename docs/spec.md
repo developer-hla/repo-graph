@@ -175,9 +175,15 @@ The first public query surface should use purpose-built read endpoints:
 - `GET /entities/{entity_id}`
 - `GET /entities/{entity_id}/neighbors`
 - `GET /edges/unresolved`
+- `GET /reports/unresolved`
 
 Raw Cypher should stay unavailable until there is an explicit read-only mode
 and clear result limits.
+
+The first UI should be a navigable local control plane over these endpoints.
+It should start with pages for source readiness, build/load jobs, graph scope,
+entity search, entity neighbors, and unresolved reports rather than a single
+large graph visualization.
 
 ## CLI MVP
 

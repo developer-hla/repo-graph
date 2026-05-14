@@ -11,6 +11,7 @@ import uvicorn
 from repo_graph import __version__
 from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.reports import unresolved_report_from_graph
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.sources import resolve_sources, sync_sources
 from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
@@ -89,6 +90,26 @@ def cmd_agent_instructions(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report_unresolved(args: argparse.Namespace) -> int:
+    graph_data = load_graph_json(args.graph)
+    report = unresolved_report_from_graph(
+        graph_data,
+        source_name=args.source,
+        edge_type=args.edge_type,
+        group_limit=args.limit,
+        examples_per_group=args.examples,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def load_graph_json(path: Path) -> dict[str, object]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Graph JSON root must be an object.")
+    return data
+
+
 def agent_instructions_markdown(api_url: str, config_path: Path | None = None) -> str:
     lines = [
         "## Repo Graph",
@@ -108,13 +129,16 @@ def agent_instructions_markdown(api_url: str, config_path: Path | None = None) -
             f"- Loaded sources: `{api_url}/sources`",
             f"- Entity search: `{api_url}/entities/search`",
             f"- Unresolved edges: `{api_url}/edges/unresolved`",
+            f"- Unresolved report: `{api_url}/reports/unresolved`",
             f"- Repo Graph version used to generate these instructions: `{__version__}`",
             "",
             "Before answering architecture questions, call the manifest, then check `/scope`",
             "and `/sources`. Use `/sources/configured` when you need to know which",
             "repositories are configured or missing locally before a graph has been loaded.",
             "Unresolved edges are discovered references that were not linked in the current",
-            "graph scope; do not treat them as unused code by default.",
+            "graph scope; do not treat them as unused code by default. Use",
+            "`/reports/unresolved` to group them into missing-source, ambiguous-target,",
+            "and parser-coverage hints.",
         ]
     )
     return "\n".join(lines)
@@ -166,6 +190,16 @@ def build_parser() -> argparse.ArgumentParser:
     agent_parser.add_argument("--api-url", default=DEFAULT_API_URL)
     agent_parser.add_argument("--config", type=Path)
     agent_parser.set_defaults(func=cmd_agent_instructions)
+
+    report_parser = subparsers.add_parser("report", help="Generate reports from a graph JSON export.")
+    report_subparsers = report_parser.add_subparsers(dest="report", required=True)
+    unresolved_parser = report_subparsers.add_parser("unresolved", help="Group unresolved graph edges.")
+    unresolved_parser.add_argument("--graph", type=Path, required=True)
+    unresolved_parser.add_argument("--source")
+    unresolved_parser.add_argument("--edge-type", dest="edge_type")
+    unresolved_parser.add_argument("--limit", type=int, default=50)
+    unresolved_parser.add_argument("--examples", type=int, default=3)
+    unresolved_parser.set_defaults(func=cmd_report_unresolved)
 
     return parser
 

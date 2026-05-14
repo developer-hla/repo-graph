@@ -33,6 +33,7 @@ from local source files.
 pixi run repo-graph inspect --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml --strict
+pixi run repo-graph report unresolved --graph .repo-graph/output/graph.json
 ```
 
 The example config scans only synthetic repositories under `examples/`. It
@@ -70,8 +71,9 @@ curl http://localhost:8000/sources/configured
 ```
 
 The runtime exposes health, manifest, config, source status, sync, build, load,
-job, and read-only graph endpoints. The manifest tells agents which API
-capabilities are available and which graph capabilities are still planned.
+job, unresolved report, and read-only graph endpoints. The manifest tells
+agents which API capabilities are available and which graph capabilities are
+still planned.
 
 Print a Markdown snippet for another repository's `AGENTS.md`:
 
@@ -187,6 +189,7 @@ curl "http://localhost:8000/sources"
 curl "http://localhost:8000/entities/search?type=api_route"
 curl "http://localhost:8000/entities/<entity_id>/neighbors"
 curl "http://localhost:8000/edges/unresolved"
+curl "http://localhost:8000/reports/unresolved"
 ```
 
 See [docs/agent-usage.md](docs/agent-usage.md) for endpoint examples and agent
