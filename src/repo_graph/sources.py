@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+from base64 import b64encode
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -320,6 +321,14 @@ def github_api_headers() -> dict[str, str]:
     return headers
 
 
+def github_git_auth_header() -> str | None:
+    token = github_token()
+    if token is None:
+        return None
+    encoded = b64encode(f"x-access-token:{token}".encode()).decode("ascii")
+    return f"AUTHORIZATION: basic {encoded}"
+
+
 def github_token() -> str | None:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token is None or not token.strip():
@@ -504,9 +513,12 @@ def git_command_env() -> dict[str, str] | None:
         return None
 
     env = os.environ.copy()
+    header = github_git_auth_header()
+    if header is None:
+        return None
     config_index = next_git_config_index(env)
     env[f"GIT_CONFIG_KEY_{config_index}"] = "http.https://github.com/.extraheader"
-    env[f"GIT_CONFIG_VALUE_{config_index}"] = f"AUTHORIZATION: bearer {token}"
+    env[f"GIT_CONFIG_VALUE_{config_index}"] = header
     env["GIT_CONFIG_COUNT"] = str(config_index + 1)
     return env
 
@@ -523,4 +535,8 @@ def redact_github_token(message: str) -> str:
     token = github_token()
     if token is None:
         return message
-    return message.replace(token, "[redacted]")
+    redacted = message.replace(token, "[redacted]")
+    auth_header = github_git_auth_header()
+    if auth_header is not None:
+        redacted = redacted.replace(auth_header, "AUTHORIZATION: [redacted]")
+    return redacted

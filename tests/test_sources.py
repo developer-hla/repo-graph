@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 import unittest
+from base64 import b64encode
 from pathlib import Path
 from unittest.mock import patch
 
@@ -240,22 +241,24 @@ class SourceSyncTests(unittest.TestCase):
 
         args = subprocess_run.call_args.args[0]
         env = subprocess_run.call_args.kwargs["env"]
+        expected_header = "AUTHORIZATION: basic " + b64encode(b"x-access-token:secret-token").decode("ascii")
         self.assertNotIn("secret-token", args)
         self.assertEqual(env["GIT_CONFIG_KEY_0"], "http.https://github.com/.extraheader")
-        self.assertEqual(env["GIT_CONFIG_VALUE_0"], "AUTHORIZATION: bearer secret-token")
+        self.assertEqual(env["GIT_CONFIG_VALUE_0"], expected_header)
         self.assertEqual(env["GIT_CONFIG_COUNT"], "1")
 
     def test_run_git_redacts_github_token_from_error_messages(self) -> None:
+        encoded = b64encode(b"x-access-token:secret-token").decode("ascii")
         completed = subprocess.CompletedProcess(
             args=["git", "fetch"],
             returncode=1,
             stdout="",
-            stderr="fatal: secret-token rejected",
+            stderr=f"fatal: secret-token rejected AUTHORIZATION: basic {encoded}",
         )
         with (
             patch.dict("os.environ", {"GITHUB_TOKEN": "secret-token"}),
             patch("subprocess.run", return_value=completed),
-            self.assertRaisesRegex(RuntimeError, r"\[redacted\] rejected"),
+            self.assertRaisesRegex(RuntimeError, r"\[redacted\] rejected AUTHORIZATION: \[redacted\]"),
         ):
             run_git(["fetch", "origin", "--prune"], cwd=Path("/repo"))
 
