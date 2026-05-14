@@ -143,9 +143,18 @@ async function renderJobs() {
             <option value="false">false</option>
           </select>
         </label>
+        <label class="checkbox-field">
+          <input id="job-sync" type="checkbox" />
+          <span>Sync</span>
+        </label>
+        <label class="checkbox-field">
+          <input id="job-load" type="checkbox" checked />
+          <span>Load</span>
+        </label>
         <button class="button" type="button" data-job-action="sync">Sync</button>
         <button class="button" type="button" data-job-action="build">Build</button>
         <button class="button" type="button" data-job-action="build-load">Build Load</button>
+        <button class="button" type="button" data-job-action="refresh">Refresh</button>
       </div>
       <div id="job-action-result" class="stack"></div>`
     )}
@@ -276,15 +285,43 @@ async function loadEntity(entityId) {
 async function submitJob(kind) {
   const result = document.querySelector("#job-action-result");
   const strict = document.querySelector("#job-strict")?.value !== "false";
-  const payload = kind === "sync" ? {} : { strict };
+  const sync = Boolean(document.querySelector("#job-sync")?.checked);
+  const load = Boolean(document.querySelector("#job-load")?.checked);
+  const payload = jobPayload(kind, strict, sync, load);
   result.innerHTML = loadingMarkup();
   const response = await fetchMaybe(`/jobs/${kind}`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  result.innerHTML = response.ok
-    ? `<div class="message">Submitted job <code>${escapeHtml(response.data.job_id)}</code></div>`
-    : errorMarkup(response.error);
+  if (response.ok) {
+    result.innerHTML = jobStatusMarkup(response.data);
+    pollJob(response.data.job_id);
+  } else {
+    result.innerHTML = errorMarkup(response.error);
+  }
+  await refreshJobsPanel();
+}
+
+function jobPayload(kind, strict, sync, load) {
+  if (kind === "sync") return {};
+  if (kind === "refresh") return { strict, sync, load };
+  return { strict, sync };
+}
+
+async function pollJob(jobId, attempts = 0) {
+  if (!jobId || attempts > 60) return;
+  const response = await fetchMaybe(`/jobs/${encodeURIComponent(jobId)}`);
+  const result = document.querySelector("#job-action-result");
+  if (response.ok && result) {
+    result.innerHTML = jobStatusMarkup(response.data);
+    await refreshJobsPanel();
+    if (!["succeeded", "failed"].includes(response.data.status)) {
+      window.setTimeout(() => pollJob(jobId, attempts + 1), 1000);
+    }
+  }
+}
+
+async function refreshJobsPanel() {
   const jobs = await fetchMaybe("/jobs?limit=50");
   const panels = document.querySelectorAll(".panel");
   const recent = panels[panels.length - 1];
@@ -555,11 +592,13 @@ function table(headers, rows) {
 }
 
 function runtimeRows(health, manifest) {
+  const endpoints = manifest.ok ? manifest.data.endpoints || [] : [];
   return [
     ["Health", health.ok ? health.data.status : health.error.message],
     ["Version", health.ok ? health.data.version : ""],
     ["Config", manifest.ok ? manifest.data.config?.path : ""],
     ["Schema", manifest.ok ? manifest.data.schema_version : ""],
+    ["Refresh", endpointAvailable(endpoints, "POST", "/refresh") ? "available" : "unavailable"],
   ];
 }
 
@@ -594,9 +633,48 @@ function status(label, tone) {
 }
 
 function statusTone(value) {
-  if (value === "succeeded" || value === "synced" || value === "built") return "ok";
+  if (value === "succeeded" || value === "synced" || value === "built" || value === "refreshed") return "ok";
   if (value === "failed") return "bad";
   return "warn";
+}
+
+function endpointAvailable(endpoints, method, path) {
+  return endpoints.some((endpoint) => endpoint.method === method && endpoint.path === path && endpoint.available);
+}
+
+function jobStatusMarkup(job) {
+  const result = job.result || {};
+  const error = job.error || {};
+  return `
+    <div class="message">
+      <div class="inline-list">
+        ${status(job.status || "unknown", statusTone(job.status))}
+        <span class="chip">${escapeHtml(job.kind || "")}</span>
+        <span class="chip mono">${escapeHtml(job.job_id || "")}</span>
+      </div>
+      ${job.finished_at ? `<div class="muted">${escapeHtml(formatDate(job.finished_at))}</div>` : ""}
+      ${job.status === "failed" ? `<div class="message error">${escapeHtml(error.message || "Job failed")}</div>` : ""}
+      ${job.kind === "refresh" && result.status ? refreshSummaryMarkup(result) : ""}
+    </div>
+  `;
+}
+
+function refreshSummaryMarkup(result) {
+  const changes = result.changes || {};
+  const cache = result.cache || {};
+  const load = result.load || {};
+  return `
+    <div class="refresh-summary">
+      ${metric("Changed", numberValue(changes.changed_count), "sources", true)}
+      ${metric("Rebuilt", numberValue(cache.rebuilt_count), "source graphs", true)}
+      ${metric("Reused", numberValue(cache.reused_count), "source graphs", true)}
+      ${keyValueTable([
+        ["Load", load.action || ""],
+        ["Reason", load.reason || ""],
+        ["Changed Sources", (changes.changed_sources || []).join(", ")],
+      ])}
+    </div>
+  `;
 }
 
 function classificationTone(value) {

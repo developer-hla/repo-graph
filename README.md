@@ -79,7 +79,7 @@ curl http://localhost:8000/sources/configured
 ```
 
 The runtime exposes a navigable local UI plus health, manifest, config, source
-status, sync, build, load, job, unresolved report, and read-only graph
+status, sync, build, refresh, load, job, unresolved report, and read-only graph
 endpoints. The manifest tells agents which API capabilities are available and
 which graph capabilities are still planned.
 

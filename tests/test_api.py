@@ -135,8 +135,11 @@ class ApiTests(unittest.TestCase):
         self.assertIn("Repo Graph", shell.text)
         self.assertEqual(script.status_code, 200)
         self.assertIn("renderDashboard", script.text)
+        self.assertIn('data-job-action="refresh"', script.text)
+        self.assertIn("pollJob", script.text)
         self.assertEqual(styles.status_code, 200)
         self.assertIn(".app-shell", styles.text)
+        self.assertIn(".refresh-summary", styles.text)
 
     def test_ui_index_path_points_to_shell(self) -> None:
         self.assertTrue(ui_index_path().exists())
