@@ -102,12 +102,29 @@ curl -X POST http://localhost:8000/build \
   -d '{"strict":true}'
 ```
 
+Refresh incrementally and load changed sources into Neo4j:
+
+```bash
+curl -X POST http://localhost:8000/refresh \
+  -H "content-type: application/json" \
+  -d '{"strict":true,"load":true}'
+```
+
+`/refresh` writes the merged graph JSON, reports changed, rebuilt, and reused
+sources, and with `load:true` updates Neo4j. It full-loads when no graph is
+loaded or when the loaded scope/source set differs; otherwise, it replaces only
+changed sources.
+
 For larger source sets, use the job API:
 
 ```bash
 curl -X POST http://localhost:8000/jobs/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
+
+curl -X POST http://localhost:8000/jobs/refresh \
+  -H "content-type: application/json" \
+  -d '{"strict":true,"load":true}'
 ```
 
 Poll the returned `job_id`:

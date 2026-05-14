@@ -116,9 +116,11 @@ relationships derived from graph edge types.
 - `POST /sync`
 - `POST /build`
 - `POST /build-load`
+- `POST /refresh`
 - `POST /jobs/sync`
 - `POST /jobs/build`
 - `POST /jobs/build-load`
+- `POST /jobs/refresh`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
 - `POST /load`
@@ -141,6 +143,7 @@ load orchestration:
 - `POST /sync`
 - `POST /build`
 - `POST /build-load`
+- `POST /refresh`
 - `POST /load`
 
 For large source sets, an in-memory local job API should support:
@@ -148,6 +151,7 @@ For large source sets, an in-memory local job API should support:
 - `POST /jobs/sync`
 - `POST /jobs/build`
 - `POST /jobs/build-load`
+- `POST /jobs/refresh`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
 

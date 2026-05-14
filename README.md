@@ -131,6 +131,10 @@ curl -X POST http://localhost:8000/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
 
+curl -X POST http://localhost:8000/refresh \
+  -H "content-type: application/json" \
+  -d '{"strict":true,"load":true}'
+
 curl http://localhost:8000/stats
 ```
 
@@ -145,6 +149,10 @@ curl -X POST http://localhost:8000/jobs/sync \
 curl -X POST http://localhost:8000/jobs/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
+
+curl -X POST http://localhost:8000/jobs/refresh \
+  -H "content-type: application/json" \
+  -d '{"strict":true,"load":true}'
 
 curl http://localhost:8000/jobs/<job_id>
 ```

@@ -13,6 +13,7 @@ from repo_graph.api import (
     BuildLoadRequest,
     BuildRequest,
     LoadRequest,
+    RefreshRequest,
     RuntimeSettings,
     SyncRequest,
     build_load_response,
@@ -27,11 +28,13 @@ from repo_graph.api import (
     load_response,
     manifest_payload,
     neighbors_response,
+    refresh_response,
     scope_response,
     search_entities_response,
     sources_response,
     submit_build_job,
     submit_build_load_job,
+    submit_refresh_job,
     submit_sync_job,
     sync_response,
     ui_index_path,
@@ -69,9 +72,11 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "POST", "path": "/sync", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/refresh", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/sync", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/jobs/refresh", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs/{job_id}", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/load", "available": True}, payload["endpoints"])
@@ -102,9 +107,11 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/sync", route_paths)
         self.assertIn("/build", route_paths)
         self.assertIn("/build-load", route_paths)
+        self.assertIn("/refresh", route_paths)
         self.assertIn("/jobs/sync", route_paths)
         self.assertIn("/jobs/build", route_paths)
         self.assertIn("/jobs/build-load", route_paths)
+        self.assertIn("/jobs/refresh", route_paths)
         self.assertIn("/jobs", route_paths)
         self.assertIn("/jobs/{job_id}", route_paths)
         self.assertIn("/load", route_paths)
@@ -256,6 +263,39 @@ class ApiTests(unittest.TestCase):
         build.assert_called_once()
         load.assert_called_once()
 
+    def test_refresh_response_runs_incremental_refresh(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        refresh_payload = {
+            "status": "refreshed",
+            "output": "/repo/.repo-graph/output/graph.json",
+            "changes": {"changed_sources": ["service"]},
+        }
+        with (
+            patch("repo_graph.api.load_config") as load_config,
+            patch("repo_graph.api.refresh_graph", return_value=refresh_payload) as refresh,
+        ):
+            config = load_config.return_value
+            config.config_path = Path("/repo/config/local-example.yaml")
+            config.output_dir = Path("/repo/.repo-graph/output")
+
+            payload = refresh_response(settings, RefreshRequest(sync=True, strict=True))
+
+        self.assertEqual(payload, refresh_payload)
+        refresh.assert_called_once()
+        self.assertTrue(refresh.call_args.kwargs["sync_first"])
+        self.assertTrue(refresh.call_args.kwargs["strict"])
+        self.assertFalse(refresh.call_args.kwargs["load"])
+
+    def test_refresh_response_rejects_invalid_max_file_bytes(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        with patch("repo_graph.api.load_config") as load_config:
+            config = load_config.return_value
+            config.config_path = Path("/repo/config/local-example.yaml")
+            config.output_dir = Path("/repo/.repo-graph/output")
+
+            with self.assertRaises(ValueError):
+                refresh_response(settings, RefreshRequest(max_file_bytes=0))
+
     def test_submit_build_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
@@ -288,6 +328,46 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(job["status"], "succeeded")
         self.assertEqual(job["request"]["clear_existing"], False)
         self.assertEqual(job["result"], {"status": "built_and_loaded"})
+
+    def test_submit_refresh_job_runs_through_registry(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        registry = JobRegistry(run_inline=True)
+        with patch("repo_graph.api.refresh_response", return_value={"status": "refreshed"}):
+            job = submit_refresh_job(registry, settings, RefreshRequest(load=True))
+
+        self.assertEqual(job["kind"], "refresh")
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(job["request"]["load"], True)
+        self.assertEqual(job["result"], {"status": "refreshed"})
+
+    def test_refresh_endpoint_rejects_unknown_request_fields(self) -> None:
+        client = TestClient(create_app(RuntimeSettings(config_path=None, neo4j_uri=None, neo4j_user=None)))
+
+        response = client.post("/refresh", json={"unknown": True})
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_refresh_endpoint_returns_refresh_response(self) -> None:
+        client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml"))))
+        with patch("repo_graph.api.refresh_response", return_value={"status": "refreshed"}) as refresh:
+            response = client.post("/refresh", json={"strict": True})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "refreshed"})
+        refresh.assert_called_once()
+
+    def test_refresh_job_endpoint_submits_refresh_job(self) -> None:
+        registry = JobRegistry(run_inline=True)
+        client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml")), registry))
+        with patch("repo_graph.api.refresh_response", return_value={"status": "refreshed"}):
+            response = client.post("/jobs/refresh", json={"load": True})
+
+        payload = response.json()
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(payload["kind"], "refresh")
+        self.assertEqual(payload["status"], "succeeded")
+        self.assertEqual(payload["request"]["load"], True)
+        self.assertEqual(payload["result"], {"status": "refreshed"})
 
     def test_job_response_reads_registry_job(self) -> None:
         registry = JobRegistry(run_inline=True)
