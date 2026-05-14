@@ -123,6 +123,7 @@ relationships derived from graph edge types.
 - `POST /jobs/build-load`
 - `POST /jobs/snapshot-status`
 - `POST /jobs/refresh`
+- `POST /jobs/refresh-changed`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
 - `POST /load`
@@ -156,6 +157,7 @@ For large source sets, an in-memory local job API should support:
 - `POST /jobs/build-load`
 - `POST /jobs/snapshot-status`
 - `POST /jobs/refresh`
+- `POST /jobs/refresh-changed`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
 
@@ -240,6 +242,12 @@ incremental workflow. Without `--load`, it refreshes source graph artifacts,
 writes the merged graph JSON, and reports changed, rebuilt, and reused sources.
 With `--load`, it loads the full graph when Neo4j has no current graph or a
 different scope loaded; otherwise, it replaces only the sources that changed.
+
+The `POST /jobs/refresh-changed` API job is the agent-friendly keep-current
+path. It checks source snapshot status first, skips when no sources changed,
+and otherwise runs refresh with Neo4j loading enabled. This gives agents a
+single endpoint for updating local graph data without doing work when the
+source set is already current.
 
 The later Neo4j incremental path should use the same source identity and
 snapshot metadata to replace one changed source at a time. Source replacement

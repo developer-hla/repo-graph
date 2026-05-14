@@ -167,6 +167,21 @@ curl -X POST http://localhost:8000/jobs/refresh \
   -d '{"strict":true,"load":true}'
 ```
 
+To keep Neo4j current without rebuilding when nothing changed, use the
+refresh-changed job:
+
+```bash
+curl -X POST http://localhost:8000/jobs/refresh-changed \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+```
+
+`/jobs/refresh-changed` checks snapshot status first. If no sources changed,
+the job result has `status:"skipped"` and no graph artifacts or Neo4j data are
+updated. If sources changed, it runs refresh with loading enabled and reports
+changed sources, rebuilt and reused source graph counts, and the Neo4j load
+mode (`full_load`, `replace_sources`, or `skipped`).
+
 Poll the returned `job_id`:
 
 ```bash

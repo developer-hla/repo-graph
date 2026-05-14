@@ -13,6 +13,7 @@ from repo_graph.api import (
     BuildLoadRequest,
     BuildRequest,
     LoadRequest,
+    RefreshChangedRequest,
     RefreshRequest,
     RuntimeSettings,
     SnapshotStatusRequest,
@@ -29,6 +30,7 @@ from repo_graph.api import (
     load_response,
     manifest_payload,
     neighbors_response,
+    refresh_changed_response,
     refresh_response,
     scope_response,
     search_entities_response,
@@ -36,6 +38,7 @@ from repo_graph.api import (
     sources_response,
     submit_build_job,
     submit_build_load_job,
+    submit_refresh_changed_job,
     submit_refresh_job,
     submit_snapshot_status_job,
     submit_sync_job,
@@ -82,6 +85,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "POST", "path": "/jobs/build-load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/snapshot-status", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/refresh", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/jobs/refresh-changed", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs/{job_id}", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/load", "available": True}, payload["endpoints"])
@@ -119,6 +123,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/jobs/build-load", route_paths)
         self.assertIn("/jobs/snapshot-status", route_paths)
         self.assertIn("/jobs/refresh", route_paths)
+        self.assertIn("/jobs/refresh-changed", route_paths)
         self.assertIn("/jobs", route_paths)
         self.assertIn("/jobs/{job_id}", route_paths)
         self.assertIn("/load", route_paths)
@@ -145,6 +150,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('data-snapshot-action="status"', script.text)
         self.assertIn("/snapshot/status", script.text)
         self.assertIn('data-job-action="refresh"', script.text)
+        self.assertIn('data-job-action="refresh-changed"', script.text)
         self.assertIn("pollJob", script.text)
         self.assertEqual(styles.status_code, 200)
         self.assertIn(".app-shell", styles.text)
@@ -308,6 +314,87 @@ class ApiTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 refresh_response(settings, RefreshRequest(max_file_bytes=0))
 
+    def test_refresh_changed_response_skips_when_snapshot_has_no_changes(self) -> None:
+        root = Path("/repo")
+        settings = RuntimeSettings(config_path=root / "repo-graph.yaml", neo4j_uri=None, neo4j_user=None)
+        config = RepoGraphConfig(
+            name="test",
+            config_path=root / "repo-graph.yaml",
+            cache_dir=root / ".repo-graph/cache/repos",
+            output_dir=root / ".repo-graph/output",
+            sources=(Source(name="service", source_type="local_path", path=root / "service"),),
+        )
+        snapshot_payload = {
+            "count": 1,
+            "changed_count": 0,
+            "unchanged_count": 1,
+            "items": [{"source_name": "service", "changed": False, "status": "unchanged"}],
+        }
+        with (
+            patch("repo_graph.api.load_config", return_value=config),
+            patch("repo_graph.api.snapshot_status", return_value=snapshot_payload) as snapshot,
+            patch("repo_graph.api.refresh_graph") as refresh,
+        ):
+            payload = refresh_changed_response(settings, RefreshChangedRequest(sync=True))
+
+        self.assertEqual(payload["status"], "skipped")
+        self.assertEqual(payload["reason"], "no_changed_sources")
+        self.assertEqual(payload["changed_sources"], [])
+        self.assertEqual(payload["load"]["action"], "skipped")
+        self.assertEqual(payload["neo4j_load_mode"], "skipped")
+        snapshot.assert_called_once_with(config, sync_first=True, max_file_bytes=1000000)
+        refresh.assert_not_called()
+
+    def test_refresh_changed_response_refreshes_and_loads_changed_sources(self) -> None:
+        root = Path("/repo")
+        settings = RuntimeSettings(
+            config_path=root / "repo-graph.yaml",
+            neo4j_uri="bolt://neo4j:7687",
+            neo4j_user="neo4j",
+            neo4j_password="password",
+        )
+        config = RepoGraphConfig(
+            name="test",
+            config_path=root / "repo-graph.yaml",
+            cache_dir=root / ".repo-graph/cache/repos",
+            output_dir=root / ".repo-graph/output",
+            sources=(Source(name="service", source_type="local_path", path=root / "service"),),
+        )
+        snapshot_payload = {
+            "count": 1,
+            "changed_count": 1,
+            "unchanged_count": 0,
+            "items": [{"source_name": "service", "changed": True, "status": "changed"}],
+        }
+        refresh_payload = {
+            "status": "refreshed",
+            "changes": {"changed_count": 1, "changed_sources": ["service"]},
+            "cache": {"rebuilt_count": 1, "reused_count": 2},
+            "load": {"action": "replace_sources", "reason": "changed_sources", "replace_sources": ["service"]},
+        }
+        with (
+            patch("repo_graph.api.load_config", return_value=config),
+            patch("repo_graph.api.snapshot_status", return_value=snapshot_payload) as snapshot,
+            patch("repo_graph.api.refresh_graph", return_value=refresh_payload) as refresh,
+        ):
+            payload = refresh_changed_response(
+                settings,
+                RefreshChangedRequest(sync=True, strict=True, max_file_bytes=1024),
+            )
+
+        self.assertEqual(payload["status"], "refreshed")
+        self.assertEqual(payload["changed_sources"], ["service"])
+        self.assertEqual(payload["neo4j_load_mode"], "replace_sources")
+        self.assertEqual(payload["rebuilt_count"], 1)
+        self.assertEqual(payload["reused_count"], 2)
+        self.assertEqual(payload["refresh"], refresh_payload)
+        snapshot.assert_called_once_with(config, sync_first=True, max_file_bytes=1024)
+        refresh.assert_called_once()
+        self.assertFalse(refresh.call_args.kwargs["sync_first"])
+        self.assertTrue(refresh.call_args.kwargs["strict"])
+        self.assertTrue(refresh.call_args.kwargs["load"])
+        self.assertIsNotNone(refresh.call_args.kwargs["settings"])
+
     def test_snapshot_status_response_compares_configured_sources(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         snapshot_payload = {"count": 1, "changed_count": 1, "items": [{"source_name": "service"}]}
@@ -373,6 +460,17 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(job["status"], "succeeded")
         self.assertEqual(job["request"]["load"], True)
         self.assertEqual(job["result"], {"status": "refreshed"})
+
+    def test_submit_refresh_changed_job_runs_through_registry(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        registry = JobRegistry(run_inline=True)
+        with patch("repo_graph.api.refresh_changed_response", return_value={"status": "skipped"}):
+            job = submit_refresh_changed_job(registry, settings, RefreshChangedRequest(sync=True))
+
+        self.assertEqual(job["kind"], "refresh-changed")
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(job["request"]["sync"], True)
+        self.assertEqual(job["result"], {"status": "skipped"})
 
     def test_submit_snapshot_status_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
@@ -442,6 +540,19 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "succeeded")
         self.assertEqual(payload["request"]["load"], True)
         self.assertEqual(payload["result"], {"status": "refreshed"})
+
+    def test_refresh_changed_job_endpoint_submits_refresh_changed_job(self) -> None:
+        registry = JobRegistry(run_inline=True)
+        client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml")), registry))
+        with patch("repo_graph.api.refresh_changed_response", return_value={"status": "skipped"}):
+            response = client.post("/jobs/refresh-changed", json={"sync": True})
+
+        payload = response.json()
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(payload["kind"], "refresh-changed")
+        self.assertEqual(payload["status"], "succeeded")
+        self.assertEqual(payload["request"]["sync"], True)
+        self.assertEqual(payload["result"], {"status": "skipped"})
 
     def test_job_response_reads_registry_job(self) -> None:
         registry = JobRegistry(run_inline=True)

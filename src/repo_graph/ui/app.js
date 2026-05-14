@@ -157,6 +157,7 @@ async function renderJobs() {
         <button class="button" type="button" data-job-action="build">Build</button>
         <button class="button" type="button" data-job-action="build-load">Build Load</button>
         <button class="button" type="button" data-job-action="refresh">Refresh</button>
+        <button class="button" type="button" data-job-action="refresh-changed">Refresh Changed</button>
       </div>
       <div id="job-action-result" class="stack"></div>`
     )}
@@ -324,6 +325,7 @@ async function checkSnapshotStatus() {
 function jobPayload(kind, strict, sync, load) {
   if (kind === "sync") return {};
   if (kind === "refresh") return { strict, sync, load };
+  if (kind === "refresh-changed") return { strict, sync };
   return { strict, sync };
 }
 
@@ -673,6 +675,7 @@ function runtimeRows(health, manifest) {
     ["Schema", manifest.ok ? manifest.data.schema_version : ""],
     ["Change Preview", endpointAvailable(endpoints, "POST", "/snapshot/status") ? "available" : "unavailable"],
     ["Refresh", endpointAvailable(endpoints, "POST", "/refresh") ? "available" : "unavailable"],
+    ["Refresh Changed", endpointAvailable(endpoints, "POST", "/jobs/refresh-changed") ? "available" : "unavailable"],
   ];
 }
 
@@ -734,7 +737,7 @@ function jobStatusMarkup(job) {
       </div>
       ${job.finished_at ? `<div class="muted">${escapeHtml(formatDate(job.finished_at))}</div>` : ""}
       ${job.status === "failed" ? `<div class="message error">${escapeHtml(error.message || "Job failed")}</div>` : ""}
-      ${job.kind === "refresh" && result.status ? refreshSummaryMarkup(result) : ""}
+      ${["refresh", "refresh-changed"].includes(job.kind) && result.status ? refreshSummaryMarkup(result) : ""}
     </div>
   `;
 }

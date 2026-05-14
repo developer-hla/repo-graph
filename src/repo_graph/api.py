@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -93,6 +94,10 @@ class RefreshRequest(BuildRequest):
     load: bool = False
 
 
+class RefreshChangedRequest(BuildRequest):
+    pass
+
+
 class SnapshotStatusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -161,6 +166,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "POST", "path": "/jobs/build-load", "available": True},
             {"method": "POST", "path": "/jobs/snapshot-status", "available": True},
             {"method": "POST", "path": "/jobs/refresh", "available": True},
+            {"method": "POST", "path": "/jobs/refresh-changed", "available": True},
             {"method": "GET", "path": "/jobs", "available": True},
             {"method": "GET", "path": "/jobs/{job_id}", "available": True},
             {"method": "POST", "path": "/load", "available": True},
@@ -183,6 +189,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "build_api_status": "available",
             "snapshot_status": "available",
             "refresh_status": "available",
+            "refresh_changed_status": "available",
             "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
             "scope_status": "available",
@@ -344,6 +351,83 @@ def refresh_response(settings: RuntimeSettings, request: RefreshRequest) -> dict
     )
 
 
+def refresh_changed_response(settings: RuntimeSettings, request: RefreshChangedRequest) -> dict[str, Any]:
+    config = load_runtime_config(settings, request.config_path)
+    max_file_bytes = validate_max_file_bytes(request.max_file_bytes)
+    output_path = resolve_graph_path(settings, request.output_path, config=config)
+    snapshot = snapshot_status(config, sync_first=request.sync, max_file_bytes=max_file_bytes)
+    changed_sources = snapshot_changed_source_names(snapshot)
+    if not changed_sources:
+        return {
+            "status": "skipped",
+            "reason": "no_changed_sources",
+            "config_path": str(config.config_path),
+            "output": str(output_path),
+            "snapshot": snapshot,
+            "changed_sources": [],
+            "neo4j_load_mode": "skipped",
+            "rebuilt_count": 0,
+            "reused_count": 0,
+            "changes": {
+                "changed_count": 0,
+                "changed_sources": [],
+            },
+            "cache": {
+                "rebuilt_count": 0,
+                "reused_count": 0,
+            },
+            "load": {
+                "requested": True,
+                "action": "skipped",
+                "reason": "no_changed_sources",
+                "replace_sources": [],
+            },
+            "refresh": None,
+        }
+
+    refresh = refresh_graph(
+        config,
+        output_path,
+        sync_first=False,
+        max_file_bytes=max_file_bytes,
+        strict=request.strict,
+        load=True,
+        settings=settings.neo4j_settings(),
+    )
+    cache = mapping_value(refresh.get("cache"))
+    load = mapping_value(refresh.get("load"))
+    return {
+        "status": "refreshed",
+        "reason": "changed_sources",
+        "config_path": str(config.config_path),
+        "output": str(output_path),
+        "snapshot": snapshot,
+        "changed_sources": changed_sources,
+        "neo4j_load_mode": load.get("action", "unknown"),
+        "rebuilt_count": cache.get("rebuilt_count", 0),
+        "reused_count": cache.get("reused_count", 0),
+        "changes": refresh.get("changes", {}),
+        "cache": refresh.get("cache", {}),
+        "load": refresh.get("load", {}),
+        "refresh": refresh,
+    }
+
+
+def snapshot_changed_source_names(snapshot: Mapping[str, Any]) -> list[str]:
+    items = snapshot.get("items", [])
+    if not isinstance(items, list):
+        return []
+    return [
+        item["source_name"]
+        for item in items
+        if isinstance(item, Mapping) and item.get("changed") and isinstance(item.get("source_name"), str)
+    ]
+
+
+def mapping_value(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
 def submit_build_job(
     registry: JobRegistry,
     settings: RuntimeSettings,
@@ -377,6 +461,18 @@ def submit_refresh_job(
         "refresh",
         request.model_dump(),
         lambda: refresh_response(settings, request),
+    )
+
+
+def submit_refresh_changed_job(
+    registry: JobRegistry,
+    settings: RuntimeSettings,
+    request: RefreshChangedRequest,
+) -> dict[str, Any]:
+    return registry.submit(
+        "refresh-changed",
+        request.model_dump(),
+        lambda: refresh_changed_response(settings, request),
     )
 
 
@@ -627,6 +723,10 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
     @app.post("/jobs/refresh", status_code=202)
     def submit_refresh(request: RefreshRequest) -> dict[str, Any]:
         return submit_refresh_job(registry, runtime_settings, request)
+
+    @app.post("/jobs/refresh-changed", status_code=202)
+    def submit_refresh_changed(request: RefreshChangedRequest) -> dict[str, Any]:
+        return submit_refresh_changed_job(registry, runtime_settings, request)
 
     @app.post("/jobs/snapshot-status", status_code=202)
     def submit_snapshot_status(request: SnapshotStatusRequest) -> dict[str, Any]:

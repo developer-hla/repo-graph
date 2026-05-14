@@ -162,6 +162,10 @@ curl -X POST http://localhost:8000/jobs/refresh \
   -H "content-type: application/json" \
   -d '{"strict":true,"load":true}'
 
+curl -X POST http://localhost:8000/jobs/refresh-changed \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+
 curl http://localhost:8000/jobs/<job_id>
 ```
 
