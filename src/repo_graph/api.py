@@ -19,6 +19,7 @@ from repo_graph.jobs import JobRegistry
 from repo_graph.refresh import refresh_graph
 from repo_graph.reports import unresolved_report_from_items
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
+from repo_graph.snapshots import snapshot_status
 from repo_graph.sources import config_summary, inspect_sources, sync_sources_with_status
 from repo_graph.storage.neo4j import (
     Neo4jSettings,
@@ -92,6 +93,14 @@ class RefreshRequest(BuildRequest):
     load: bool = False
 
 
+class SnapshotStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    config_path: str | None = None
+    sync: bool = False
+    max_file_bytes: int = MAX_FILE_BYTES
+
+
 class SyncRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -145,10 +154,12 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "POST", "path": "/sync", "available": True},
             {"method": "POST", "path": "/build", "available": True},
             {"method": "POST", "path": "/build-load", "available": True},
+            {"method": "POST", "path": "/snapshot/status", "available": True},
             {"method": "POST", "path": "/refresh", "available": True},
             {"method": "POST", "path": "/jobs/sync", "available": True},
             {"method": "POST", "path": "/jobs/build", "available": True},
             {"method": "POST", "path": "/jobs/build-load", "available": True},
+            {"method": "POST", "path": "/jobs/snapshot-status", "available": True},
             {"method": "POST", "path": "/jobs/refresh", "available": True},
             {"method": "GET", "path": "/jobs", "available": True},
             {"method": "GET", "path": "/jobs/{job_id}", "available": True},
@@ -170,6 +181,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "source_status": "available",
             "sync_status": "available",
             "build_api_status": "available",
+            "snapshot_status": "available",
             "refresh_status": "available",
             "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
@@ -261,6 +273,15 @@ def submit_sync_job(
         "sync",
         request.model_dump(),
         lambda: sync_response(settings, request),
+    )
+
+
+def snapshot_status_response(settings: RuntimeSettings, request: SnapshotStatusRequest) -> dict[str, Any]:
+    config = load_runtime_config(settings, request.config_path)
+    return snapshot_status(
+        config,
+        sync_first=request.sync,
+        max_file_bytes=validate_max_file_bytes(request.max_file_bytes),
     )
 
 
@@ -356,6 +377,18 @@ def submit_refresh_job(
         "refresh",
         request.model_dump(),
         lambda: refresh_response(settings, request),
+    )
+
+
+def submit_snapshot_status_job(
+    registry: JobRegistry,
+    settings: RuntimeSettings,
+    request: SnapshotStatusRequest,
+) -> dict[str, Any]:
+    return registry.submit(
+        "snapshot-status",
+        request.model_dump(),
+        lambda: snapshot_status_response(settings, request),
     )
 
 
@@ -568,6 +601,17 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Graph refresh failed: {exc}") from exc
 
+    @app.post("/snapshot/status")
+    def snapshot_status_endpoint(request: SnapshotStatusRequest) -> dict[str, Any]:
+        try:
+            return snapshot_status_response(runtime_settings, request)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Snapshot status failed: {exc}") from exc
+
     @app.post("/jobs/build", status_code=202)
     def submit_build(request: BuildRequest) -> dict[str, Any]:
         return submit_build_job(registry, runtime_settings, request)
@@ -583,6 +627,10 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
     @app.post("/jobs/refresh", status_code=202)
     def submit_refresh(request: RefreshRequest) -> dict[str, Any]:
         return submit_refresh_job(registry, runtime_settings, request)
+
+    @app.post("/jobs/snapshot-status", status_code=202)
+    def submit_snapshot_status(request: SnapshotStatusRequest) -> dict[str, Any]:
+        return submit_snapshot_status_job(registry, runtime_settings, request)
 
     @app.get("/jobs")
     def list_jobs(

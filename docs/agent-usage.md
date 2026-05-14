@@ -75,6 +75,46 @@ curl -X POST http://localhost:8000/jobs/sync \
 `/sources/configured` describes what the runtime can see on disk. `/sources`
 describes what was loaded into Neo4j from the most recent graph load.
 
+## Change Preview
+
+Preview changed sources before running an incremental refresh:
+
+```bash
+curl -X POST http://localhost:8000/snapshot/status \
+  -H "content-type: application/json" \
+  -d '{}'
+```
+
+Use `sync:true` to clone or update Git sources before comparing snapshots:
+
+```bash
+curl -X POST http://localhost:8000/snapshot/status \
+  -H "content-type: application/json" \
+  -d '{"sync":true}'
+```
+
+Useful response fields:
+
+- `changed_count`
+- `unchanged_count`
+- `items[].source_name`
+- `items[].status`
+- `items[].reasons`
+- `items[].added_files`
+- `items[].modified_files`
+- `items[].removed_files`
+
+For larger source sets, submit the preview as a job:
+
+```bash
+curl -X POST http://localhost:8000/jobs/snapshot-status \
+  -H "content-type: application/json" \
+  -d '{}'
+```
+
+Agents should use this endpoint when they need to explain what would be
+refreshed without changing graph artifacts or Neo4j.
+
 ## Build And Load
 
 Build the active config and load the result into Neo4j:

@@ -6,7 +6,7 @@ const routes = {
   },
   sources: {
     title: "Sources",
-    meta: "Configured and loaded repositories",
+    meta: "Configured, loaded, and changed repositories",
     render: renderSources,
   },
   jobs: {
@@ -52,6 +52,7 @@ const state = {
     limit: 50,
     examples: 3,
   },
+  snapshotStatus: null,
 };
 
 apiBase.textContent = window.location.origin || "local";
@@ -125,6 +126,7 @@ async function renderSources() {
   const [configured, loaded] = await Promise.all([fetchMaybe("/sources/configured"), fetchMaybe("/sources")]);
   view.innerHTML = `
     ${sourceMetrics(configured.data, loaded.data)}
+    ${panel("Change Preview", snapshotStatusPanel())}
     ${panel("Configured Sources", configured.ok ? configuredSourcesTable(configured.data.items || []) : errorMarkup(configured.error))}
     ${panel("Loaded Sources", loaded.ok ? loadedSourcesTable(loaded.data.items || []) : errorMarkup(loaded.error))}
   `;
@@ -302,6 +304,23 @@ async function submitJob(kind) {
   await refreshJobsPanel();
 }
 
+async function checkSnapshotStatus() {
+  const target = document.querySelector("#snapshot-status-results");
+  if (!target) return;
+  const sync = Boolean(document.querySelector("#snapshot-sync")?.checked);
+  target.innerHTML = loadingMarkup();
+  const response = await fetchMaybe("/snapshot/status", {
+    method: "POST",
+    body: JSON.stringify({ sync }),
+  });
+  if (response.ok) {
+    state.snapshotStatus = response.data;
+    target.innerHTML = snapshotStatusMarkup(response.data);
+  } else {
+    target.innerHTML = errorMarkup(response.error);
+  }
+}
+
 function jobPayload(kind, strict, sync, load) {
   if (kind === "sync") return {};
   if (kind === "refresh") return { strict, sync, load };
@@ -339,6 +358,11 @@ function handleDocumentClick(event) {
   const jobButton = event.target.closest("[data-job-action]");
   if (jobButton) {
     submitJob(jobButton.dataset.jobAction);
+    return;
+  }
+  const snapshotButton = event.target.closest("[data-snapshot-action]");
+  if (snapshotButton) {
+    checkSnapshotStatus();
   }
 }
 
@@ -465,6 +489,55 @@ function loadedSourcesTable(items) {
     )
     .join("");
   return table(["Name", "Type", "Ref", "Commit", "Path"], rows);
+}
+
+function snapshotStatusPanel() {
+  return `
+    <div class="stack">
+      <div class="toolbar">
+        <label class="checkbox-field">
+          <input id="snapshot-sync" type="checkbox" />
+          <span>Sync</span>
+        </label>
+        <button class="button" type="button" data-snapshot-action="status">Check Changes</button>
+      </div>
+      <div id="snapshot-status-results">
+        ${state.snapshotStatus ? snapshotStatusMarkup(state.snapshotStatus) : emptyMarkup("No change preview has been run.")}
+      </div>
+    </div>
+  `;
+}
+
+function snapshotStatusMarkup(payload) {
+  const items = payload.items || [];
+  return `
+    <div class="stack">
+      <div class="grid three">
+        ${metric("Changed", numberValue(payload.changed_count), "sources", true)}
+        ${metric("Unchanged", numberValue(payload.unchanged_count), "sources", true)}
+        ${metric("Total", numberValue(payload.count), "configured sources", true)}
+      </div>
+      ${snapshotStatusTable(items)}
+    </div>
+  `;
+}
+
+function snapshotStatusTable(items) {
+  if (!items.length) return emptyMarkup("No sources returned.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${status(item.status || "unknown", snapshotStatusTone(item.status))}</td>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${inlineList(item.reasons || [])}</td>
+          <td>${numberValue((item.added_files || []).length)}</td>
+          <td>${numberValue((item.modified_files || []).length)}</td>
+          <td>${numberValue((item.removed_files || []).length)}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Status", "Source", "Reasons", "Added", "Modified", "Removed"], rows);
 }
 
 function jobsTable(items) {
@@ -598,6 +671,7 @@ function runtimeRows(health, manifest) {
     ["Version", health.ok ? health.data.version : ""],
     ["Config", manifest.ok ? manifest.data.config?.path : ""],
     ["Schema", manifest.ok ? manifest.data.schema_version : ""],
+    ["Change Preview", endpointAvailable(endpoints, "POST", "/snapshot/status") ? "available" : "unavailable"],
     ["Refresh", endpointAvailable(endpoints, "POST", "/refresh") ? "available" : "unavailable"],
   ];
 }
@@ -636,6 +710,12 @@ function statusTone(value) {
   if (value === "succeeded" || value === "synced" || value === "built" || value === "refreshed") return "ok";
   if (value === "failed") return "bad";
   return "warn";
+}
+
+function snapshotStatusTone(value) {
+  if (value === "unchanged") return "ok";
+  if (value === "changed" || value === "new") return "warn";
+  return "";
 }
 
 function endpointAvailable(endpoints, method, path) {

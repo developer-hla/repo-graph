@@ -116,10 +116,12 @@ relationships derived from graph edge types.
 - `POST /sync`
 - `POST /build`
 - `POST /build-load`
+- `POST /snapshot/status`
 - `POST /refresh`
 - `POST /jobs/sync`
 - `POST /jobs/build`
 - `POST /jobs/build-load`
+- `POST /jobs/snapshot-status`
 - `POST /jobs/refresh`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
@@ -143,6 +145,7 @@ load orchestration:
 - `POST /sync`
 - `POST /build`
 - `POST /build-load`
+- `POST /snapshot/status`
 - `POST /refresh`
 - `POST /load`
 
@@ -151,6 +154,7 @@ For large source sets, an in-memory local job API should support:
 - `POST /jobs/sync`
 - `POST /jobs/build`
 - `POST /jobs/build-load`
+- `POST /jobs/snapshot-status`
 - `POST /jobs/refresh`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
@@ -219,6 +223,10 @@ updates. The first foundation is a source snapshot:
 Snapshots are stored under `.repo-graph/sources/<source>/snapshot.json`.
 Changed-source detection compares the current snapshot to the saved one and
 reports added, modified, removed, or metadata-changed sources.
+
+The API exposes that same comparison through `POST /snapshot/status` and
+`POST /jobs/snapshot-status` so agents and the UI can preview changed sources
+without writing graph artifacts or loading Neo4j.
 
 Source-level graph artifacts are stored beside snapshots under
 `.repo-graph/sources/<source>/graph.json`. These artifacts scan one source at a

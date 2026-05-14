@@ -79,9 +79,9 @@ curl http://localhost:8000/sources/configured
 ```
 
 The runtime exposes a navigable local UI plus health, manifest, config, source
-status, sync, build, refresh, load, job, unresolved report, and read-only graph
-endpoints. The manifest tells agents which API capabilities are available and
-which graph capabilities are still planned.
+status, change preview, sync, build, refresh, load, job, unresolved report, and
+read-only graph endpoints. The manifest tells agents which API capabilities are
+available and which graph capabilities are still planned.
 
 Print a Markdown snippet for another repository's `AGENTS.md`:
 
@@ -131,6 +131,10 @@ curl -X POST http://localhost:8000/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
 
+curl -X POST http://localhost:8000/snapshot/status \
+  -H "content-type: application/json" \
+  -d '{}'
+
 curl -X POST http://localhost:8000/refresh \
   -H "content-type: application/json" \
   -d '{"strict":true,"load":true}'
@@ -149,6 +153,10 @@ curl -X POST http://localhost:8000/jobs/sync \
 curl -X POST http://localhost:8000/jobs/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
+
+curl -X POST http://localhost:8000/jobs/snapshot-status \
+  -H "content-type: application/json" \
+  -d '{}'
 
 curl -X POST http://localhost:8000/jobs/refresh \
   -H "content-type: application/json" \

@@ -15,6 +15,7 @@ from repo_graph.api import (
     LoadRequest,
     RefreshRequest,
     RuntimeSettings,
+    SnapshotStatusRequest,
     SyncRequest,
     build_load_response,
     build_response,
@@ -31,10 +32,12 @@ from repo_graph.api import (
     refresh_response,
     scope_response,
     search_entities_response,
+    snapshot_status_response,
     sources_response,
     submit_build_job,
     submit_build_load_job,
     submit_refresh_job,
+    submit_snapshot_status_job,
     submit_sync_job,
     sync_response,
     ui_index_path,
@@ -72,10 +75,12 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "POST", "path": "/sync", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/snapshot/status", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/refresh", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/sync", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/build", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/build-load", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "POST", "path": "/jobs/snapshot-status", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/jobs/refresh", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/jobs/{job_id}", "available": True}, payload["endpoints"])
@@ -107,10 +112,12 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/sync", route_paths)
         self.assertIn("/build", route_paths)
         self.assertIn("/build-load", route_paths)
+        self.assertIn("/snapshot/status", route_paths)
         self.assertIn("/refresh", route_paths)
         self.assertIn("/jobs/sync", route_paths)
         self.assertIn("/jobs/build", route_paths)
         self.assertIn("/jobs/build-load", route_paths)
+        self.assertIn("/jobs/snapshot-status", route_paths)
         self.assertIn("/jobs/refresh", route_paths)
         self.assertIn("/jobs", route_paths)
         self.assertIn("/jobs/{job_id}", route_paths)
@@ -135,6 +142,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("Repo Graph", shell.text)
         self.assertEqual(script.status_code, 200)
         self.assertIn("renderDashboard", script.text)
+        self.assertIn('data-snapshot-action="status"', script.text)
+        self.assertIn("/snapshot/status", script.text)
         self.assertIn('data-job-action="refresh"', script.text)
         self.assertIn("pollJob", script.text)
         self.assertEqual(styles.status_code, 200)
@@ -299,6 +308,28 @@ class ApiTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 refresh_response(settings, RefreshRequest(max_file_bytes=0))
 
+    def test_snapshot_status_response_compares_configured_sources(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        snapshot_payload = {"count": 1, "changed_count": 1, "items": [{"source_name": "service"}]}
+        with (
+            patch("repo_graph.api.load_config") as load_config,
+            patch("repo_graph.api.snapshot_status", return_value=snapshot_payload) as compare,
+        ):
+            config = load_config.return_value
+
+            payload = snapshot_status_response(
+                settings,
+                SnapshotStatusRequest(sync=True, max_file_bytes=1024),
+            )
+
+        self.assertEqual(payload, snapshot_payload)
+        compare.assert_called_once_with(config, sync_first=True, max_file_bytes=1024)
+
+    def test_snapshot_status_response_rejects_invalid_max_file_bytes(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        with patch("repo_graph.api.load_config"), self.assertRaises(ValueError):
+            snapshot_status_response(settings, SnapshotStatusRequest(max_file_bytes=0))
+
     def test_submit_build_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
@@ -342,6 +373,46 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(job["status"], "succeeded")
         self.assertEqual(job["request"]["load"], True)
         self.assertEqual(job["result"], {"status": "refreshed"})
+
+    def test_submit_snapshot_status_job_runs_through_registry(self) -> None:
+        settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
+        registry = JobRegistry(run_inline=True)
+        with patch("repo_graph.api.snapshot_status_response", return_value={"count": 1}):
+            job = submit_snapshot_status_job(registry, settings, SnapshotStatusRequest(sync=True))
+
+        self.assertEqual(job["kind"], "snapshot-status")
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(job["request"]["sync"], True)
+        self.assertEqual(job["result"], {"count": 1})
+
+    def test_snapshot_status_endpoint_rejects_unknown_request_fields(self) -> None:
+        client = TestClient(create_app(RuntimeSettings(config_path=None, neo4j_uri=None, neo4j_user=None)))
+
+        response = client.post("/snapshot/status", json={"unknown": True})
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_snapshot_status_endpoint_returns_snapshot_response(self) -> None:
+        client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml"))))
+        with patch("repo_graph.api.snapshot_status_response", return_value={"count": 1}) as compare:
+            response = client.post("/snapshot/status", json={"sync": True})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"count": 1})
+        compare.assert_called_once()
+
+    def test_snapshot_status_job_endpoint_submits_job(self) -> None:
+        registry = JobRegistry(run_inline=True)
+        client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml")), registry))
+        with patch("repo_graph.api.snapshot_status_response", return_value={"count": 1}):
+            response = client.post("/jobs/snapshot-status", json={"sync": True})
+
+        payload = response.json()
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(payload["kind"], "snapshot-status")
+        self.assertEqual(payload["status"], "succeeded")
+        self.assertEqual(payload["request"]["sync"], True)
+        self.assertEqual(payload["result"], {"count": 1})
 
     def test_refresh_endpoint_rejects_unknown_request_fields(self) -> None:
         client = TestClient(create_app(RuntimeSettings(config_path=None, neo4j_uri=None, neo4j_user=None)))
