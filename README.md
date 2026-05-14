@@ -185,6 +185,11 @@ pixi run repo-graph load --graph .repo-graph/output/graph.json
 
 REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
 REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
+pixi run repo-graph load --graph .repo-graph/output/graph.json \
+  --replace-source api-service
+
+REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
+REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
 pixi run repo-graph stats
 ```
 

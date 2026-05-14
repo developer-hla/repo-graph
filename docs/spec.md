@@ -194,6 +194,7 @@ repo-graph build --config path/to/sources.yaml --output graph.json
 repo-graph build --config path/to/sources.yaml --strict
 repo-graph build --cached --config path/to/sources.yaml --strict
 repo-graph load --graph graph.json
+repo-graph load --graph graph.json --replace-source api-service
 repo-graph snapshot status --config path/to/sources.yaml
 repo-graph snapshot write --config path/to/sources.yaml
 repo-graph source-graphs write --config path/to/sources.yaml
@@ -222,8 +223,12 @@ the source artifacts, and then recomputes cross-source resolution once before
 loading. That preserves correctness while reducing scanner work.
 
 The later Neo4j incremental path should use the same source identity and
-snapshot metadata to replace one changed source at a time, then re-resolve
-affected cross-source references.
+snapshot metadata to replace one changed source at a time. Source replacement
+loads a globally resolved graph, deletes selected source-owned data, removes
+current graph edge IDs before replaying relationships, and cleans orphan
+unresolved targets. That lets changed sources be refreshed without clearing the
+whole database while still letting inbound cross-source references move between
+resolved and unresolved states.
 
 ## Parser MVP
 

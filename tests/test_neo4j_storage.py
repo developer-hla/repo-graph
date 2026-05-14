@@ -5,6 +5,8 @@ from __future__ import annotations
 import unittest
 
 from repo_graph.storage.neo4j import (
+    delete_current_edges_tx,
+    delete_source_data_tx,
     edge_payload,
     edge_record,
     entity_payload,
@@ -13,6 +15,8 @@ from repo_graph.storage.neo4j import (
     load_summary,
     normalize_direction,
     normalize_limit,
+    normalize_source_names,
+    prepare_graph_records,
     sanitize_relationship_type,
     scope_payload,
     source_payload,
@@ -20,6 +24,7 @@ from repo_graph.storage.neo4j import (
     target_payload,
     unloaded_scope_payload,
     unresolved_target_records,
+    validate_replace_sources,
 )
 
 
@@ -213,6 +218,83 @@ class Neo4jStorageTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             normalize_direction("sideways")
+
+    def test_prepare_graph_records_shapes_all_load_records(self) -> None:
+        graph_data = {
+            "metadata": {"scope_name": "example", "schema_version": "0.1"},
+            "sources": [{"name": "api-service"}],
+            "entities": [
+                {
+                    "entity_id": "entity-1",
+                    "entity_type": "file",
+                    "name": "index.ts",
+                    "source_name": "api-service",
+                }
+            ],
+            "edges": [
+                {
+                    "edge_id": "edge-1",
+                    "from_entity_id": "entity-1",
+                    "from_name": "index.ts",
+                    "from_type": "file",
+                    "to_name": "missing",
+                    "to_type": "package",
+                    "edge_type": "IMPORTS",
+                    "resolved": False,
+                    "source_name": "api-service",
+                }
+            ],
+        }
+
+        records = prepare_graph_records(graph_data)
+
+        self.assertEqual(len(records.source_records), 1)
+        self.assertEqual(len(records.entity_records), 1)
+        self.assertEqual(len(records.edge_records), 1)
+        self.assertEqual(len(records.target_records), 1)
+
+    def test_normalize_source_names_dedupes_and_ignores_blanks(self) -> None:
+        self.assertEqual(normalize_source_names([" service ", "", "api", "service"]), ("api", "service"))
+
+    def test_validate_replace_sources_rejects_names_missing_from_graph(self) -> None:
+        graph_data = {"sources": [{"name": "api-service"}]}
+
+        with self.assertRaises(ValueError):
+            validate_replace_sources(graph_data, ("missing-service",))
+
+    def test_delete_current_edges_tx_deletes_existing_edge_ids(self) -> None:
+        tx = FakeTx()
+
+        delete_current_edges_tx(tx, [{"edge_id": "edge-1"}, {"edge_id": "edge-2"}])
+
+        self.assertEqual(tx.calls[0]["params"]["edge_ids"], ["edge-1", "edge-2"])
+        self.assertIn("edge.edge_id IN $edge_ids", tx.calls[0]["query"])
+
+    def test_delete_source_data_tx_deletes_source_owned_graph_data(self) -> None:
+        tx = FakeTx()
+
+        delete_source_data_tx(tx, ["api-service"])
+
+        self.assertEqual(len(tx.calls), 4)
+        self.assertTrue(all(call["params"]["source_names"] == ["api-service"] for call in tx.calls))
+        self.assertIn("edge.source_name IN $source_names", tx.calls[0]["query"])
+        self.assertIn("DETACH DELETE entity", tx.calls[1]["query"])
+        self.assertIn("DETACH DELETE target", tx.calls[2]["query"])
+        self.assertIn("DETACH DELETE source", tx.calls[3]["query"])
+
+
+class FakeResult:
+    def consume(self) -> None:
+        return None
+
+
+class FakeTx:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def run(self, query: str, **params: object) -> FakeResult:
+        self.calls.append({"query": query, "params": params})
+        return FakeResult()
 
 
 if __name__ == "__main__":

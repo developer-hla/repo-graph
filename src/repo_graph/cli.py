@@ -100,8 +100,24 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 def cmd_load(args: argparse.Namespace) -> int:
     settings = RuntimeSettings.from_env().neo4j_settings()
-    summary = load_graph_path(args.graph, settings, clear_existing=not args.append)
-    print(json.dumps({"status": "loaded", "graph_path": str(args.graph), "summary": summary.to_dict()}, indent=2))
+    summary = load_graph_path(
+        args.graph,
+        settings,
+        clear_existing=not args.append and not args.replace_source,
+        replace_sources=args.replace_source,
+    )
+    status = "source_replaced" if args.replace_source else "loaded"
+    print(
+        json.dumps(
+            {
+                "status": status,
+                "graph_path": str(args.graph),
+                "replace_sources": args.replace_source or [],
+                "summary": summary.to_dict(),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -244,6 +260,11 @@ def build_parser() -> argparse.ArgumentParser:
     load_parser = subparsers.add_parser("load", help="Load a graph JSON export into Neo4j.")
     load_parser.add_argument("--graph", type=Path, required=True)
     load_parser.add_argument("--append", action="store_true", help="Keep existing Repo Graph data in Neo4j.")
+    load_parser.add_argument(
+        "--replace-source",
+        action="append",
+        help="Replace one source's Neo4j data from a globally resolved graph. Repeat for multiple sources.",
+    )
     load_parser.set_defaults(func=cmd_load)
 
     stats_parser = subparsers.add_parser("stats", help="Read Repo Graph counts from Neo4j.")

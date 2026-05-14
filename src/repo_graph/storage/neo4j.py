@@ -55,6 +55,14 @@ class LoadSummary:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class PreparedGraphRecords:
+    source_records: list[dict[str, Any]]
+    entity_records: list[dict[str, Any]]
+    edge_records: list[dict[str, Any]]
+    target_records: list[dict[str, Any]]
+
+
 def env_value(name: str, default: str | None) -> str:
     value = os.getenv(name)
     if value is None or not value.strip():
@@ -69,24 +77,29 @@ def env_optional_value(name: str) -> str | None:
     return value.strip()
 
 
-def load_graph_path(path: Path, settings: Neo4jSettings, clear_existing: bool = True) -> LoadSummary:
+def load_graph_path(
+    path: Path,
+    settings: Neo4jSettings,
+    clear_existing: bool = True,
+    replace_sources: Iterable[str] | None = None,
+) -> LoadSummary:
     graph_data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(graph_data, dict):
         raise ValueError("Graph JSON root must be an object.")
-    return load_graph_data(graph_data, settings, clear_existing=clear_existing)
+    return load_graph_data(graph_data, settings, clear_existing=clear_existing, replace_sources=replace_sources)
 
 
 def load_graph_data(
     graph_data: Mapping[str, Any],
     settings: Neo4jSettings,
     clear_existing: bool = True,
+    replace_sources: Iterable[str] | None = None,
 ) -> LoadSummary:
-    source_records = [
-        source_record(source, graph_data, index) for index, source in enumerate(graph_items(graph_data, "sources"))
-    ]
-    entity_records = [entity_record(entity) for entity in graph_items(graph_data, "entities")]
-    edge_records = [edge_record(edge) for edge in graph_items(graph_data, "edges")]
-    target_records = unresolved_target_records(edge_records)
+    source_names = normalize_source_names(replace_sources)
+    if clear_existing and source_names:
+        raise ValueError("Source replacement cannot also clear the whole graph.")
+    validate_replace_sources(graph_data, source_names)
+    records = prepare_graph_records(graph_data)
 
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()
@@ -94,18 +107,28 @@ def load_graph_data(
             initialize_schema(session)
             if clear_existing:
                 session.execute_write(clear_graph_tx)
+            elif source_names:
+                session.execute_write(delete_current_edges_tx, records.edge_records)
+                session.execute_write(delete_source_data_tx, source_names)
             session.execute_write(write_graph_tx, graph_record(graph_data))
-            if source_records:
-                session.execute_write(write_sources_tx, source_records)
-            if entity_records:
-                session.execute_write(write_entities_tx, entity_records)
-            if target_records:
-                session.execute_write(write_targets_tx, target_records)
-            for relationship_type, records in grouped_relationships(edge_records).items():
-                session.execute_write(write_resolved_edges_tx, relationship_type, resolved_edges(records))
-                session.execute_write(write_unresolved_edges_tx, relationship_type, unresolved_edges(records))
+            if records.source_records:
+                session.execute_write(write_sources_tx, records.source_records)
+            if records.entity_records:
+                session.execute_write(write_entities_tx, records.entity_records)
+            if records.target_records:
+                session.execute_write(write_targets_tx, records.target_records)
+            for relationship_type, edge_records in grouped_relationships(records.edge_records).items():
+                session.execute_write(write_resolved_edges_tx, relationship_type, resolved_edges(edge_records))
+                session.execute_write(write_unresolved_edges_tx, relationship_type, unresolved_edges(edge_records))
+            session.execute_write(delete_orphan_targets_tx)
 
-    return load_summary(graph_data, source_records, edge_records, target_records, clear_existing=clear_existing)
+    return load_summary(
+        graph_data,
+        records.source_records,
+        records.edge_records,
+        records.target_records,
+        clear_existing=clear_existing,
+    )
 
 
 def read_graph_stats(settings: Neo4jSettings) -> dict[str, Any]:
@@ -463,6 +486,36 @@ def graph_items(graph_data: Mapping[str, Any], key: str) -> list[Mapping[str, An
     return [item for item in raw_items if isinstance(item, dict)]
 
 
+def prepare_graph_records(graph_data: Mapping[str, Any]) -> PreparedGraphRecords:
+    source_records = [
+        source_record(source, graph_data, index) for index, source in enumerate(graph_items(graph_data, "sources"))
+    ]
+    entity_records = [entity_record(entity) for entity in graph_items(graph_data, "entities")]
+    edge_records = [edge_record(edge) for edge in graph_items(graph_data, "edges")]
+    target_records = unresolved_target_records(edge_records)
+    return PreparedGraphRecords(
+        source_records=source_records,
+        entity_records=entity_records,
+        edge_records=edge_records,
+        target_records=target_records,
+    )
+
+
+def normalize_source_names(source_names: Iterable[str] | None) -> tuple[str, ...]:
+    if source_names is None:
+        return ()
+    return tuple(sorted({source_name.strip() for source_name in source_names if source_name.strip()}))
+
+
+def validate_replace_sources(graph_data: Mapping[str, Any], source_names: tuple[str, ...]) -> None:
+    if not source_names:
+        return
+    graph_sources = {source.get("name") for source in graph_items(graph_data, "sources")}
+    missing = [source_name for source_name in source_names if source_name not in graph_sources]
+    if missing:
+        raise ValueError(f"Replace source is not present in graph: {', '.join(missing)}")
+
+
 def graph_record(graph_data: Mapping[str, Any]) -> dict[str, Any]:
     metadata = mapping_value(graph_data.get("metadata"))
     summary = mapping_value(graph_data.get("summary"))
@@ -646,6 +699,59 @@ def clear_graph_tx(tx: Any) -> None:
     ).consume()
 
 
+def delete_current_edges_tx(tx: Any, edges: list[dict[str, Any]]) -> None:
+    edge_ids = [edge["edge_id"] for edge in edges]
+    if not edge_ids:
+        return
+    tx.run(
+        """
+        MATCH ()-[edge]->()
+        WHERE edge.edge_id IN $edge_ids
+        DELETE edge
+        """,
+        edge_ids=edge_ids,
+    ).consume()
+
+
+def delete_source_data_tx(tx: Any, source_names: Iterable[str]) -> None:
+    names = list(source_names)
+    if not names:
+        return
+    tx.run(
+        """
+        MATCH ()-[edge]->()
+        WHERE edge.edge_id IS NOT NULL
+          AND edge.source_name IN $source_names
+        DELETE edge
+        """,
+        source_names=names,
+    ).consume()
+    tx.run(
+        """
+        MATCH (entity:RepoGraphEntity)
+        WHERE entity.source_name IN $source_names
+        DETACH DELETE entity
+        """,
+        source_names=names,
+    ).consume()
+    tx.run(
+        """
+        MATCH (target:RepoGraphTarget)
+        WHERE target.source_name IN $source_names
+        DETACH DELETE target
+        """,
+        source_names=names,
+    ).consume()
+    tx.run(
+        """
+        MATCH (source:RepoGraphSource)
+        WHERE source.name IN $source_names
+        DETACH DELETE source
+        """,
+        source_names=names,
+    ).consume()
+
+
 def write_graph_tx(tx: Any, graph: dict[str, Any]) -> None:
     tx.run(
         """
@@ -721,6 +827,16 @@ def write_unresolved_edges_tx(tx: Any, relationship_type: str, edges: list[dict[
         SET relationship += edge.properties
         """,
         edges=edges,
+    ).consume()
+
+
+def delete_orphan_targets_tx(tx: Any) -> None:
+    tx.run(
+        """
+        MATCH (target:RepoGraphTarget)
+        WHERE NOT (target)<-[]-()
+        DELETE target
+        """
     ).consume()
 
 
