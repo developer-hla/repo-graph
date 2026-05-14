@@ -193,6 +193,7 @@ repo-graph sync --config path/to/sources.yaml
 repo-graph build --config path/to/sources.yaml --output graph.json
 repo-graph build --config path/to/sources.yaml --strict
 repo-graph build --cached --config path/to/sources.yaml --strict
+repo-graph refresh --config path/to/sources.yaml --load
 repo-graph load --graph graph.json
 repo-graph load --graph graph.json --replace-source api-service
 repo-graph snapshot status --config path/to/sources.yaml
@@ -221,6 +222,12 @@ time and intentionally defer global resolution. The `build --cached` path
 reuses unchanged source graph artifacts, rebuilds changed source graphs, merges
 the source artifacts, and then recomputes cross-source resolution once before
 loading. That preserves correctness while reducing scanner work.
+
+The `refresh` command wraps the cached build path into the first end-to-end
+incremental workflow. Without `--load`, it refreshes source graph artifacts,
+writes the merged graph JSON, and reports changed, rebuilt, and reused sources.
+With `--load`, it loads the full graph when Neo4j has no current graph or a
+different scope loaded; otherwise, it replaces only the sources that changed.
 
 The later Neo4j incremental path should use the same source identity and
 snapshot metadata to replace one changed source at a time. Source replacement

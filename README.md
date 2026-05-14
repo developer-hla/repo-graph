@@ -34,6 +34,7 @@ pixi run repo-graph inspect --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml --strict
 pixi run repo-graph build --cached --config config/local-example.yaml --strict
+pixi run repo-graph refresh --config config/local-example.yaml
 pixi run repo-graph snapshot status --config config/local-example.yaml
 pixi run repo-graph source-graphs write --config config/local-example.yaml
 pixi run repo-graph report unresolved --graph .repo-graph/output/graph.json
@@ -56,6 +57,7 @@ pixi run repo-graph sync --config ../my-repo-graph-sources.yaml
 pixi run repo-graph snapshot status --config ../my-repo-graph-sources.yaml
 pixi run repo-graph source-graphs write --config ../my-repo-graph-sources.yaml
 pixi run repo-graph build --cached --config ../my-repo-graph-sources.yaml --sync --strict
+pixi run repo-graph refresh --config ../my-repo-graph-sources.yaml --sync --strict
 pixi run repo-graph build --config ../my-repo-graph-sources.yaml --sync --strict
 ```
 
@@ -187,6 +189,10 @@ REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
 REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
 pixi run repo-graph load --graph .repo-graph/output/graph.json \
   --replace-source api-service
+
+REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
+REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
+pixi run repo-graph refresh --config config/local-example.yaml --load
 
 REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
 REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \

@@ -12,6 +12,7 @@ from repo_graph import __version__
 from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.refresh import refresh_graph
 from repo_graph.reports import unresolved_report_from_graph
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.snapshots import snapshot_status, write_snapshots
@@ -181,6 +182,27 @@ def cmd_source_graphs_write(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_refresh(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    settings = RuntimeSettings.from_env().neo4j_settings() if args.load else None
+    print(
+        json.dumps(
+            refresh_graph(
+                config,
+                resolve_output_path(config, args.output),
+                sync_first=args.sync,
+                max_file_bytes=args.max_file_bytes,
+                strict=args.strict,
+                load=args.load,
+                settings=settings,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def load_graph_json(path: Path) -> dict[str, object]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -250,6 +272,22 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--cached", action="store_true", help="Reuse unchanged source graph artifacts.")
     build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
     build_parser.set_defaults(func=cmd_build)
+
+    refresh_parser = subparsers.add_parser(
+        "refresh",
+        help="Build from source artifacts and optionally load changed sources into Neo4j.",
+    )
+    refresh_parser.add_argument("--config", type=Path, required=True)
+    refresh_parser.add_argument("--output", type=Path)
+    refresh_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
+    refresh_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail if any configured source cannot be scanned.",
+    )
+    refresh_parser.add_argument("--load", action="store_true", help="Load the refreshed graph into Neo4j.")
+    refresh_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    refresh_parser.set_defaults(func=cmd_refresh)
 
     serve_parser = subparsers.add_parser("serve", help="Run the local Repo Graph HTTP API.")
     serve_parser.add_argument("--config", type=Path)
