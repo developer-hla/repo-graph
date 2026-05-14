@@ -176,6 +176,7 @@ The first public query surface should use purpose-built read endpoints:
 - `GET /entities/{entity_id}/neighbors`
 - `GET /edges/unresolved`
 - `GET /reports/unresolved`
+- `GET /ui`
 
 Raw Cypher should stay unavailable until there is an explicit read-only mode
 and clear result limits.

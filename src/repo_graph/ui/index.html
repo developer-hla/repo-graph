@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repo Graph</title>
+    <link rel="stylesheet" href="/ui/assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">RG</div>
+          <div>
+            <div class="brand-name">Repo Graph</div>
+            <div class="runtime-state" id="runtime-state">checking</div>
+          </div>
+        </div>
+        <nav class="nav-list" aria-label="Main navigation">
+          <a href="#dashboard" data-route="dashboard">Dashboard</a>
+          <a href="#sources" data-route="sources">Sources</a>
+          <a href="#jobs" data-route="jobs">Jobs</a>
+          <a href="#scope" data-route="scope">Scope</a>
+          <a href="#search" data-route="search">Entity Search</a>
+          <a href="#unresolved" data-route="unresolved">Unresolved</a>
+        </nav>
+        <div class="sidebar-footer">
+          <span>API</span>
+          <code id="api-base">local</code>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="page-title">Dashboard</h1>
+            <div class="page-meta" id="page-meta"></div>
+          </div>
+          <button class="icon-button" id="refresh-button" type="button" title="Refresh" aria-label="Refresh">
+            &#8635;
+          </button>
+        </header>
+        <section class="view" id="app-view" aria-live="polite"></section>
+      </main>
+    </div>
+    <script src="/ui/assets/app.js"></script>
+  </body>
+</html>

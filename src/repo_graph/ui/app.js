@@ -1,0 +1,665 @@
+const routes = {
+  dashboard: {
+    title: "Dashboard",
+    meta: "Runtime overview",
+    render: renderDashboard,
+  },
+  sources: {
+    title: "Sources",
+    meta: "Configured and loaded repositories",
+    render: renderSources,
+  },
+  jobs: {
+    title: "Jobs",
+    meta: "Sync, build, and load operations",
+    render: renderJobs,
+  },
+  scope: {
+    title: "Scope",
+    meta: "Loaded graph scope",
+    render: renderScope,
+  },
+  search: {
+    title: "Entity Search",
+    meta: "Find graph entities",
+    render: renderSearch,
+  },
+  unresolved: {
+    title: "Unresolved",
+    meta: "Grouped unresolved references",
+    render: renderUnresolved,
+  },
+};
+
+const view = document.querySelector("#app-view");
+const title = document.querySelector("#page-title");
+const pageMeta = document.querySelector("#page-meta");
+const runtimeState = document.querySelector("#runtime-state");
+const refreshButton = document.querySelector("#refresh-button");
+const apiBase = document.querySelector("#api-base");
+
+const state = {
+  currentRoute: "dashboard",
+  search: {
+    q: "",
+    type: "",
+    source: "",
+    limit: 25,
+  },
+  unresolved: {
+    source: "",
+    type: "",
+    limit: 50,
+    examples: 3,
+  },
+};
+
+apiBase.textContent = window.location.origin || "local";
+
+window.addEventListener("hashchange", renderRoute);
+refreshButton.addEventListener("click", () => renderRoute({ force: true }));
+document.addEventListener("click", handleDocumentClick);
+document.addEventListener("submit", handleDocumentSubmit);
+
+checkRuntime();
+renderRoute();
+
+function activeRoute() {
+  const hash = window.location.hash.replace(/^#/, "");
+  return routes[hash] ? hash : "dashboard";
+}
+
+function renderRoute() {
+  const routeName = activeRoute();
+  state.currentRoute = routeName;
+  const route = routes[routeName];
+  document.querySelectorAll("[data-route]").forEach((link) => {
+    link.classList.toggle("active", link.dataset.route === routeName);
+  });
+  title.textContent = route.title;
+  pageMeta.textContent = route.meta;
+  view.innerHTML = loadingMarkup();
+  route.render().catch((error) => {
+    view.innerHTML = errorMarkup(error);
+  });
+}
+
+async function checkRuntime() {
+  try {
+    const health = await fetchJson("/health");
+    runtimeState.textContent = `${health.status} ${health.version || ""}`.trim();
+    runtimeState.className = "runtime-state ok";
+  } catch (error) {
+    runtimeState.textContent = "offline";
+    runtimeState.className = "runtime-state error";
+  }
+}
+
+async function renderDashboard() {
+  const [health, manifest, scope, stats] = await Promise.all([
+    fetchMaybe("/health"),
+    fetchMaybe("/manifest"),
+    fetchMaybe("/scope"),
+    fetchMaybe("/stats"),
+  ]);
+  const scopeData = scope.data || {};
+  const summary = scopeData.summary || {};
+  const statsData = stats.data || {};
+  view.innerHTML = `
+    <div class="grid three">
+      ${metric("Runtime", health.ok ? "ok" : "error", health.ok ? health.data.version : health.error, health.ok)}
+      ${metric("Graph", scopeData.loaded ? "loaded" : "not loaded", scopeData.scope_name || "scope unavailable", scopeData.loaded)}
+      ${metric("Sources", numberValue(scopeData.source_count), "loaded sources", true)}
+      ${metric("Entities", numberValue(summary.entity_count || statsData.entity_count), "graph entities", stats.ok)}
+      ${metric("Edges", numberValue(summary.edge_count || statsData.edge_count), "graph relationships", stats.ok)}
+      ${metric("Unresolved", numberValue(summary.unresolved_edge_count || statsData.unresolved_edge_count), "unresolved edges", stats.ok)}
+    </div>
+    <div class="grid two">
+      ${panel("Runtime", keyValueTable(runtimeRows(health, manifest)))}
+      ${panel("Graph Store", keyValueTable(storeRows(manifest, stats)))}
+    </div>
+  `;
+}
+
+async function renderSources() {
+  const [configured, loaded] = await Promise.all([fetchMaybe("/sources/configured"), fetchMaybe("/sources")]);
+  view.innerHTML = `
+    ${sourceMetrics(configured.data, loaded.data)}
+    ${panel("Configured Sources", configured.ok ? configuredSourcesTable(configured.data.items || []) : errorMarkup(configured.error))}
+    ${panel("Loaded Sources", loaded.ok ? loadedSourcesTable(loaded.data.items || []) : errorMarkup(loaded.error))}
+  `;
+}
+
+async function renderJobs() {
+  const jobs = await fetchMaybe("/jobs?limit=50");
+  view.innerHTML = `
+    ${panel(
+      "Operations",
+      `<div class="toolbar">
+        <label class="field small">
+          <span>Strict</span>
+          <select id="job-strict">
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+        </label>
+        <button class="button" type="button" data-job-action="sync">Sync</button>
+        <button class="button" type="button" data-job-action="build">Build</button>
+        <button class="button" type="button" data-job-action="build-load">Build Load</button>
+      </div>
+      <div id="job-action-result" class="stack"></div>`
+    )}
+    ${panel("Recent Jobs", jobs.ok ? jobsTable(jobs.data.items || []) : errorMarkup(jobs.error))}
+  `;
+}
+
+async function renderScope() {
+  const scope = await fetchMaybe("/scope");
+  if (!scope.ok) {
+    view.innerHTML = errorMarkup(scope.error);
+    return;
+  }
+  const payload = scope.data;
+  view.innerHTML = `
+    <div class="grid three">
+      ${metric("Status", payload.loaded ? "loaded" : "not loaded", payload.scope_name || "no scope", payload.loaded)}
+      ${metric("Sources", numberValue(payload.source_count), "loaded sources", true)}
+      ${metric("Generated", payload.generated_at ? formatDate(payload.generated_at) : "unknown", "graph export", true)}
+    </div>
+    ${panel("Summary", keyValueTable(objectRows(payload.summary || {})))}
+    ${panel("Sources", loadedSourcesTable(payload.sources || []))}
+  `;
+}
+
+async function renderSearch() {
+  view.innerHTML = `
+    ${panel(
+      "Search",
+      `<form class="toolbar" data-form="search">
+        <label class="field">
+          <span>Query</span>
+          <input name="q" value="${escapeAttr(state.search.q)}" />
+        </label>
+        <label class="field">
+          <span>Type</span>
+          <input name="type" value="${escapeAttr(state.search.type)}" placeholder="api_route" />
+        </label>
+        <label class="field">
+          <span>Source</span>
+          <input name="source" value="${escapeAttr(state.search.source)}" />
+        </label>
+        <label class="field small">
+          <span>Limit</span>
+          <input name="limit" type="number" min="1" max="100" value="${state.search.limit}" />
+        </label>
+        <button class="button" type="submit">Search</button>
+      </form>`
+    )}
+    <div id="search-results"></div>
+    <div id="entity-detail"></div>
+  `;
+  await runSearch();
+}
+
+async function renderUnresolved() {
+  view.innerHTML = `
+    ${panel(
+      "Filters",
+      `<form class="toolbar" data-form="unresolved">
+        <label class="field">
+          <span>Source</span>
+          <input name="source" value="${escapeAttr(state.unresolved.source)}" />
+        </label>
+        <label class="field">
+          <span>Edge Type</span>
+          <input name="type" value="${escapeAttr(state.unresolved.type)}" placeholder="CALLS_SQL" />
+        </label>
+        <label class="field small">
+          <span>Limit</span>
+          <input name="limit" type="number" min="1" max="200" value="${state.unresolved.limit}" />
+        </label>
+        <label class="field small">
+          <span>Examples</span>
+          <input name="examples" type="number" min="1" max="10" value="${state.unresolved.examples}" />
+        </label>
+        <button class="button" type="submit">Apply</button>
+      </form>`
+    )}
+    <div id="unresolved-results">${loadingMarkup()}</div>
+  `;
+  await runUnresolvedReport();
+}
+
+async function runSearch() {
+  const params = new URLSearchParams();
+  if (state.search.q) params.set("q", state.search.q);
+  if (state.search.type) params.set("type", state.search.type);
+  if (state.search.source) params.set("source", state.search.source);
+  params.set("limit", String(state.search.limit));
+  const target = document.querySelector("#search-results");
+  target.innerHTML = loadingMarkup();
+  const result = await fetchMaybe(`/entities/search?${params}`);
+  target.innerHTML = result.ok ? panel("Results", searchResultsTable(result.data.items || [])) : errorMarkup(result.error);
+}
+
+async function runUnresolvedReport() {
+  const params = new URLSearchParams();
+  if (state.unresolved.source) params.set("source", state.unresolved.source);
+  if (state.unresolved.type) params.set("type", state.unresolved.type);
+  params.set("limit", String(state.unresolved.limit));
+  params.set("examples", String(state.unresolved.examples));
+  const target = document.querySelector("#unresolved-results");
+  const result = await fetchMaybe(`/reports/unresolved?${params}`);
+  target.innerHTML = result.ok ? unresolvedReportMarkup(result.data) : errorMarkup(result.error);
+}
+
+async function loadEntity(entityId) {
+  const detail = document.querySelector("#entity-detail");
+  detail.innerHTML = loadingMarkup();
+  const [entity, neighbors] = await Promise.all([
+    fetchMaybe(`/entities/${encodeURIComponent(entityId)}`),
+    fetchMaybe(`/entities/${encodeURIComponent(entityId)}/neighbors?limit=25`),
+  ]);
+  if (!entity.ok) {
+    detail.innerHTML = errorMarkup(entity.error);
+    return;
+  }
+  detail.innerHTML = panel(
+    "Entity Detail",
+    `<div class="entity-detail">
+      ${keyValueTable(entityRows(entity.data))}
+      ${neighbors.ok ? neighborsTable(neighbors.data.items || []) : errorMarkup(neighbors.error)}
+    </div>`
+  );
+}
+
+async function submitJob(kind) {
+  const result = document.querySelector("#job-action-result");
+  const strict = document.querySelector("#job-strict")?.value !== "false";
+  const payload = kind === "sync" ? {} : { strict };
+  result.innerHTML = loadingMarkup();
+  const response = await fetchMaybe(`/jobs/${kind}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  result.innerHTML = response.ok
+    ? `<div class="message">Submitted job <code>${escapeHtml(response.data.job_id)}</code></div>`
+    : errorMarkup(response.error);
+  const jobs = await fetchMaybe("/jobs?limit=50");
+  const panels = document.querySelectorAll(".panel");
+  const recent = panels[panels.length - 1];
+  if (recent && jobs.ok) {
+    recent.outerHTML = panel("Recent Jobs", jobsTable(jobs.data.items || []));
+  }
+}
+
+function handleDocumentClick(event) {
+  const entityButton = event.target.closest("[data-entity-id]");
+  if (entityButton) {
+    loadEntity(entityButton.dataset.entityId);
+    return;
+  }
+  const jobButton = event.target.closest("[data-job-action]");
+  if (jobButton) {
+    submitJob(jobButton.dataset.jobAction);
+  }
+}
+
+function handleDocumentSubmit(event) {
+  const form = event.target.closest("form[data-form]");
+  if (!form) return;
+  event.preventDefault();
+  const data = new FormData(form);
+  if (form.dataset.form === "search") {
+    state.search = {
+      q: stringField(data, "q"),
+      type: stringField(data, "type"),
+      source: stringField(data, "source"),
+      limit: numberField(data, "limit", 25),
+    };
+    runSearch().catch((error) => {
+      document.querySelector("#search-results").innerHTML = errorMarkup(error);
+    });
+  }
+  if (form.dataset.form === "unresolved") {
+    state.unresolved = {
+      source: stringField(data, "source"),
+      type: stringField(data, "type"),
+      limit: numberField(data, "limit", 50),
+      examples: numberField(data, "examples", 3),
+    };
+    runUnresolvedReport().catch((error) => {
+      document.querySelector("#unresolved-results").innerHTML = errorMarkup(error);
+    });
+  }
+}
+
+async function fetchMaybe(path, options = {}) {
+  try {
+    return { ok: true, data: await fetchJson(path, options) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+async function fetchJson(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    throw new Error(errorMessage(data, response));
+  }
+  return data;
+}
+
+function errorMessage(data, response) {
+  if (data && typeof data.detail === "string") return data.detail;
+  return `${response.status} ${response.statusText}`.trim();
+}
+
+function metric(label, value, note, healthy) {
+  return `
+    <div class="metric">
+      <div class="metric-label">${escapeHtml(label)}</div>
+      <div class="metric-value">${escapeHtml(value ?? "unknown")}</div>
+      <div class="metric-note">${escapeHtml(note ?? "")}</div>
+      <span class="status ${healthy ? "ok" : "warn"}">${healthy ? "available" : "check"}</span>
+    </div>
+  `;
+}
+
+function panel(heading, body, actions = "") {
+  return `
+    <section class="panel">
+      <div class="panel-header">
+        <h2>${escapeHtml(heading)}</h2>
+        <div>${actions}</div>
+      </div>
+      <div class="panel-body">${body}</div>
+    </section>
+  `;
+}
+
+function sourceMetrics(configured, loaded) {
+  return `
+    <div class="grid three">
+      ${metric("Configured", numberValue(configured?.count), "expanded sources", Boolean(configured))}
+      ${metric("Ready", numberValue(configured?.ready_count), "local sources ready", Boolean(configured))}
+      ${metric("Loaded", numberValue(loaded?.count), "graph sources", Boolean(loaded?.loaded))}
+    </div>
+  `;
+}
+
+function configuredSourcesTable(items) {
+  if (!items.length) return emptyMarkup("No configured sources.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${status(item.ready ? "ready" : "not ready", item.ready ? "ok" : "warn")}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.type)}</td>
+          <td class="mono">${escapeHtml(item.resolved_path || "")}</td>
+          <td>${inlineList(item.problems || [])}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Status", "Name", "Type", "Path", "Problems"], rows);
+}
+
+function loadedSourcesTable(items) {
+  if (!items.length) return emptyMarkup("No loaded sources.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.type || "")}</td>
+          <td class="mono">${escapeHtml(item.ref || "")}</td>
+          <td class="mono">${escapeHtml(item.commit || "")}</td>
+          <td class="mono">${escapeHtml(item.path || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Name", "Type", "Ref", "Commit", "Path"], rows);
+}
+
+function jobsTable(items) {
+  if (!items.length) return emptyMarkup("No jobs.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${status(item.status || "unknown", statusTone(item.status))}</td>
+          <td>${escapeHtml(item.kind || "")}</td>
+          <td class="mono">${escapeHtml(item.job_id || "")}</td>
+          <td>${escapeHtml(formatDate(item.created_at))}</td>
+          <td>${escapeHtml(item.finished_at ? formatDate(item.finished_at) : "")}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Status", "Kind", "Job", "Created", "Finished"], rows);
+}
+
+function searchResultsTable(items) {
+  if (!items.length) return emptyMarkup("No entities.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td><button class="button secondary" type="button" data-entity-id="${escapeAttr(item.entity_id)}">Open</button></td>
+          <td>${escapeHtml(item.entity_type || "")}</td>
+          <td>${escapeHtml(item.name || "")}</td>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td class="mono">${escapeHtml(item.file_path || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["", "Type", "Name", "Source", "File"], rows);
+}
+
+function neighborsTable(items) {
+  if (!items.length) return emptyMarkup("No neighbors.");
+  const rows = items
+    .map((item) => {
+      const edge = item.edge || {};
+      const neighbor = item.neighbor || {};
+      return `
+        <tr>
+          <td>${escapeHtml(item.direction || "")}</td>
+          <td>${escapeHtml(edge.edge_type || "")}</td>
+          <td>${escapeHtml(neighbor.entity_type || neighbor.target_type || "")}</td>
+          <td>${escapeHtml(neighbor.name || "")}</td>
+          <td>${escapeHtml(edge.source_name || "")}</td>
+        </tr>`;
+    })
+    .join("");
+  return table(["Direction", "Edge", "Type", "Name", "Source"], rows);
+}
+
+function unresolvedReportMarkup(report) {
+  const summary = report.summary || {};
+  const groups = report.items || [];
+  const groupMarkup = groups.length
+    ? groups.map((group) => unresolvedGroupMarkup(group)).join("")
+    : emptyMarkup("No unresolved groups.");
+  return `
+    <div class="grid three">
+      ${metric("Unresolved Edges", numberValue(summary.unresolved_edge_count), "matching edges", true)}
+      ${metric("Groups", numberValue(summary.group_count), "target groups", true)}
+      ${metric("Returned", numberValue(summary.returned_group_count), "visible groups", true)}
+    </div>
+    ${panel("Classification Edge Counts", keyValueTable(objectRows(summary.classification_edge_counts || {})))}
+    <div class="stack">${groupMarkup}</div>
+  `;
+}
+
+function unresolvedGroupMarkup(group) {
+  const examples = group.examples || [];
+  const exampleRows = examples
+    .map(
+      (example) => `
+        <tr>
+          <td>${escapeHtml(example.source_name || "")}</td>
+          <td class="mono">${escapeHtml(example.file_path || "")}</td>
+          <td>${escapeHtml(example.line_number || "")}</td>
+          <td>${escapeHtml(example.parser || "")}</td>
+          <td class="mono">${escapeHtml(example.raw_target || example.normalized_target || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return panel(
+    `${group.edge_type} to ${group.to_name}`,
+    `<div class="stack">
+      <div class="inline-list">
+        ${status(group.classification, classificationTone(group.classification))}
+        <span class="chip">${escapeHtml(group.to_type)}</span>
+        <span class="chip">${numberValue(group.count)} edges</span>
+        ${inlineList(group.source_names || [])}
+      </div>
+      <div class="muted">${escapeHtml(group.classification_reason || "")}</div>
+      ${table(["Source", "File", "Line", "Parser", "Target"], exampleRows)}
+    </div>`
+  );
+}
+
+function keyValueTable(rows) {
+  if (!rows.length) return emptyMarkup("No values.");
+  const body = rows
+    .map(
+      ([key, value]) => `
+        <tr>
+          <th>${escapeHtml(key)}</th>
+          <td>${escapeHtml(formatValue(value))}</td>
+        </tr>`
+    )
+    .join("");
+  return `<div class="table-wrap"><table><tbody>${body}</tbody></table></div>`;
+}
+
+function table(headers, rows) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function runtimeRows(health, manifest) {
+  return [
+    ["Health", health.ok ? health.data.status : health.error.message],
+    ["Version", health.ok ? health.data.version : ""],
+    ["Config", manifest.ok ? manifest.data.config?.path : ""],
+    ["Schema", manifest.ok ? manifest.data.schema_version : ""],
+  ];
+}
+
+function storeRows(manifest, stats) {
+  return [
+    ["Store", manifest.ok ? manifest.data.graph_store?.type : ""],
+    ["URI", manifest.ok ? manifest.data.graph_store?.uri : ""],
+    ["Database", manifest.ok ? manifest.data.graph_store?.database || "default" : ""],
+    ["Stats", stats.ok ? "available" : stats.error?.message || "unavailable"],
+  ];
+}
+
+function objectRows(value) {
+  return Object.entries(value || {});
+}
+
+function entityRows(entity) {
+  return [
+    ["ID", entity.entity_id],
+    ["Type", entity.entity_type],
+    ["Name", entity.name],
+    ["Source", entity.source_name],
+    ["File", entity.file_path],
+    ["Line", entity.line_number],
+    ["Aliases", (entity.aliases || []).join(", ")],
+    ["Properties", JSON.stringify(entity.properties || {}, null, 2)],
+  ];
+}
+
+function status(label, tone) {
+  return `<span class="status ${escapeAttr(tone || "")}">${escapeHtml(label || "")}</span>`;
+}
+
+function statusTone(value) {
+  if (value === "succeeded" || value === "synced" || value === "built") return "ok";
+  if (value === "failed") return "bad";
+  return "warn";
+}
+
+function classificationTone(value) {
+  if (value === "ambiguous_target") return "warn";
+  if (value === "likely_missing_source") return "bad";
+  if (value === "likely_parser_gap") return "warn";
+  return "";
+}
+
+function inlineList(items) {
+  if (!items.length) return "";
+  return `<span class="inline-list">${items.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("")}</span>`;
+}
+
+function loadingMarkup() {
+  return `<div class="message">Loading</div>`;
+}
+
+function emptyMarkup(message) {
+  return `<div class="message muted">${escapeHtml(message)}</div>`;
+}
+
+function errorMarkup(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return `<div class="message error">${escapeHtml(message)}</div>`;
+}
+
+function stringField(data, name) {
+  const value = data.get(name);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function numberField(data, name, fallback) {
+  const value = Number(data.get(name));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function numberValue(value) {
+  return value === undefined || value === null || value === "" ? "0" : String(value);
+}
+
+function formatValue(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}

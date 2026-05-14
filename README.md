@@ -61,7 +61,7 @@ Run the API directly with Pixi:
 pixi run serve
 ```
 
-Then check:
+Then open the UI at `http://localhost:8000/ui` and check:
 
 ```bash
 curl http://localhost:8000/health
@@ -70,10 +70,10 @@ curl http://localhost:8000/config
 curl http://localhost:8000/sources/configured
 ```
 
-The runtime exposes health, manifest, config, source status, sync, build, load,
-job, unresolved report, and read-only graph endpoints. The manifest tells
-agents which API capabilities are available and which graph capabilities are
-still planned.
+The runtime exposes a navigable local UI plus health, manifest, config, source
+status, sync, build, load, job, unresolved report, and read-only graph
+endpoints. The manifest tells agents which API capabilities are available and
+which graph capabilities are still planned.
 
 Print a Markdown snippet for another repository's `AGENTS.md`:
 
@@ -97,6 +97,7 @@ docker compose up --build
 Services:
 
 - Repo Graph API: `http://localhost:8000`
+- Repo Graph UI: `http://localhost:8000/ui`
 - Neo4j browser: `http://localhost:7475`
 - Neo4j Bolt: `bolt://localhost:7688`
 

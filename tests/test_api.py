@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
+
 from repo_graph.api import (
     BuildLoadRequest,
     BuildRequest,
@@ -32,6 +34,7 @@ from repo_graph.api import (
     submit_build_load_job,
     submit_sync_job,
     sync_response,
+    ui_index_path,
     unresolved_edges_response,
     unresolved_report_response,
 )
@@ -60,6 +63,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["config"]["path"], "config/local-example.yaml")
         self.assertEqual(payload["graph_store"]["type"], "neo4j")
         self.assertIsNone(payload["graph_store"]["database"])
+        self.assertIn({"method": "GET", "path": "/ui", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/config", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/sources/configured", "available": True}, payload["endpoints"])
         self.assertIn({"method": "POST", "path": "/sync", "available": True}, payload["endpoints"])
@@ -88,6 +92,9 @@ class ApiTests(unittest.TestCase):
         app = create_app(RuntimeSettings(config_path=None, neo4j_uri=None, neo4j_user=None))
         route_paths = {route.path for route in app.routes}
 
+        self.assertIn("/ui/assets", route_paths)
+        self.assertIn("/ui", route_paths)
+        self.assertIn("/ui/", route_paths)
         self.assertIn("/health", route_paths)
         self.assertIn("/manifest", route_paths)
         self.assertIn("/config", route_paths)
@@ -109,6 +116,24 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
         self.assertIn("/edges/unresolved", route_paths)
         self.assertIn("/reports/unresolved", route_paths)
+
+    def test_ui_shell_and_static_assets_are_served(self) -> None:
+        client = TestClient(create_app(RuntimeSettings(config_path=None, neo4j_uri=None, neo4j_user=None)))
+
+        shell = client.get("/ui")
+        script = client.get("/ui/assets/app.js")
+        styles = client.get("/ui/assets/styles.css")
+
+        self.assertEqual(shell.status_code, 200)
+        self.assertIn("Repo Graph", shell.text)
+        self.assertEqual(script.status_code, 200)
+        self.assertIn("renderDashboard", script.text)
+        self.assertEqual(styles.status_code, 200)
+        self.assertIn(".app-shell", styles.text)
+
+    def test_ui_index_path_points_to_shell(self) -> None:
+        self.assertTrue(ui_index_path().exists())
+        self.assertEqual(ui_index_path().name, "index.html")
 
     def test_config_response_returns_summary(self) -> None:
         root = Path("/repo")

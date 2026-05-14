@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from repo_graph import __version__
@@ -32,6 +34,7 @@ DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
 DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
 DEFAULT_NEO4J_PASSWORD = "repo-graph-password"
 UNRESOLVED_REPORT_EDGE_LIMIT = 1000
+UI_DIR = Path(__file__).with_name("ui")
 
 
 @dataclass(frozen=True)
@@ -130,6 +133,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
         },
         "endpoints": [
             {"method": "GET", "path": "/health", "available": True},
+            {"method": "GET", "path": "/ui", "available": True},
             {"method": "GET", "path": "/manifest", "available": True},
             {"method": "GET", "path": "/config", "available": True},
             {"method": "GET", "path": "/sources/configured", "available": True},
@@ -163,6 +167,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "graph_loader_status": "available",
             "scope_status": "available",
             "unresolved_report_status": "available",
+            "ui_status": "available",
         },
     }
 
@@ -440,6 +445,10 @@ def unresolved_report_response(
     return report
 
 
+def ui_index_path() -> Path:
+    return UI_DIR / "index.html"
+
+
 def neo4j_http_exception(operation: str, exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
@@ -452,6 +461,12 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
     runtime_settings = settings or RuntimeSettings.from_env()
     registry = job_registry or JobRegistry()
     app = FastAPI(title="Repo Graph", version=__version__)
+    app.mount("/ui/assets", StaticFiles(directory=UI_DIR), name="repo-graph-ui-assets")
+
+    @app.get("/ui", include_in_schema=False)
+    @app.get("/ui/", include_in_schema=False)
+    def ui() -> FileResponse:
+        return FileResponse(ui_index_path())
 
     @app.get("/health")
     def health() -> dict[str, str]:
