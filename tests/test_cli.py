@@ -73,6 +73,36 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["scope_name"], "test-scope")
         self.assertEqual(payload["items"][0]["classification"], "likely_missing_source")
 
+    def test_snapshot_status_command_reports_changed_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "service"
+            repo.mkdir()
+            (repo / "package.json").write_text('{"name": "@example/service"}', encoding="utf-8")
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+output_dir: .repo-graph/output
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["snapshot", "status", "--config", str(config_path)])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual(payload["changed_count"], 1)
+        self.assertEqual(payload["items"][0]["status"], "new")
+
 
 if __name__ == "__main__":
     unittest.main()

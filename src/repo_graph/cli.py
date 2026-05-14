@@ -13,6 +13,7 @@ from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.reports import unresolved_report_from_graph
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
+from repo_graph.snapshots import snapshot_status, write_snapshots
 from repo_graph.sources import resolve_sources, sync_sources
 from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
 
@@ -100,6 +101,30 @@ def cmd_report_unresolved(args: argparse.Namespace) -> int:
         examples_per_group=args.examples,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_snapshot_status(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    print(
+        json.dumps(
+            snapshot_status(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes),
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def cmd_snapshot_write(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    print(
+        json.dumps(
+            write_snapshots(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes),
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
@@ -200,6 +225,19 @@ def build_parser() -> argparse.ArgumentParser:
     unresolved_parser.add_argument("--limit", type=int, default=50)
     unresolved_parser.add_argument("--examples", type=int, default=3)
     unresolved_parser.set_defaults(func=cmd_report_unresolved)
+
+    snapshot_parser = subparsers.add_parser("snapshot", help="Inspect or write source snapshots.")
+    snapshot_subparsers = snapshot_parser.add_subparsers(dest="snapshot", required=True)
+    snapshot_status_parser = snapshot_subparsers.add_parser("status", help="Compare current sources to snapshots.")
+    snapshot_status_parser.add_argument("--config", type=Path, required=True)
+    snapshot_status_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
+    snapshot_status_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    snapshot_status_parser.set_defaults(func=cmd_snapshot_status)
+    snapshot_write_parser = snapshot_subparsers.add_parser("write", help="Write current source snapshots.")
+    snapshot_write_parser.add_argument("--config", type=Path, required=True)
+    snapshot_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
+    snapshot_write_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    snapshot_write_parser.set_defaults(func=cmd_snapshot_write)
 
     return parser
 

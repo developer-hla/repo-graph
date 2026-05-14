@@ -33,6 +33,7 @@ from local source files.
 pixi run repo-graph inspect --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml --strict
+pixi run repo-graph snapshot status --config config/local-example.yaml
 pixi run repo-graph report unresolved --graph .repo-graph/output/graph.json
 ```
 
@@ -50,6 +51,7 @@ graphs out of public commits.
 ```bash
 pixi run repo-graph inspect --config ../my-repo-graph-sources.yaml
 pixi run repo-graph sync --config ../my-repo-graph-sources.yaml
+pixi run repo-graph snapshot status --config ../my-repo-graph-sources.yaml
 pixi run repo-graph build --config ../my-repo-graph-sources.yaml --sync --strict
 ```
 

@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from repo_graph.schema import GRAPH_SCHEMA_VERSION
+
 
 @dataclass
 class Entity:
@@ -155,7 +157,7 @@ class Graph:
         return {
             "metadata": {
                 "tool": "RepoGraph",
-                "schema_version": "0.1",
+                "schema_version": GRAPH_SCHEMA_VERSION,
                 "scope_name": self.scope_name,
                 "generated_at": datetime.now(UTC).isoformat(),
             },

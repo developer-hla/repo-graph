@@ -193,9 +193,31 @@ repo-graph sync --config path/to/sources.yaml
 repo-graph build --config path/to/sources.yaml --output graph.json
 repo-graph build --config path/to/sources.yaml --strict
 repo-graph load --graph graph.json
+repo-graph snapshot status --config path/to/sources.yaml
+repo-graph snapshot write --config path/to/sources.yaml
 repo-graph serve --config path/to/sources.yaml
 repo-graph agent-instructions --api-url http://localhost:8000 --config path/to/sources.yaml
 ```
+
+## Incremental Build Direction
+
+RepoGraph should move from full rebuilds toward source-level incremental
+updates. The first foundation is a source snapshot:
+
+- source name, type, path, URL, ref, and commit
+- tool, graph schema, and parser fingerprint
+- scannable file paths, sizes, and content hashes
+
+Snapshots are stored under `.repo-graph/sources/<source>/snapshot.json`.
+Changed-source detection compares the current snapshot to the saved one and
+reports added, modified, removed, or metadata-changed sources. The first
+cached build can reuse unchanged source graph artifacts, merge them with
+changed source graphs, and still recompute resolution globally before loading.
+That preserves correctness while reducing scanner work.
+
+The later Neo4j incremental path should use the same source identity and
+snapshot metadata to replace one changed source at a time, then re-resolve
+affected cross-source references.
 
 ## Parser MVP
 
