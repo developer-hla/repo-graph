@@ -20,7 +20,7 @@ be loaded into different stores.
 ```json
 {
   "entity_id": "stable-id",
-  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | api_route | function | class | module | interface | sql_table | sql_view | sql_function | stored_procedure",
+  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | service | deployment | container | ingress | api_route | function | class | module | interface | sql_table | sql_view | sql_function | stored_procedure",
   "name": "display name",
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -41,13 +41,13 @@ be loaded into different stores.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
   "line_number": 12,
   "confidence": "high | medium | low",
-  "parser": "filesystem | package_json | pyproject | python_import | python_route | python_http | dotnet_symbol | dotnet_controller_route | dotnet_minimal_route | dotnet_http | javascript | sql | sql_reference",
+  "parser": "filesystem | package_json | pyproject | python_import | python_route | python_http | dotnet_symbol | dotnet_controller_route | dotnet_minimal_route | dotnet_http | kubernetes_service | kubernetes_deployment | kubernetes_ingress | kubernetes_ingress_route | kubernetes_container | kubernetes_env | javascript | sql | sql_reference",
   "properties": {}
 }
 ```
@@ -68,6 +68,8 @@ be loaded into different stores.
 - `file`: a scanned source file.
 - `package`: a package manifest declaration, such as `package.json` `name`,
   Python project name, or .NET package ID.
+- `service`, `deployment`, `container`, and `ingress`: Kubernetes runtime
+  topology discovered from manifests.
 - `api_route`: an HTTP route declared in source code.
 - `function`, `class`, `module`, and `interface`: exported JavaScript,
   TypeScript, Python, C#, or legacy VB symbols.
@@ -84,6 +86,9 @@ be loaded into different stores.
 - `DECLARES_CONFIG_FILE`: file to config manifest.
 - `DECLARES_CONFIG`: config file to config value.
 - `DECLARES_PACKAGE`: file or project to package.
+- `DECLARES_SERVICE`: file to Kubernetes service.
+- `DECLARES_DEPLOYMENT`: file to Kubernetes deployment.
+- `DECLARES_INGRESS`: file to Kubernetes ingress.
 - `DEPENDS_ON_PACKAGE`: package, project, build config, or manifest file to
   package target.
 - `DEPENDS_ON_PROJECT`: project to project target, such as a .NET
@@ -92,6 +97,9 @@ be loaded into different stores.
 - `DECLARES_ROUTE`: file to route.
 - `EXPOSES_ROUTE`: project to route.
 - `DECLARES_SYMBOL`: file to exported function or class.
+- `RUNS_CONTAINER`: Kubernetes deployment to container.
+- `SELECTS_DEPLOYMENT`: Kubernetes service to deployment selected by labels.
+- `ROUTES_TO_SERVICE`: Kubernetes ingress route to backend service.
 - `CALLS_HTTP`: file to route target inferred from `fetch`, `axios`,
   `requests`, `httpx`, or .NET HTTP client calls.
 - `CALLS_SERVICE`: file to a service-like target inferred from environment

@@ -566,6 +566,165 @@ sources:
             )
         )
 
+    def test_build_graph_discovers_kubernetes_topology(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            api_service = root / "api-service"
+            inventory_service = root / "inventory-service"
+            (api_service / "src").mkdir(parents=True)
+            inventory_service.mkdir()
+
+            (api_service / "package.json").write_text('{"name": "@example/api-service"}', encoding="utf-8")
+            (api_service / "src" / "index.ts").write_text(
+                """
+export async function loadInventory(id: string) {
+  return fetch(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
+}
+""",
+                encoding="utf-8",
+            )
+            (inventory_service / "k8s.yaml").write_text(
+                """
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  namespace: example
+  labels:
+    app: inventory
+spec:
+  selector:
+    app: inventory
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  namespace: example
+  labels:
+    app: inventory
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+        - name: inventory-api
+          image: example/inventory-service:latest
+          env:
+            - name: INVENTORY_SERVICE_URL
+              value: http://inventory-service
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inventory-ingress
+  namespace: example
+spec:
+  rules:
+    - host: inventory.example.local
+      http:
+        paths:
+          - path: /inventory
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 80
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: api-service
+    path: api-service
+  - type: local_path
+    name: inventory-service
+    path: inventory-service
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 3)
+        self.assertIn("DECLARES_SERVICE", graph_data["edge_counts"])
+        self.assertIn("DECLARES_DEPLOYMENT", graph_data["edge_counts"])
+        self.assertIn("DECLARES_INGRESS", graph_data["edge_counts"])
+        self.assertIn("RUNS_CONTAINER", graph_data["edge_counts"])
+        self.assertIn("SELECTS_DEPLOYMENT", graph_data["edge_counts"])
+        self.assertIn("ROUTES_TO_SERVICE", graph_data["edge_counts"])
+        self.assertIn("CONFIGURES_SERVICE", graph_data["edge_counts"])
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "service" and entity["name"] == "inventory-service"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "deployment" and entity["name"] == "inventory-service"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "container" and entity["name"] == "inventory-service:inventory-api"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "ingress" and entity["name"] == "inventory-ingress"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "api_route" and entity["name"] == "ANY /inventory"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["to_type"] == "service"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "ROUTES_TO_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CONFIGURES_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
     def test_build_graph_discovers_workspace_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

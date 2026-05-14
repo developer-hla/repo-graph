@@ -192,6 +192,8 @@ Start with parsers that are useful across many codebases:
   service calls
 - Python imports, FastAPI or Flask routes, HTTP calls, and exported
   application symbols
+- Kubernetes services, deployments, containers, ingress routes, and
+  service-selection topology
 - TypeScript and JavaScript imports, exports, and route declarations
 - HTTP calls from `fetch` and common client libraries
 - SQL tables, views, functions, and stored procedures
@@ -205,7 +207,6 @@ than replace rich initial extraction.
 Future parser slices should add:
 
 - deeper MSBuild metadata
-- Kubernetes manifests for service and deployment topology
 - optional LLM-assisted documentation discovery that emits evidence-backed
   candidate entities and edges
 

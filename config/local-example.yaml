@@ -50,6 +50,8 @@ include:
     - .ts
     - .vb
     - .vbproj
+    - .yaml
+    - .yml
 
 exclude:
   directories:

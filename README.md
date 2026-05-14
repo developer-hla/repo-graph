@@ -13,15 +13,16 @@ configs, sync Git sources, scan local repositories, export a portable JSON
 graph, load Neo4j, and expose a local HTTP runtime with safe read endpoints.
 The scanner discovers repository, project, file, package, route, exported
 symbol, Python code and manifest, HTTP call, modern C#/.NET code and manifest,
-legacy VB/.NET Framework config, and SQL relationships from local source files.
+legacy VB/.NET Framework config, Kubernetes topology, and SQL relationships
+from local source files.
 
 ## Goals
 
 - Clone or update repositories into a local cache.
 - Parse code, package manifests, API routes, HTTP calls, Python project and
   code metadata, C#/.NET project and code metadata, legacy VB services, SQL,
-  and database objects without requiring users to define relationships up
-  front.
+  Kubernetes manifests, and database objects without requiring users to define
+  relationships up front.
 - Emit an entity/edge graph with source provenance.
 - Load the graph into a queryable store.
 - Expose a local API that agents and developers can query.
@@ -36,8 +37,8 @@ pixi run repo-graph build --config config/local-example.yaml --strict
 
 The example config scans only synthetic repositories under `examples/`. It
 includes API, shared package, inventory, Python, modern .NET, legacy VB, and
-database projects so package, HTTP, project reference, service config, and SQL
-relationships can resolve locally.
+database projects so package, HTTP, project reference, Kubernetes service,
+service config, and SQL relationships can resolve locally.
 
 To scan your own repositories, create a local config outside this repository or
 use an ignored local file. Keep real organization names, repository URLs, and
