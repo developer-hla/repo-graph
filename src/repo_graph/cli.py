@@ -10,6 +10,7 @@ import uvicorn
 
 from repo_graph import __version__
 from repo_graph.api import RuntimeSettings, create_app
+from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.reports import unresolved_report_from_graph
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
@@ -59,12 +60,35 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 def cmd_build(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    graph = build_graph(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes, strict=args.strict)
+    cache_summary = None
+    if args.cached:
+        cached_result = build_cached_graph(
+            config,
+            sync_first=args.sync,
+            max_file_bytes=args.max_file_bytes,
+            strict=args.strict,
+        )
+        graph = cached_result.graph
+        cache_summary = cached_result.cache_summary
+    else:
+        graph = build_graph(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes, strict=args.strict)
     output_path = resolve_output_path(config, args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     graph_data = graph.to_dict()
+    if cache_summary is not None:
+        graph_data["metadata"].update(
+            {
+                "build_mode": "cached",
+                "source_artifact_dir": cache_summary["artifact_dir"],
+                "source_artifact_reused_count": cache_summary["reused_count"],
+                "source_artifact_rebuilt_count": cache_summary["rebuilt_count"],
+            }
+        )
     output_path.write_text(json.dumps(graph_data, indent=2, sort_keys=True), encoding="utf-8")
-    print(json.dumps({"output": str(output_path), "summary": graph_data["summary"]}, indent=2, sort_keys=True))
+    payload: dict[str, object] = {"output": str(output_path), "summary": graph_data["summary"]}
+    if cache_summary is not None:
+        payload["cache"] = cache_summary
+    print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
 
@@ -207,6 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--output", type=Path)
     build_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
     build_parser.add_argument("--strict", action="store_true", help="Fail if any configured source cannot be scanned.")
+    build_parser.add_argument("--cached", action="store_true", help="Reuse unchanged source graph artifacts.")
     build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
     build_parser.set_defaults(func=cmd_build)
 

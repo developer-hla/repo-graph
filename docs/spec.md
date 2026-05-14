@@ -192,6 +192,7 @@ large graph visualization.
 repo-graph sync --config path/to/sources.yaml
 repo-graph build --config path/to/sources.yaml --output graph.json
 repo-graph build --config path/to/sources.yaml --strict
+repo-graph build --cached --config path/to/sources.yaml --strict
 repo-graph load --graph graph.json
 repo-graph snapshot status --config path/to/sources.yaml
 repo-graph snapshot write --config path/to/sources.yaml
@@ -215,10 +216,10 @@ reports added, modified, removed, or metadata-changed sources.
 
 Source-level graph artifacts are stored beside snapshots under
 `.repo-graph/sources/<source>/graph.json`. These artifacts scan one source at a
-time and intentionally defer global resolution. A cached build can reuse
-unchanged source graph artifacts, merge them with changed source graphs, and
-then recompute cross-source resolution once before loading. That preserves
-correctness while reducing scanner work.
+time and intentionally defer global resolution. The `build --cached` path
+reuses unchanged source graph artifacts, rebuilds changed source graphs, merges
+the source artifacts, and then recomputes cross-source resolution once before
+loading. That preserves correctness while reducing scanner work.
 
 The later Neo4j incremental path should use the same source identity and
 snapshot metadata to replace one changed source at a time, then re-resolve

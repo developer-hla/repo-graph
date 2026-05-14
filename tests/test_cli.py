@@ -138,6 +138,41 @@ sources:
             self.assertTrue(graph_path.exists())
             self.assertTrue(snapshot_path.exists())
 
+    def test_build_cached_command_prints_cache_summary_and_writes_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "service"
+            repo.mkdir()
+            (repo / "package.json").write_text('{"name": "@example/service"}', encoding="utf-8")
+            config_path = root / "sources.yaml"
+            output_path = root / "graph.json"
+            config_path.write_text(
+                """
+name: test-scope
+output_dir: .repo-graph/output
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["build", "--cached", "--config", str(config_path), "--output", str(output_path)])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+            payload = json.loads(output.getvalue())
+            graph_data = json.loads(output_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(result, 0)
+            self.assertEqual(payload["cache"]["rebuilt_count"], 1)
+            self.assertEqual(payload["cache"]["reused_count"], 0)
+            self.assertEqual(graph_data["metadata"]["build_mode"], "cached")
+            self.assertTrue(output_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
