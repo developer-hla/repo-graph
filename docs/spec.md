@@ -188,6 +188,10 @@ Start with parsers that are useful across many codebases:
 - legacy .NET Framework `Web.config`, `App.config`, `packages.config`,
   ASMX/WCF endpoints, VB symbols, config-driven service URLs, and SQL command
   stored procedure references
+- modern C#/.NET controller routes, minimal API routes, symbols, and HTTP
+  service calls
+- Python imports, FastAPI or Flask routes, HTTP calls, and exported
+  application symbols
 - TypeScript and JavaScript imports, exports, and route declarations
 - HTTP calls from `fetch` and common client libraries
 - SQL tables, views, functions, and stored procedures
@@ -200,9 +204,7 @@ than replace rich initial extraction.
 
 Future parser slices should add:
 
-- Python imports, FastAPI or Flask routes, and exported application symbols
-- modern .NET controllers, minimal APIs, service calls, and deeper MSBuild
-  metadata
+- deeper MSBuild metadata
 - Kubernetes manifests for service and deployment topology
 - optional LLM-assisted documentation discovery that emits evidence-backed
   candidate entities and edges

@@ -61,6 +61,26 @@ ENV_URL_RE = re.compile(r"(?:process\.env\.|import\.meta\.env\.)([A-Z][A-Z0-9_]*
 ENV_NAME_RE = re.compile(r"\b([A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST))\b")
 REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)")
 SLN_PROJECT_RE = re.compile(r'^Project\("[^"]+"\)\s*=\s*"([^"]+)",\s*"([^"]+)"')
+CS_ATTRIBUTE_LINE_RE = re.compile(r"^\s*\[(?P<body>.+)\]\s*$")
+CS_ATTRIBUTE_ITEM_RE = re.compile(r"(?P<name>[A-Za-z_][\w.]*)(?:Attribute)?\s*(?:\((?P<args>[^)]*)\))?")
+CS_NAMESPACE_RE = re.compile(r"^\s*namespace\s+([A-Za-z_][\w.]*)(?:\s*;|\s*\{)?")
+CS_TYPE_RE = re.compile(
+    r"^\s*(?:(?:public|private|protected|internal|static|sealed|abstract|partial)\s+)*"
+    r"(class|record|interface|struct)\s+([A-Za-z_]\w*)"
+)
+CS_METHOD_RE = re.compile(
+    r"^\s*(?:(?:public|private|protected|internal|static|virtual|override|async|sealed|new|partial|extern|unsafe)"
+    r"\s+)+(?:[\w<>\[\],.?]+\s+)+([A-Za-z_]\w*)\s*(?:<[^>]+>)?\s*\("
+)
+CS_MINIMAL_ROUTE_RE = re.compile(
+    r"\b[A-Za-z_]\w*\s*\.\s*Map(Get|Post|Put|Patch|Delete|Head|Options)\s*\(\s*"
+    r"(?:\$@|@\$|\$|@)?\"((?:\"\"|\\.|[^\"])*)\"",
+    re.IGNORECASE,
+)
+CS_HTTP_CALL_RE = re.compile(
+    r"\.\s*(Get|Post|Put|Patch|Delete)Async\s*\(\s*(?:\$@|@\$|\$|@)?\"((?:\"\"|\\.|[^\"])*)\"",
+    re.IGNORECASE,
+)
 VB_ATTRIBUTE_RE = re.compile(r"^\s*<\s*([A-Za-z_][\w.]*)", re.IGNORECASE)
 VB_NAMESPACE_RE = re.compile(r"^\s*Namespace\s+([A-Za-z_][\w.]*)", re.IGNORECASE)
 VB_TYPE_RE = re.compile(
@@ -123,6 +143,13 @@ class FileScanContext:
     project: ProjectInfo | None = None
 
 
+@dataclass(frozen=True)
+class CSharpAttribute:
+    name: str
+    args: str | None
+    line_number: int
+
+
 class FileExtractor(Protocol):
     name: str
 
@@ -166,6 +193,7 @@ def default_extractors() -> list[FileExtractor]:
         DotnetSolutionExtractor(),
         PnpmWorkspaceExtractor(),
         LegacyDotnetEndpointExtractor(),
+        CSharpCodeExtractor(),
         VbCodeExtractor(),
         JavaScriptExtractor(),
         SqlExtractor(),
@@ -1011,6 +1039,79 @@ class LegacyDotnetEndpointExtractor:
                     1,
                 )
             )
+        return result
+
+
+class CSharpCodeExtractor:
+    name = "csharp_code"
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).suffix.lower() == ".cs"
+
+    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+        result = ScanResult()
+        namespace: str | None = None
+        current_type: str | None = None
+        current_route_prefix: str | None = None
+        pending_attributes: list[CSharpAttribute] = []
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            result.extend(csharp_minimal_route_result(context, line, line_number))
+            result.edges.extend(csharp_http_call_edges(context, line, line_number))
+
+            attributes = csharp_attributes(line, line_number)
+            if attributes:
+                pending_attributes.extend(attributes)
+                continue
+
+            namespace_match = CS_NAMESPACE_RE.match(line)
+            if namespace_match:
+                namespace = namespace_match.group(1)
+
+            type_match = CS_TYPE_RE.match(line)
+            if type_match:
+                current_type = type_match.group(2)
+                current_route_prefix = csharp_route_prefix(pending_attributes, current_type, None)
+                result.extend(
+                    csharp_symbol_result(
+                        context,
+                        type_match.group(1).lower(),
+                        current_type,
+                        namespace,
+                        line_number,
+                    )
+                )
+                pending_attributes = []
+                continue
+
+            method_match = CS_METHOD_RE.match(line)
+            if method_match:
+                method_name = method_match.group(1)
+                result.extend(
+                    csharp_symbol_result(
+                        context,
+                        "method",
+                        method_name,
+                        namespace,
+                        line_number,
+                        parent_name=current_type,
+                    )
+                )
+                result.extend(
+                    csharp_controller_route_result(
+                        context,
+                        method_name,
+                        pending_attributes,
+                        current_route_prefix,
+                        current_type,
+                        line_number,
+                    )
+                )
+                pending_attributes = []
+                continue
+
+            if csharp_should_clear_attributes(line):
+                pending_attributes = []
+
         return result
 
 
@@ -2057,6 +2158,218 @@ def solution_project_reference(line: str) -> dict[str, str | None] | None:
         "raw_target": raw_path,
         "normalized_target": Path(raw_path).stem,
     }
+
+
+def csharp_attributes(line: str, line_number: int) -> list[CSharpAttribute]:
+    match = CS_ATTRIBUTE_LINE_RE.match(line)
+    if not match:
+        return []
+    return [
+        CSharpAttribute(
+            name=csharp_attribute_name(attribute_match.group("name")),
+            args=attribute_match.group("args"),
+            line_number=line_number,
+        )
+        for attribute_match in CS_ATTRIBUTE_ITEM_RE.finditer(match.group("body"))
+    ]
+
+
+def csharp_attribute_name(name: str) -> str:
+    return name.rsplit(".", 1)[-1].removesuffix("Attribute").lower()
+
+
+def csharp_symbol_result(
+    context: FileScanContext,
+    symbol_kind: str,
+    name: str,
+    namespace: str | None,
+    line_number: int,
+    parent_name: str | None = None,
+) -> ScanResult:
+    result = ScanResult()
+    entity_type = csharp_entity_type(symbol_kind)
+    full_name = ".".join(part for part in (namespace, parent_name, name) if part)
+    symbol = Entity(
+        entity_type=entity_type,
+        name=full_name or name,
+        source_name=context.source.name,
+        file_path=context.rel_path,
+        line_number=line_number,
+        aliases={name, full_name or name},
+        properties={
+            "symbol_kind": symbol_kind,
+            "namespace": namespace,
+            "parent": parent_name,
+            "project": context.project.name if context.project else None,
+        },
+    )
+    result.entities.append(symbol)
+    result.edges.append(
+        resolved_edge(
+            context.file_entity,
+            symbol,
+            "DECLARES_SYMBOL",
+            context.source.name,
+            context.rel_path,
+            "dotnet_symbol",
+            line_number,
+        )
+    )
+    return result
+
+
+def csharp_entity_type(symbol_kind: str) -> str:
+    if symbol_kind == "interface":
+        return "interface"
+    if symbol_kind == "method":
+        return "function"
+    return "class"
+
+
+def csharp_route_prefix(
+    attributes: Sequence[CSharpAttribute],
+    type_name: str | None,
+    method_name: str | None,
+) -> str | None:
+    route_attribute = next((attribute for attribute in attributes if attribute.name == "route"), None)
+    if not route_attribute:
+        return None
+    route = csharp_first_string(route_attribute.args)
+    if route is None:
+        return None
+    return csharp_replace_route_tokens(route, type_name, method_name)
+
+
+def csharp_controller_route_result(
+    context: FileScanContext,
+    method_name: str,
+    attributes: Sequence[CSharpAttribute],
+    route_prefix: str | None,
+    type_name: str | None,
+    line_number: int,
+) -> ScanResult:
+    result = ScanResult()
+    route_path = csharp_route_prefix(attributes, type_name, method_name)
+    for attribute in attributes:
+        method = csharp_http_attribute_method(attribute)
+        if not method:
+            continue
+        attribute_path = csharp_first_string(attribute.args) or route_path or ""
+        path = csharp_join_route_paths(
+            route_prefix, csharp_replace_route_tokens(attribute_path, type_name, method_name)
+        )
+        route = route_entity(context, method, path, line_number, "dotnet_controller_route", method_name)
+        result.entities.append(route)
+        result.edges.append(
+            resolved_edge(
+                context.file_entity,
+                route,
+                "DECLARES_ROUTE",
+                context.source.name,
+                context.rel_path,
+                "dotnet_controller_route",
+                line_number,
+            )
+        )
+        if context.project:
+            result.edges.append(
+                resolved_edge(
+                    context.project.entity,
+                    route,
+                    "EXPOSES_ROUTE",
+                    context.source.name,
+                    context.rel_path,
+                    "dotnet_controller_route",
+                    line_number,
+                )
+            )
+    return result
+
+
+def csharp_http_attribute_method(attribute: CSharpAttribute) -> str | None:
+    methods = {
+        "httpget": "GET",
+        "httppost": "POST",
+        "httpput": "PUT",
+        "httppatch": "PATCH",
+        "httpdelete": "DELETE",
+        "httphead": "HEAD",
+        "httpoptions": "OPTIONS",
+    }
+    return methods.get(attribute.name)
+
+
+def csharp_minimal_route_result(context: FileScanContext, line: str, line_number: int) -> ScanResult:
+    result = ScanResult()
+    for match in CS_MINIMAL_ROUTE_RE.finditer(line):
+        result.extend(
+            add_route(
+                context,
+                match.group(1).upper(),
+                csharp_unescape_string(match.group(2)),
+                line_number,
+                "dotnet_minimal_route",
+            )
+        )
+    return result
+
+
+def csharp_http_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+    edges: list[Edge] = []
+    for match in CS_HTTP_CALL_RE.finditer(line):
+        method = match.group(1).upper()
+        raw_target = csharp_unescape_string(match.group(2))
+        parsed = urlparse(raw_target)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            target = http_target(raw_target, method)
+            target["service_name"] = service_name_from_url(raw_target)
+            edges.append(
+                unresolved_edge(
+                    context.file_entity,
+                    target["service_name"],
+                    "CALLS_SERVICE",
+                    context.source.name,
+                    context.rel_path,
+                    "dotnet_http",
+                    to_type="service",
+                    line_number=line_number,
+                    properties=target,
+                )
+            )
+        else:
+            edges.extend(http_edges_for_target(context, method, raw_target, line_number, "dotnet_http"))
+    return edges
+
+
+def csharp_first_string(value: str | None) -> str | None:
+    if not value:
+        return None
+    match = re.search(r"(?:\$@|@\$|\$|@)?\"((?:\"\"|\\.|[^\"])*)\"", value)
+    if not match:
+        return None
+    return csharp_unescape_string(match.group(1))
+
+
+def csharp_unescape_string(value: str) -> str:
+    return value.replace('""', '"').replace(r"\"", '"').replace(r"\\", "\\")
+
+
+def csharp_replace_route_tokens(value: str, type_name: str | None, method_name: str | None) -> str:
+    controller_name = type_name.removesuffix("Controller") if type_name else ""
+    route = re.sub(r"\[controller\]", controller_name, value, flags=re.IGNORECASE)
+    return re.sub(r"\[action\]", method_name or "", route, flags=re.IGNORECASE)
+
+
+def csharp_join_route_paths(prefix: str | None, path: str) -> str:
+    if path.startswith("/"):
+        return path
+    parts = [part.strip("/") for part in (prefix, path) if part and part.strip("/")]
+    return "/" + "/".join(parts) if parts else "/"
+
+
+def csharp_should_clear_attributes(line: str) -> bool:
+    stripped = line.strip()
+    return bool(stripped and not stripped.startswith("//"))
 
 
 def config_file_entity(context: FileScanContext, config_kind: str) -> Entity:

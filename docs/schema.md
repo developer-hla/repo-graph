@@ -47,7 +47,7 @@ be loaded into different stores.
   "file_path": "relative/path when known",
   "line_number": 12,
   "confidence": "high | medium | low",
-  "parser": "filesystem | package_json | pyproject | python_import | python_route | python_http | javascript | sql | sql_reference",
+  "parser": "filesystem | package_json | pyproject | python_import | python_route | python_http | dotnet_symbol | dotnet_controller_route | dotnet_minimal_route | dotnet_http | javascript | sql | sql_reference",
   "properties": {}
 }
 ```
@@ -70,7 +70,7 @@ be loaded into different stores.
   Python project name, or .NET package ID.
 - `api_route`: an HTTP route declared in source code.
 - `function`, `class`, `module`, and `interface`: exported JavaScript,
-  TypeScript, Python, or legacy VB symbols.
+  TypeScript, Python, C#, or legacy VB symbols.
 - `sql_table`, `sql_view`, `sql_function`, `stored_procedure`: SQL objects
   declared in SQL files.
 
@@ -93,7 +93,7 @@ be loaded into different stores.
 - `EXPOSES_ROUTE`: project to route.
 - `DECLARES_SYMBOL`: file to exported function or class.
 - `CALLS_HTTP`: file to route target inferred from `fetch`, `axios`,
-  `requests`, or `httpx`.
+  `requests`, `httpx`, or .NET HTTP client calls.
 - `CALLS_SERVICE`: file to a service-like target inferred from environment
   URL names, config keys, or legacy HTTP clients.
 - `CONFIGURES_SERVICE`: config value to a service-like target inferred from

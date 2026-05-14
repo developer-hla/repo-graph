@@ -38,6 +38,7 @@ sources:
 include:
   file_extensions:
     - .asmx
+    - .cs
     - .config
     - .json
     - .csproj

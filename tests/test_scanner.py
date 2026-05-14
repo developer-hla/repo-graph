@@ -432,6 +432,140 @@ sources:
             )
         )
 
+    def test_build_graph_discovers_modern_dotnet_code_relationships(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            dotnet_service = root / "dotnet-service"
+            inventory_service = root / "inventory-service"
+            database_project = root / "database-project"
+            (dotnet_service / "Controllers").mkdir(parents=True)
+            inventory_service.mkdir()
+            database_project.mkdir()
+
+            (dotnet_service / "Example.Service.csproj").write_text(
+                """
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>Example.Service</PackageId>
+  </PropertyGroup>
+</Project>
+""",
+                encoding="utf-8",
+            )
+            (dotnet_service / "Program.cs").write_text(
+                """
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapPost("/things/{id}", (string id) => Results.Ok(new { id }));
+
+app.Run();
+""",
+                encoding="utf-8",
+            )
+            (dotnet_service / "Controllers" / "ThingsController.cs").write_text(
+                """
+using Microsoft.AspNetCore.Mvc;
+
+namespace Example.Service.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ThingsController : ControllerBase
+{
+    private readonly HttpClient httpClient;
+
+    public ThingsController(HttpClient httpClient)
+    {
+        this.httpClient = httpClient;
+    }
+
+    [HttpGet("{id}")]
+    public async Task<string> GetThing(string id)
+    {
+        await httpClient.GetAsync("http://inventory-service/inventory/" + id);
+        var query = "EXEC dbo.get_thing_by_id";
+        return query;
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            (inventory_service / "package.json").write_text(
+                '{"name": "@example/inventory-service"}',
+                encoding="utf-8",
+            )
+            (database_project / "schema.sql").write_text(
+                "CREATE PROCEDURE dbo.get_thing_by_id AS SELECT 1",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: dotnet-service
+    path: dotnet-service
+  - type: local_path
+    name: inventory-service
+    path: inventory-service
+  - type: local_path
+    name: database-project
+    path: database-project
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 5)
+        self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
+        self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("EXPOSES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SQL", graph_data["edge_counts"])
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "class" and entity["name"] == "Example.Service.Controllers.ThingsController"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "function"
+                and entity["name"] == "Example.Service.Controllers.ThingsController.GetThing"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "api_route" and entity["name"] == "GET /api/Things/{id}"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "api_route" and entity["name"] == "POST /things/{id}"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.get_thing_by_id" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
     def test_build_graph_discovers_workspace_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

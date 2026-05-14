@@ -12,15 +12,16 @@ Repo Graph is alpha software. The current implementation can inspect source
 configs, sync Git sources, scan local repositories, export a portable JSON
 graph, load Neo4j, and expose a local HTTP runtime with safe read endpoints.
 The scanner discovers repository, project, file, package, route, exported
-symbol, Python code and manifest, HTTP call, modern .NET manifest, legacy
-VB/.NET Framework config, and SQL relationships from local source files.
+symbol, Python code and manifest, HTTP call, modern C#/.NET code and manifest,
+legacy VB/.NET Framework config, and SQL relationships from local source files.
 
 ## Goals
 
 - Clone or update repositories into a local cache.
 - Parse code, package manifests, API routes, HTTP calls, Python project and
-  code metadata, .NET project metadata, legacy VB services, SQL, and database
-  objects without requiring users to define relationships up front.
+  code metadata, C#/.NET project and code metadata, legacy VB services, SQL,
+  and database objects without requiring users to define relationships up
+  front.
 - Emit an entity/edge graph with source provenance.
 - Load the graph into a queryable store.
 - Expose a local API that agents and developers can query.
