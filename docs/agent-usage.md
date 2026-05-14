@@ -78,7 +78,9 @@ describes what was loaded into Neo4j from the most recent graph load.
 For private GitHub repositories in Docker, operators should put `GITHUB_TOKEN`
 in local `.env`; that file is ignored and must not be committed. The token is
 used for GitHub org discovery and HTTPS clone/fetch. Agents should not ask
-users to place tokens in source config files.
+users to place tokens in source config files. Operators can point Docker at an
+ignored private config by setting `REPO_GRAPH_CONFIG` in `.env` to a container
+path such as `/app/config/private-my-sources.yaml`.
 
 ## Change Preview
 

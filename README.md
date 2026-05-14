@@ -120,6 +120,13 @@ token for GitHub org discovery and HTTPS clone/fetch through temporary Git
 environment config, without writing the token into source configs, generated
 graphs, or cloned repository remotes.
 
+To run Docker against a private config mounted from `./config`, set
+`REPO_GRAPH_CONFIG` to the container path:
+
+```bash
+REPO_GRAPH_CONFIG=/app/config/private-my-sources.yaml
+```
+
 Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
 `REPO_GRAPH_NEO4J_BOLT_PORT` if those ports are already in use.
 
