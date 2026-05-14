@@ -3,6 +3,21 @@ cache_dir: ../.repo-graph/cache/repos
 output_dir: ../.repo-graph/output
 
 sources:
+  - type: github_org
+    name: example-org
+    org: example
+    visibility: all
+    ref: default
+    limit: 50
+    include:
+      archived: false
+      forks: false
+      name_patterns:
+        - "-service$"
+    exclude:
+      name_patterns:
+        - "-experiment$"
+
   - type: git
     name: api-service
     url: https://github.com/example/api-service.git

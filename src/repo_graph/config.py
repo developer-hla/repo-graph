@@ -57,6 +57,13 @@ class Source:
     path: Path | None = None
     url: str | None = None
     ref: str = "default"
+    org: str | None = None
+    visibility: str = "all"
+    include_archived: bool = False
+    include_forks: bool = False
+    include_name_patterns: tuple[str, ...] = ()
+    exclude_name_patterns: tuple[str, ...] = ()
+    limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -178,10 +185,40 @@ def parse_sources(raw_sources: Any, config_dir: Path) -> list[Source]:
             if not isinstance(url, str) or not url.strip():
                 raise ValueError(f"Git source '{name}' must define 'url'.")
             sources.append(Source(name=name, source_type=source_type, url=url.strip(), ref=ref.strip()))
+        elif source_type == "github_org":
+            sources.append(parse_github_org_source(raw_source, name, ref.strip()))
         else:
             raise ValueError(f"Unsupported source type '{source_type}' for source '{name}'.")
 
     return sources
+
+
+def parse_github_org_source(raw_source: dict[str, Any], name: str, ref: str) -> Source:
+    org = raw_source.get("org")
+    if not isinstance(org, str) or not org.strip():
+        raise ValueError(f"GitHub org source '{name}' must define 'org'.")
+    visibility = raw_source.get("visibility", "all")
+    if not isinstance(visibility, str) or not visibility.strip():
+        raise ValueError(f"GitHub org source '{name}' has invalid 'visibility'.")
+    visibility = visibility.strip()
+    if visibility not in {"all", "public", "private", "forks", "sources", "member"}:
+        raise ValueError(f"GitHub org source '{name}' has unsupported 'visibility'.")
+
+    include = object_mapping(raw_source.get("include"), f"GitHub org source '{name}' include")
+    exclude = object_mapping(raw_source.get("exclude"), f"GitHub org source '{name}' exclude")
+    limit = optional_positive_int(raw_source.get("limit"), f"GitHub org source '{name}' limit")
+    return Source(
+        name=name,
+        source_type="github_org",
+        ref=ref,
+        org=org.strip(),
+        visibility=visibility,
+        include_archived=bool_value(include.get("archived"), default=False),
+        include_forks=bool_value(include.get("forks"), default=False),
+        include_name_patterns=string_tuple(include.get("name_patterns")),
+        exclude_name_patterns=string_tuple(exclude.get("name_patterns")),
+        limit=limit,
+    )
 
 
 def parse_include(raw_include: Any) -> IncludeRules:
@@ -227,3 +264,40 @@ def normalize_extension(value: Any) -> str:
     if not extension.startswith("."):
         extension = f".{extension}"
     return extension
+
+
+def object_mapping(value: Any, field_name: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    raise ValueError(f"{field_name} must be a mapping.")
+
+
+def string_tuple(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list | tuple | set):
+        raise ValueError("Name patterns must be a list.")
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("Name patterns must be non-empty strings.")
+        items.append(item.strip())
+    return tuple(items)
+
+
+def bool_value(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise ValueError("Boolean config values must be true or false.")
+
+
+def optional_positive_int(value: Any, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or value <= 0:
+        raise ValueError(f"{field_name} must be a positive integer.")
+    return value

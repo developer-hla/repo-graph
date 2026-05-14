@@ -52,6 +52,40 @@ sources:
             with self.assertRaisesRegex(ValueError, "Duplicate source name"):
                 load_config(config_path)
 
+    def test_load_config_reads_github_org_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+sources:
+  - type: github_org
+    name: example-org
+    org: example
+    visibility: all
+    ref: default
+    limit: 25
+    include:
+      archived: false
+      forks: false
+      name_patterns:
+        - "^api-"
+    exclude:
+      name_patterns:
+        - "-experiment$"
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.sources[0].source_type, "github_org")
+        self.assertEqual(config.sources[0].org, "example")
+        self.assertEqual(config.sources[0].visibility, "all")
+        self.assertEqual(config.sources[0].limit, 25)
+        self.assertEqual(config.sources[0].include_name_patterns, ("^api-",))
+        self.assertEqual(config.sources[0].exclude_name_patterns, ("-experiment$",))
+
 
 if __name__ == "__main__":
     unittest.main()

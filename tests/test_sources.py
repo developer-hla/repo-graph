@@ -4,12 +4,15 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.sources import (
     config_summary,
+    expand_sources,
     get_default_branch,
     git_cache_path,
+    github_next_link,
     inspect_sources,
     sync_git_source,
     sync_sources_with_status,
@@ -128,6 +131,91 @@ class SourceSyncTests(unittest.TestCase):
             run(["git", "symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], cwd=clone)
 
             self.assertEqual(get_default_branch(clone), "main")
+
+    def test_github_org_source_expands_filtered_repositories(self) -> None:
+        source = Source(
+            name="example-org",
+            source_type="github_org",
+            org="example",
+            include_name_patterns=(".*-service$",),
+            exclude_name_patterns=("legacy-.*",),
+            limit=1,
+        )
+        repos_payload = [
+            {"name": "api-service", "clone_url": "https://github.com/example/api-service.git"},
+            {"name": "legacy-service", "clone_url": "https://github.com/example/legacy-service.git"},
+            {
+                "name": "archived-service",
+                "clone_url": "https://github.com/example/archived-service.git",
+                "archived": True,
+            },
+            {
+                "name": "forked-service",
+                "clone_url": "https://github.com/example/forked-service.git",
+                "fork": True,
+            },
+        ]
+
+        with patch("repo_graph.sources.github_api_pages", return_value=repos_payload) as github_api_pages:
+            sources = expand_sources((source,))
+
+        github_api_pages.assert_called_once_with("https://api.github.com/orgs/example/repos?per_page=100&type=all")
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(sources[0].name, "api-service")
+        self.assertEqual(sources[0].source_type, "git")
+        self.assertEqual(sources[0].url, "https://github.com/example/api-service.git")
+
+    def test_github_org_fork_visibility_includes_forks(self) -> None:
+        source = Source(
+            name="example-org",
+            source_type="github_org",
+            org="example",
+            visibility="forks",
+        )
+        repos_payload = [
+            {
+                "name": "forked-service",
+                "clone_url": "https://github.com/example/forked-service.git",
+                "fork": True,
+            },
+        ]
+
+        with patch("repo_graph.sources.github_api_pages", return_value=repos_payload) as github_api_pages:
+            sources = expand_sources((source,))
+
+        github_api_pages.assert_called_once_with("https://api.github.com/orgs/example/repos?per_page=100&type=forks")
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(sources[0].name, "forked-service")
+
+    def test_inspect_sources_reports_expanded_github_org_repositories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(Source(name="example-org", source_type="github_org", org="example"),),
+            )
+            repos_payload = [{"name": "api-service", "clone_url": "https://github.com/example/api-service.git"}]
+
+            with patch("repo_graph.sources.github_api_pages", return_value=repos_payload):
+                payload = inspect_sources(config)
+
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["name"], "api-service")
+        self.assertEqual(payload[0]["type"], "git")
+        self.assertEqual(payload[0]["url"], "https://github.com/example/api-service.git")
+        self.assertFalse(payload[0]["ready"])
+        self.assertIn("path_missing", payload[0]["problems"])
+
+    def test_github_next_link_reads_pagination_header(self) -> None:
+        next_url = github_next_link(
+            '<https://api.github.com/orgs/example/repos?page=2>; rel="next", '
+            '<https://api.github.com/orgs/example/repos?page=3>; rel="last"'
+        )
+
+        self.assertEqual(next_url, "https://api.github.com/orgs/example/repos?page=2")
 
 
 def run(args: list[str], cwd: Path | None = None) -> None:

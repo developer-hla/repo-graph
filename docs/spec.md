@@ -27,7 +27,8 @@ that developers and agents can use.
 ## Source Model
 
 Sources are declared in a config file. A source may be a local path, a specific
-Git repository, or a GitHub organization query.
+Git repository, or a GitHub organization query that expands to Git
+repositories.
 
 Each graph build records:
 
@@ -50,6 +51,18 @@ sources:
     name: api-service
     url: https://github.com/example/api-service.git
     ref: default
+
+  - type: github_org
+    name: example-org
+    org: example
+    visibility: all
+    ref: default
+    limit: 50
+    include:
+      archived: false
+      forks: false
+      name_patterns:
+        - "-service$"
 
   - type: local_path
     name: local-library

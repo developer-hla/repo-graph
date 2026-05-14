@@ -41,8 +41,10 @@ database projects so package, HTTP, project reference, Kubernetes service,
 service config, and SQL relationships can resolve locally.
 
 To scan your own repositories, create a local config outside this repository or
-use an ignored local file. Keep real organization names, repository URLs, and
-generated graphs out of public commits.
+use an ignored local file. Sources may be local paths, explicit Git URLs, or a
+GitHub organization query that expands to matching repositories through the
+GitHub REST API. Keep real organization names, repository URLs, and generated
+graphs out of public commits.
 
 ```bash
 pixi run repo-graph inspect --config ../my-repo-graph-sources.yaml
