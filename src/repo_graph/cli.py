@@ -14,6 +14,7 @@ from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.reports import unresolved_report_from_graph
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.snapshots import snapshot_status, write_snapshots
+from repo_graph.source_graphs import write_source_graphs
 from repo_graph.sources import resolve_sources, sync_sources
 from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
 
@@ -121,6 +122,18 @@ def cmd_snapshot_write(args: argparse.Namespace) -> int:
     print(
         json.dumps(
             write_snapshots(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes),
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def cmd_source_graphs_write(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    print(
+        json.dumps(
+            write_source_graphs(config, sync_first=args.sync, max_file_bytes=args.max_file_bytes),
             indent=2,
             sort_keys=True,
         )
@@ -238,6 +251,17 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
     snapshot_write_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
     snapshot_write_parser.set_defaults(func=cmd_snapshot_write)
+
+    source_graphs_parser = subparsers.add_parser("source-graphs", help="Build source-level graph artifacts.")
+    source_graphs_subparsers = source_graphs_parser.add_subparsers(dest="source_graphs", required=True)
+    source_graphs_write_parser = source_graphs_subparsers.add_parser(
+        "write",
+        help="Write one graph artifact per source.",
+    )
+    source_graphs_write_parser.add_argument("--config", type=Path, required=True)
+    source_graphs_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
+    source_graphs_write_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    source_graphs_write_parser.set_defaults(func=cmd_source_graphs_write)
 
     return parser
 

@@ -103,6 +103,41 @@ sources:
         self.assertEqual(payload["changed_count"], 1)
         self.assertEqual(payload["items"][0]["status"], "new")
 
+    def test_source_graphs_write_command_writes_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "service"
+            repo.mkdir()
+            (repo / "package.json").write_text('{"name": "@example/service"}', encoding="utf-8")
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+output_dir: .repo-graph/output
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["source-graphs", "write", "--config", str(config_path)])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+            payload = json.loads(output.getvalue())
+            graph_path = root / ".repo-graph" / "sources" / "service" / "graph.json"
+            snapshot_path = root / ".repo-graph" / "sources" / "service" / "snapshot.json"
+
+            self.assertEqual(result, 0)
+            self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["items"][0]["source_name"], "service")
+            self.assertTrue(graph_path.exists())
+            self.assertTrue(snapshot_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
