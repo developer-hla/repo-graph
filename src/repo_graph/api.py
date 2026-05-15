@@ -38,6 +38,45 @@ DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
 DEFAULT_NEO4J_PASSWORD = "repo-graph-password"
 UNRESOLVED_REPORT_EDGE_LIMIT = 1000
 UI_DIR = Path(__file__).with_name("ui")
+IMPACT_EDGE_TYPES = frozenset(
+    {
+        "CALLS_HTTP",
+        "CALLS_SERVICE",
+        "CALLS_SQL",
+        "CONFIGURES_SERVICE",
+        "DEPENDS_ON_PACKAGE",
+        "DEPENDS_ON_PROJECT",
+        "IMPORTS",
+        "READS_SQL_OBJECT",
+        "ROUTES_TO_SERVICE",
+        "SELECTS_DEPLOYMENT",
+    }
+)
+STRUCTURAL_EDGE_TYPES = frozenset(
+    {
+        "CONTAINS_FILE",
+        "CONTAINS_PROJECT",
+        "DECLARES_BUILD_CONFIG",
+        "DECLARES_CONFIG",
+        "DECLARES_CONFIG_FILE",
+        "DECLARES_DEPLOYMENT",
+        "DECLARES_INGRESS",
+        "DECLARES_PACKAGE",
+        "DECLARES_ROUTE",
+        "DECLARES_SERVICE",
+        "DECLARES_SOLUTION",
+        "DECLARES_SYMBOL",
+        "DECLARES_WORKSPACE",
+        "DEFINES",
+        "EXPOSES_ROUTE",
+        "RUNS_CONTAINER",
+    }
+)
+IMPACT_PROFILES = {
+    "all": None,
+    "impact": IMPACT_EDGE_TYPES,
+    "structural": STRUCTURAL_EDGE_TYPES,
+}
 
 
 @dataclass(frozen=True)
@@ -195,6 +234,8 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "graph_loader_status": "available",
             "scope_status": "available",
             "impact_status": "available",
+            "impact_default_profile": "impact",
+            "impact_profiles": sorted(IMPACT_PROFILES),
             "unresolved_report_status": "available",
             "ui_status": "available",
         },
@@ -581,13 +622,17 @@ def impact_response(
     edge_type: str | None,
     depth: int,
     limit: int,
+    profile: str = "impact",
 ) -> dict[str, Any]:
+    normalized_profile = normalize_impact_profile(profile)
+    allowed_edge_types = impact_profile_edge_types(normalized_profile, edge_type)
     entity = entity_response(settings, entity_id)
     items = get_entity_neighbors(
         settings.neo4j_settings(),
         entity_id,
         direction=direction,
         edge_type=edge_type,
+        allowed_edge_types=allowed_edge_types,
         depth=depth,
         limit=limit,
     )
@@ -598,11 +643,26 @@ def impact_response(
         "direction": direction,
         "depth": depth,
         "edge_type": edge_type,
+        "profile": normalized_profile,
+        "allowed_edge_types": sorted(allowed_edge_types) if allowed_edge_types else None,
         "items": items,
         "count": len(items),
         "affected_source_count": len(affected_sources),
         "affected_sources": affected_sources,
     }
+
+
+def normalize_impact_profile(value: str) -> str:
+    profile = value.strip().lower()
+    if profile not in IMPACT_PROFILES:
+        raise ValueError("Impact profile must be one of: all, impact, structural.")
+    return profile
+
+
+def impact_profile_edge_types(profile: str, edge_type: str | None) -> frozenset[str] | None:
+    if edge_type:
+        return None
+    return IMPACT_PROFILES[profile]
 
 
 def impact_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -918,10 +978,11 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
         direction: str = "in",
         depth: int = Query(default=2, ge=1, le=3),
         edge_type: str | None = Query(default=None, alias="type"),
+        profile: str = "impact",
         limit: int = Query(default=100, ge=1, le=200),
     ) -> dict[str, Any]:
         try:
-            return impact_response(runtime_settings, entity_id, direction, edge_type, depth, limit)
+            return impact_response(runtime_settings, entity_id, direction, edge_type, depth, limit, profile)
         except Exception as exc:
             raise neo4j_http_exception("impact lookup", exc) from exc
 

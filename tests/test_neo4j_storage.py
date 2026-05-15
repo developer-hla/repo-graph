@@ -16,8 +16,10 @@ from repo_graph.storage.neo4j import (
     neighbor_payload,
     normalize_depth,
     normalize_direction,
+    normalize_edge_types,
     normalize_limit,
     normalize_source_names,
+    outgoing_neighbors_query,
     prepare_graph_records,
     sanitize_relationship_type,
     scope_payload,
@@ -252,6 +254,17 @@ class Neo4jStorageTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             normalize_depth(4)
+
+    def test_normalize_edge_types_dedupes_and_ignores_blanks(self) -> None:
+        self.assertEqual(normalize_edge_types([" CALLS_SQL ", "", "IMPORTS", "CALLS_SQL"]), ["CALLS_SQL", "IMPORTS"])
+        self.assertIsNone(normalize_edge_types(None))
+        self.assertIsNone(normalize_edge_types(["", " "]))
+
+    def test_neighbor_query_supports_allowed_edge_type_filter(self) -> None:
+        query = outgoing_neighbors_query(2)
+
+        self.assertIn("edge.edge_type IN $edge_types", query)
+        self.assertIn("[*1..2]", query)
 
     def test_prepare_graph_records_shapes_all_load_records(self) -> None:
         graph_data = {

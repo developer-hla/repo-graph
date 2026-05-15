@@ -197,6 +197,11 @@ It should start with pages for source readiness, build/load jobs, graph scope,
 entity search, entity neighbors, impact queries, and unresolved reports rather
 than a single large graph visualization.
 
+Impact queries should default to dependency and usage edges so refactor
+blast-radius results are not dominated by containment or declaration paths.
+Agents can request `profile=all` for raw graph traversal or
+`profile=structural` for containment and declaration paths.
+
 ## CLI MVP
 
 ```bash

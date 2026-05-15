@@ -60,6 +60,7 @@ const state = {
   impact: {
     entityId: "",
     direction: "in",
+    profile: "impact",
     type: "",
     depth: 2,
     limit: 100,
@@ -272,6 +273,14 @@ async function renderImpact() {
           </select>
         </label>
         <label class="field">
+          <span>Profile</span>
+          <select name="profile">
+            ${option("impact", "Dependency impact", state.impact.profile)}
+            ${option("all", "All graph paths", state.impact.profile)}
+            ${option("structural", "Structural paths", state.impact.profile)}
+          </select>
+        </label>
+        <label class="field">
           <span>Edge Type</span>
           <input name="type" value="${escapeAttr(state.impact.type)}" placeholder="CALLS_SQL" />
         </label>
@@ -324,6 +333,7 @@ async function runImpact() {
   }
   const params = new URLSearchParams();
   params.set("direction", state.impact.direction);
+  params.set("profile", state.impact.profile);
   if (state.impact.type) params.set("type", state.impact.type);
   params.set("depth", String(state.impact.depth));
   params.set("limit", String(state.impact.limit));
@@ -471,6 +481,7 @@ function handleDocumentSubmit(event) {
     state.impact = {
       entityId: stringField(data, "entityId"),
       direction: stringField(data, "direction") || "in",
+      profile: stringField(data, "profile") || "impact",
       type: stringField(data, "type"),
       depth: numberField(data, "depth", 2),
       limit: numberField(data, "limit", 100),
@@ -687,7 +698,7 @@ function impactMarkup(payload) {
     <div class="grid three">
       ${metric("Affected Sources", numberValue(payload.affected_source_count), "grouped by source", true)}
       ${metric("Paths", numberValue(payload.count), "returned paths", true)}
-      ${metric("Depth", numberValue(payload.depth), payload.direction || "", true)}
+      ${metric("Depth", numberValue(payload.depth), `${payload.direction || ""} / ${payload.profile || ""}`, true)}
     </div>
     ${panel("Start Entity", keyValueTable(entityRows(entity)))}
     ${panel("Affected Sources", affectedSourcesTable(payload.affected_sources || []))}

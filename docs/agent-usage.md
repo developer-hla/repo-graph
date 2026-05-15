@@ -333,7 +333,13 @@ curl "http://localhost:8000/entities/<entity_id>/impact"
 
 Impact defaults to incoming relationships at depth `2`, which answers "what
 appears to depend on this entity?" Use `direction=out` to ask what the entity
-touches, and use `type` to restrict the traversal to one edge type:
+touches. The default `profile=impact` follows dependency and usage edges such
+as imports, package/project dependencies, service calls, HTTP calls, and SQL
+references. It excludes structural graph edges like `CONTAINS_FILE` and
+`DEFINES` so blast-radius results do not get padded with repository/file
+containment paths.
+
+Use `type` to restrict the traversal to one edge type:
 
 ```bash
 curl "http://localhost:8000/entities/<entity_id>/impact?direction=in&depth=3"
@@ -341,9 +347,28 @@ curl "http://localhost:8000/entities/<entity_id>/impact?direction=out&type=CALLS
 curl "http://localhost:8000/entities/<entity_id>/impact?direction=in&type=CALLS_HTTP"
 ```
 
+Use profiles when you need a different view of the same entity:
+
+```bash
+curl "http://localhost:8000/entities/<entity_id>/impact?profile=all"
+curl "http://localhost:8000/entities/<entity_id>/impact?profile=structural"
+```
+
+Profiles:
+
+- `impact`: dependency and usage edges; this is the default for blast radius.
+- `all`: all graph paths, including containment and declaration edges.
+- `structural`: containment and declaration edges only.
+
+When `type` is provided, it is treated as an explicit edge request and is not
+limited by the selected profile.
+
 Useful response fields:
 
 - `entity`: the root entity being investigated
+- `profile`: selected impact profile
+- `allowed_edge_types`: edge types used by the selected profile, or null when
+  `profile=all` or `type` is provided
 - `items`: bounded neighbor/path examples
 - `affected_sources`: groups by source name with count, minimum depth, entity
   types, edge types, and examples

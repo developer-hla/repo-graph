@@ -255,6 +255,7 @@ def get_entity_neighbors(
     entity_id: str,
     direction: str = "both",
     edge_type: str | None = None,
+    allowed_edge_types: Iterable[str] | None = None,
     depth: int = 1,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
@@ -264,6 +265,7 @@ def get_entity_neighbors(
     params = {
         "entity_id": entity_id,
         "edge_type": optional_filter(edge_type),
+        "edge_types": normalize_edge_types(allowed_edge_types),
         "limit": normalized_limit,
     }
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
@@ -312,7 +314,8 @@ def outgoing_neighbors_query(depth: int) -> str:
         MATCH path = (:RepoGraphEntity {{entity_id: $entity_id}})-[*1..{depth}]->(neighbor)
         WHERE all(edge IN relationships(path)
           WHERE edge.edge_id IS NOT NULL
-            AND ($edge_type IS NULL OR edge.edge_type = $edge_type))
+            AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
+            AND ($edge_types IS NULL OR edge.edge_type IN $edge_types))
         WITH path, last(relationships(path)) AS edge, neighbor
         RETURN
           edge,
@@ -332,7 +335,8 @@ def incoming_neighbors_query(depth: int) -> str:
         MATCH path = (neighbor)-[*1..{depth}]->(:RepoGraphEntity {{entity_id: $entity_id}})
         WHERE all(edge IN relationships(path)
           WHERE edge.edge_id IS NOT NULL
-            AND ($edge_type IS NULL OR edge.edge_type = $edge_type))
+            AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
+            AND ($edge_types IS NULL OR edge.edge_type IN $edge_types))
         WITH path, head(relationships(path)) AS edge, neighbor
         RETURN
           edge,
@@ -513,6 +517,13 @@ def normalize_depth(value: int) -> int:
     if value > 3:
         raise ValueError("Depth must be at most 3.")
     return value
+
+
+def normalize_edge_types(values: Iterable[str] | None) -> list[str] | None:
+    if values is None:
+        return None
+    edge_types = sorted({value.strip() for value in values if value and value.strip()})
+    return edge_types or None
 
 
 def graph_items(graph_data: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:

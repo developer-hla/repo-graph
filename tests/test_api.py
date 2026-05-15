@@ -645,13 +645,52 @@ class ApiTests(unittest.TestCase):
             payload = impact_response(settings, "entity-1", "in", "CALLS_SQL", 2, 25)
 
         self.assertEqual(payload["entity"], entity)
+        self.assertEqual(payload["profile"], "impact")
+        self.assertIsNone(payload["allowed_edge_types"])
         self.assertEqual(payload["affected_source_count"], 2)
         self.assertEqual(payload["affected_sources"][0]["source_name"], "api-service")
         self.assertEqual(payload["affected_sources"][0]["edge_types"], ["CALLS_SQL"])
         neighbors.assert_called_once()
         self.assertEqual(neighbors.call_args.kwargs["direction"], "in")
         self.assertEqual(neighbors.call_args.kwargs["edge_type"], "CALLS_SQL")
+        self.assertIsNone(neighbors.call_args.kwargs["allowed_edge_types"])
         self.assertEqual(neighbors.call_args.kwargs["depth"], 2)
+
+    def test_impact_response_defaults_to_dependency_impact_edges(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+
+        with (
+            patch("repo_graph.api.entity_response", return_value={"entity_id": "entity-1"}),
+            patch("repo_graph.api.get_entity_neighbors", return_value=[]) as neighbors,
+        ):
+            payload = impact_response(settings, "entity-1", "in", None, 2, 25)
+
+        self.assertEqual(payload["profile"], "impact")
+        self.assertIn("CALLS_SQL", payload["allowed_edge_types"])
+        self.assertIn("IMPORTS", payload["allowed_edge_types"])
+        self.assertNotIn("CONTAINS_FILE", payload["allowed_edge_types"])
+        self.assertEqual(neighbors.call_args.kwargs["allowed_edge_types"], set(payload["allowed_edge_types"]))
+
+    def test_impact_response_supports_structural_profile(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+
+        with (
+            patch("repo_graph.api.entity_response", return_value={"entity_id": "entity-1"}),
+            patch("repo_graph.api.get_entity_neighbors", return_value=[]) as neighbors,
+        ):
+            payload = impact_response(settings, "entity-1", "in", None, 2, 25, "structural")
+
+        self.assertEqual(payload["profile"], "structural")
+        self.assertIn("CONTAINS_FILE", payload["allowed_edge_types"])
+        self.assertIn("DEFINES", payload["allowed_edge_types"])
+        self.assertNotIn("CALLS_SQL", payload["allowed_edge_types"])
+        self.assertEqual(neighbors.call_args.kwargs["allowed_edge_types"], set(payload["allowed_edge_types"]))
+
+    def test_impact_response_rejects_unknown_profile(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+
+        with self.assertRaises(ValueError):
+            impact_response(settings, "entity-1", "in", None, 2, 25, "unknown")
 
     def test_unresolved_edges_response_wraps_items(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
