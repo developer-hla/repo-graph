@@ -17,17 +17,11 @@
           </div>
         </div>
         <nav class="nav-list" aria-label="Main navigation">
-          <a href="#dashboard" data-route="dashboard">Dashboard</a>
-          <a href="#sources" data-route="sources">Sources</a>
-          <a href="#jobs" data-route="jobs">Jobs</a>
-          <a href="#scope" data-route="scope">Scope</a>
-          <a href="#explore" data-route="explore">Explore</a>
-          <a href="#source" data-route="source">Source</a>
-          <a href="#entity" data-route="entity">Entity</a>
-          <a href="#search" data-route="search">Entity Search</a>
-          <a href="#relationships" data-route="relationships">Relationships</a>
+          <a href="#overview" data-route="overview">Overview</a>
+          <a href="#search" data-route="search">Search</a>
           <a href="#impact" data-route="impact">Impact</a>
           <a href="#unresolved" data-route="unresolved">Unresolved</a>
+          <a href="#jobs" data-route="jobs">Jobs</a>
         </nav>
         <div class="sidebar-footer">
           <span>API</span>
@@ -38,12 +32,18 @@
       <main class="main">
         <header class="topbar">
           <div>
-            <h1 id="page-title">Dashboard</h1>
+            <h1 id="page-title">Overview</h1>
             <div class="page-meta" id="page-meta"></div>
           </div>
-          <button class="icon-button" id="refresh-button" type="button" title="Refresh" aria-label="Refresh">
-            &#8635;
-          </button>
+          <div class="topbar-actions">
+            <form class="global-search" data-form="global-search">
+              <input name="globalQuery" placeholder="Search entities" aria-label="Search entities" />
+              <button class="button secondary" type="submit">Search</button>
+            </form>
+            <button class="icon-button" id="refresh-button" type="button" title="Refresh" aria-label="Refresh">
+              &#8635;
+            </button>
+          </div>
         </header>
         <section class="view" id="app-view" aria-live="polite"></section>
       </main>

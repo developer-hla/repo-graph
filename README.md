@@ -93,10 +93,11 @@ curl http://localhost:8000/config
 curl http://localhost:8000/sources/configured
 ```
 
-The runtime exposes a navigable local UI plus health, manifest, config, source
-status, change preview, sync, build, refresh, load, job, unresolved report, and
-read-only graph endpoints. The manifest tells agents which API capabilities are
-available and which graph capabilities are still planned.
+The runtime exposes a navigable local UI organized around overview, search,
+impact, unresolved-reference review, and graph refresh jobs. Lower-level source,
+relationship, and entity evidence views are opened from those workflows. The
+manifest tells agents which API capabilities are available and which graph
+capabilities are still planned.
 
 Print a Markdown snippet for another repository's `AGENTS.md`:
 

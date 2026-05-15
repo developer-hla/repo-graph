@@ -203,9 +203,12 @@ Raw Cypher should stay unavailable until there is an explicit read-only mode
 and clear result limits.
 
 The first UI should be a navigable local control plane over these endpoints.
-It should start with pages for source readiness, build/load jobs, graph scope,
-entity search, entity neighbors, impact queries, and unresolved reports rather
-than a single large graph visualization.
+It should start with workflow pages for graph overview, entity search, impact
+analysis, unresolved-reference review, and refresh jobs. Source, entity,
+relationship, and snippet evidence views should remain available as contextual
+drilldowns rather than primary navigation items. Advanced filters should stay
+available, but the default surface should emphasize the question a user is
+trying to answer rather than every query parameter.
 
 Impact queries should default to dependency and usage edges so refactor
 blast-radius results are not dominated by containment or declaration paths.

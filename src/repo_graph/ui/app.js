@@ -1,48 +1,19 @@
 const routes = {
+  overview: {
+    title: "Overview",
+    meta: "Loaded graph, source health, and open risk",
+    render: renderOverview,
+  },
   dashboard: {
-    title: "Dashboard",
-    meta: "Runtime overview",
-    render: renderDashboard,
-  },
-  sources: {
-    title: "Sources",
-    meta: "Configured, loaded, and changed repositories",
-    render: renderSources,
-  },
-  jobs: {
-    title: "Jobs",
-    meta: "Sync, build, and load operations",
-    render: renderJobs,
-  },
-  scope: {
-    title: "Scope",
-    meta: "Loaded graph scope",
-    render: renderScope,
-  },
-  explore: {
-    title: "Explore",
-    meta: "Understand graph shape and drill into evidence",
-    render: renderExplore,
-  },
-  source: {
-    title: "Source",
-    meta: "Inspect one repository's surface and dependencies",
-    render: renderSource,
-  },
-  entity: {
-    title: "Entity",
-    meta: "Inspect one graph entity and its direct relationships",
-    render: renderEntity,
+    title: "Overview",
+    meta: "Loaded graph, source health, and open risk",
+    render: renderOverview,
+    navRoute: "overview",
   },
   search: {
-    title: "Entity Search",
-    meta: "Find graph entities",
+    title: "Search",
+    meta: "Find graph entities and open their evidence",
     render: renderSearch,
-  },
-  relationships: {
-    title: "Relationships",
-    meta: "Find edge evidence between sources and entity types",
-    render: renderRelationships,
   },
   impact: {
     title: "Impact",
@@ -51,8 +22,49 @@ const routes = {
   },
   unresolved: {
     title: "Unresolved",
-    meta: "Grouped unresolved references",
+    meta: "Find missing sources, parser gaps, and ambiguous targets",
     render: renderUnresolved,
+  },
+  jobs: {
+    title: "Jobs",
+    meta: "Sync, build, and refresh operations",
+    render: renderJobs,
+  },
+  sources: {
+    title: "Sources",
+    meta: "Configured, loaded, and changed repositories",
+    render: renderSources,
+    navRoute: "overview",
+  },
+  scope: {
+    title: "Scope",
+    meta: "Loaded graph scope",
+    render: renderScope,
+    navRoute: "overview",
+  },
+  explore: {
+    title: "Explore",
+    meta: "Understand graph shape and drill into evidence",
+    render: renderExplore,
+    navRoute: "overview",
+  },
+  source: {
+    title: "Source",
+    meta: "Inspect one repository's surface and dependencies",
+    render: renderSource,
+    navRoute: "overview",
+  },
+  entity: {
+    title: "Entity",
+    meta: "Inspect one graph entity and its direct relationships",
+    render: renderEntity,
+    navRoute: "search",
+  },
+  relationships: {
+    title: "Relationships",
+    meta: "Find edge evidence between sources and entity types",
+    render: renderRelationships,
+    navRoute: "search",
   },
 };
 
@@ -64,7 +76,7 @@ const refreshButton = document.querySelector("#refresh-button");
 const apiBase = document.querySelector("#api-base");
 
 const state = {
-  currentRoute: "dashboard",
+  currentRoute: "overview",
   search: {
     q: "",
     type: "",
@@ -126,15 +138,16 @@ renderRoute();
 
 function activeRoute() {
   const hash = window.location.hash.replace(/^#/, "");
-  return routes[hash] ? hash : "dashboard";
+  return routes[hash] ? hash : "overview";
 }
 
 function renderRoute() {
   const routeName = activeRoute();
   state.currentRoute = routeName;
   const route = routes[routeName];
+  const navRoute = route.navRoute || routeName;
   document.querySelectorAll("[data-route]").forEach((link) => {
-    link.classList.toggle("active", link.dataset.route === routeName);
+    link.classList.toggle("active", link.dataset.route === navRoute);
   });
   title.textContent = route.title;
   pageMeta.textContent = route.meta;
@@ -155,16 +168,19 @@ async function checkRuntime() {
   }
 }
 
-async function renderDashboard() {
-  const [health, manifest, scope, stats] = await Promise.all([
+async function renderOverview() {
+  const [health, manifest, scope, stats, overview, unresolved] = await Promise.all([
     fetchMaybe("/health"),
     fetchMaybe("/manifest"),
     fetchMaybe("/scope"),
     fetchMaybe("/stats"),
+    fetchMaybe(`/explore?limit=${state.explore.limit}`),
+    fetchMaybe("/reports/unresolved?limit=8&examples=1"),
   ]);
   const scopeData = scope.data || {};
   const summary = scopeData.summary || {};
   const statsData = stats.data || {};
+  const overviewData = overview.data || {};
   view.innerHTML = `
     <div class="grid three">
       ${metric("Runtime", health.ok ? "ok" : "error", health.ok ? health.data.version : health.error, health.ok)}
@@ -174,11 +190,24 @@ async function renderDashboard() {
       ${metric("Edges", numberValue(summary.edge_count || statsData.edge_count), "graph relationships", stats.ok)}
       ${metric("Unresolved", numberValue(summary.unresolved_edge_count || statsData.unresolved_edge_count), "unresolved edges", stats.ok)}
     </div>
+    ${panel("Start Here", workflowStarters())}
     <div class="grid two">
-      ${panel("Runtime", keyValueTable(runtimeRows(health, manifest)))}
-      ${panel("Graph Store", keyValueTable(storeRows(manifest, stats)))}
+      ${panel("Source Activity", overview.ok ? sourceActivityTable(overviewData.sources || []) : errorMarkup(overview.error))}
+      ${panel("Needs Attention", unresolved.ok ? unresolvedHotspotsTable(unresolved.data.items || []) : errorMarkup(unresolved.error))}
     </div>
+    ${panel("Change Preview", snapshotStatusPanel())}
+    ${advancedPanel(
+      "Advanced runtime details",
+      `<div class="grid two">
+        ${panel("Runtime", keyValueTable(runtimeRows(health, manifest)))}
+        ${panel("Graph Store", keyValueTable(storeRows(manifest, stats)))}
+      </div>`
+    )}
   `;
+}
+
+async function renderDashboard() {
+  await renderOverview();
 }
 
 async function renderSources() {
@@ -286,25 +315,37 @@ async function renderSource() {
 async function renderSearch() {
   view.innerHTML = `
     ${panel(
-      "Search",
-      `<form class="toolbar" data-form="search">
-        <label class="field">
-          <span>Query</span>
-          <input name="q" value="${escapeAttr(state.search.q)}" />
-        </label>
-        <label class="field">
-          <span>Type</span>
-          <input name="type" value="${escapeAttr(state.search.type)}" placeholder="api_route" />
-        </label>
-        <label class="field">
-          <span>Source</span>
-          <input name="source" value="${escapeAttr(state.search.source)}" />
-        </label>
-        <label class="field small">
-          <span>Limit</span>
-          <input name="limit" type="number" min="1" max="100" value="${state.search.limit}" />
-        </label>
-        <button class="button" type="submit">Search</button>
+      "Find Something",
+      `<form class="stack" data-form="search">
+        <div class="query-row">
+          <label class="field query-field">
+            <span>Search</span>
+            <input name="q" value="${escapeAttr(state.search.q)}" placeholder="route, table, service, symbol" />
+          </label>
+          <button class="button" type="submit">Search</button>
+        </div>
+        <div class="quick-actions">
+          <button class="button secondary" type="button" data-search-type="api_route">API Routes</button>
+          <button class="button secondary" type="button" data-search-type="stored_procedure">Stored Procedures</button>
+          <button class="button secondary" type="button" data-search-type="sql_table">SQL Tables</button>
+          <button class="button secondary" type="button" data-route-link="unresolved">Unresolved</button>
+        </div>
+        ${advancedControls(
+          `<div class="toolbar">
+            <label class="field">
+              <span>Type</span>
+              <input name="type" value="${escapeAttr(state.search.type)}" placeholder="api_route" />
+            </label>
+            <label class="field">
+              <span>Source</span>
+              <input name="source" value="${escapeAttr(state.search.source)}" />
+            </label>
+            <label class="field small">
+              <span>Limit</span>
+              <input name="limit" type="number" min="1" max="100" value="${state.search.limit}" />
+            </label>
+          </div>`
+        )}
       </form>`
     )}
     <div id="search-results"></div>
@@ -337,7 +378,7 @@ async function renderEntity() {
 
 async function renderRelationships() {
   view.innerHTML = `
-    ${panel("Filters", relationshipsForm())}
+    ${panel("Relationship Evidence", relationshipsForm())}
     <div id="relationship-results">${loadingMarkup()}</div>
     <div id="snippet-results"></div>
   `;
@@ -347,25 +388,34 @@ async function renderRelationships() {
 async function renderUnresolved() {
   view.innerHTML = `
     ${panel(
-      "Filters",
-      `<form class="toolbar" data-form="unresolved">
-        <label class="field">
-          <span>Source</span>
-          <input name="source" value="${escapeAttr(state.unresolved.source)}" />
-        </label>
-        <label class="field">
-          <span>Edge Type</span>
-          <input name="type" value="${escapeAttr(state.unresolved.type)}" placeholder="CALLS_SQL" />
-        </label>
-        <label class="field small">
-          <span>Limit</span>
-          <input name="limit" type="number" min="1" max="200" value="${state.unresolved.limit}" />
-        </label>
-        <label class="field small">
-          <span>Examples</span>
-          <input name="examples" type="number" min="1" max="10" value="${state.unresolved.examples}" />
-        </label>
-        <button class="button" type="submit">Apply</button>
+      "Needs Attention",
+      `<form class="stack" data-form="unresolved">
+        <div class="quick-actions">
+          <button class="button secondary" type="button" data-unresolved-type="CALLS_SERVICE">Service Calls</button>
+          <button class="button secondary" type="button" data-unresolved-type="CALLS_SQL">SQL Calls</button>
+          <button class="button secondary" type="button" data-unresolved-type="IMPORTS">Imports</button>
+          <button class="button secondary" type="submit">Refresh</button>
+        </div>
+        ${advancedControls(
+          `<div class="toolbar">
+            <label class="field">
+              <span>Source</span>
+              <input name="source" value="${escapeAttr(state.unresolved.source)}" />
+            </label>
+            <label class="field">
+              <span>Edge Type</span>
+              <input name="type" value="${escapeAttr(state.unresolved.type)}" placeholder="CALLS_SQL" />
+            </label>
+            <label class="field small">
+              <span>Limit</span>
+              <input name="limit" type="number" min="1" max="200" value="${state.unresolved.limit}" />
+            </label>
+            <label class="field small">
+              <span>Examples</span>
+              <input name="examples" type="number" min="1" max="10" value="${state.unresolved.examples}" />
+            </label>
+          </div>`
+        )}
       </form>`
     )}
     <div id="unresolved-results">${loadingMarkup()}</div>
@@ -376,41 +426,52 @@ async function renderUnresolved() {
 async function renderImpact() {
   view.innerHTML = `
     ${panel(
-      "Impact Query",
-      `<form class="toolbar" data-form="impact">
-        <label class="field wide">
-          <span>Entity ID</span>
-          <input name="entityId" value="${escapeAttr(state.impact.entityId)}" />
-        </label>
-        <label class="field small">
-          <span>Direction</span>
-          <select name="direction">
-            ${option("in", "Incoming", state.impact.direction)}
-            ${option("out", "Outgoing", state.impact.direction)}
-            ${option("both", "Both", state.impact.direction)}
-          </select>
-        </label>
-        <label class="field">
-          <span>Profile</span>
-          <select name="profile">
-            ${option("impact", "Dependency impact", state.impact.profile)}
-            ${option("all", "All graph paths", state.impact.profile)}
-            ${option("structural", "Structural paths", state.impact.profile)}
-          </select>
-        </label>
-        <label class="field">
-          <span>Edge Type</span>
-          <input name="type" value="${escapeAttr(state.impact.type)}" placeholder="CALLS_SQL" />
-        </label>
-        <label class="field small">
-          <span>Depth</span>
-          <input name="depth" type="number" min="1" max="3" value="${state.impact.depth}" />
-        </label>
-        <label class="field small">
-          <span>Limit</span>
-          <input name="limit" type="number" min="1" max="200" value="${state.impact.limit}" />
-        </label>
-        <button class="button" type="submit">Run</button>
+      "Blast Radius",
+      `<form class="stack" data-form="impact">
+        <div class="query-row">
+          <label class="field query-field">
+            <span>Entity ID</span>
+            <input name="entityId" value="${escapeAttr(state.impact.entityId)}" />
+          </label>
+          <button class="button" type="submit">Run Impact</button>
+        </div>
+        <div class="quick-actions">
+          <button class="button secondary" type="button" data-impact-direction="in">Show Callers</button>
+          <button class="button secondary" type="button" data-impact-direction="out">Show Dependencies</button>
+          <button class="button secondary" type="button" data-impact-direction="both">Show Both</button>
+        </div>
+        ${advancedControls(
+          `<div class="toolbar">
+            <label class="field small">
+              <span>Direction</span>
+              <select name="direction">
+                ${option("in", "Incoming", state.impact.direction)}
+                ${option("out", "Outgoing", state.impact.direction)}
+                ${option("both", "Both", state.impact.direction)}
+              </select>
+            </label>
+            <label class="field">
+              <span>Profile</span>
+              <select name="profile">
+                ${option("impact", "Dependency impact", state.impact.profile)}
+                ${option("all", "All graph paths", state.impact.profile)}
+                ${option("structural", "Structural paths", state.impact.profile)}
+              </select>
+            </label>
+            <label class="field">
+              <span>Edge Type</span>
+              <input name="type" value="${escapeAttr(state.impact.type)}" placeholder="CALLS_SQL" />
+            </label>
+            <label class="field small">
+              <span>Depth</span>
+              <input name="depth" type="number" min="1" max="3" value="${state.impact.depth}" />
+            </label>
+            <label class="field small">
+              <span>Limit</span>
+              <input name="limit" type="number" min="1" max="200" value="${state.impact.limit}" />
+            </label>
+          </div>`
+        )}
       </form>`
     )}
     <div id="impact-results">${state.impact.entityId ? loadingMarkup() : emptyMarkup("Open an entity from search or paste an entity ID.")}</div>
@@ -677,6 +738,20 @@ function handleDocumentClick(event) {
   if (snapshotButton) {
     checkSnapshotStatus();
   }
+  const impactDirectionButton = event.target.closest("[data-impact-direction]");
+  if (impactDirectionButton) {
+    state.impact.direction = impactDirectionButton.dataset.impactDirection || "in";
+    const directionSelect = document.querySelector('form[data-form="impact"] select[name="direction"]');
+    if (directionSelect) {
+      directionSelect.value = state.impact.direction;
+    }
+    if (state.currentRoute === "impact" && state.impact.entityId) {
+      runImpact().catch((error) => {
+        document.querySelector("#impact-results").innerHTML = errorMarkup(error);
+      });
+    }
+    return;
+  }
   const impactButton = event.target.closest("[data-impact-id]");
   if (impactButton) {
     state.impact.entityId = impactButton.dataset.impactId;
@@ -711,6 +786,16 @@ function handleDocumentSubmit(event) {
   if (!form) return;
   event.preventDefault();
   const data = new FormData(form);
+  if (form.dataset.form === "global-search") {
+    state.search = {
+      q: stringField(data, "globalQuery"),
+      type: "",
+      source: "",
+      limit: 25,
+    };
+    navigateToRoute("search");
+    return;
+  }
   if (form.dataset.form === "search") {
     state.search = {
       q: stringField(data, "q"),
@@ -897,12 +982,43 @@ function exploreStarters() {
   `;
 }
 
+function workflowStarters() {
+  return `
+    <div class="action-grid">
+      ${actionButton("Find Something", "Search routes, data objects, packages, and symbols", "data-route-link", "search")}
+      ${actionButton("Review Impact", "Trace callers and dependencies from a known entity", "data-route-link", "impact")}
+      ${actionButton("Needs Attention", "Group unresolved references by likely cause", "data-route-link", "unresolved")}
+      ${actionButton("Refresh Graph", "Sync sources and update loaded graph data", "data-route-link", "jobs")}
+      ${actionButton("Source Map", "Open source-level ownership and dependency summaries", "data-route-link", "explore")}
+      ${actionButton("API Routes", "Start with declared HTTP routes", "data-search-type", "api_route")}
+    </div>
+  `;
+}
+
 function actionButton(label, note, dataAttr, value) {
   return `
     <button class="action-button" type="button" ${dataAttr}="${escapeAttr(value)}">
       <span>${escapeHtml(label)}</span>
       <small>${escapeHtml(note)}</small>
     </button>
+  `;
+}
+
+function advancedPanel(label, body) {
+  return `
+    <details class="advanced-panel">
+      <summary>${escapeHtml(label)}</summary>
+      <div class="advanced-body">${body}</div>
+    </details>
+  `;
+}
+
+function advancedControls(body) {
+  return `
+    <details class="advanced-controls">
+      <summary>Advanced</summary>
+      <div class="advanced-body">${body}</div>
+    </details>
   `;
 }
 
