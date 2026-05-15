@@ -131,6 +131,7 @@ relationships derived from graph edge types.
 - `GET /stats`
 - `GET /scope`
 - `GET /sources`
+- `GET /explore`
 - `GET /entities/search`
 - `GET /entities/neighbors`
 - `GET /manifest`
@@ -181,6 +182,7 @@ The configured source API should expose source readiness before graph load:
 
 The first public query surface should use purpose-built read endpoints:
 
+- `GET /explore`
 - `GET /entities/search`
 - `GET /entities/{entity_id}`
 - `GET /entities/{entity_id}/neighbors`

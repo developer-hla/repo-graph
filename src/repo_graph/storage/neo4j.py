@@ -177,6 +177,153 @@ def read_graph_stats(settings: Neo4jSettings) -> dict[str, Any]:
     return dict(record)
 
 
+def read_graph_overview(settings: Neo4jSettings, limit: int = 50) -> dict[str, Any]:
+    normalized_limit = normalize_limit(limit, maximum=200)
+    scope = read_graph_scope(settings)
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            entity_type_records = [
+                dict(record) for record in session.run(entity_type_counts_query(), limit=normalized_limit)
+            ]
+            edge_type_records = [
+                dict(record) for record in session.run(edge_type_counts_query(), limit=normalized_limit)
+            ]
+            source_records = source_activity_records(session, normalized_limit)
+            cross_source_records = [
+                dict(record) for record in session.run(cross_source_edges_query(), limit=normalized_limit)
+            ]
+    return {
+        "loaded": bool(scope.get("loaded")),
+        "scope_name": scope.get("scope_name"),
+        "generated_at": scope.get("generated_at"),
+        "summary": scope.get("summary", {}),
+        "source_count": scope.get("source_count", 0),
+        "entity_types": entity_type_records,
+        "edge_types": edge_type_records,
+        "sources": source_records,
+        "cross_source_edges": cross_source_records,
+    }
+
+
+def entity_type_counts_query() -> str:
+    return """
+        MATCH (entity:RepoGraphEntity)
+        RETURN
+          coalesce(entity.entity_type, "unknown") AS entity_type,
+          count(entity) AS entity_count
+        ORDER BY entity_count DESC, entity_type
+        LIMIT $limit
+    """
+
+
+def edge_type_counts_query() -> str:
+    return """
+        MATCH ()-[edge]->()
+        WHERE edge.edge_id IS NOT NULL
+        RETURN
+          coalesce(edge.edge_type, "unknown") AS edge_type,
+          count(edge) AS edge_count,
+          sum(CASE WHEN coalesce(edge.resolved, false) THEN 1 ELSE 0 END) AS resolved_edge_count,
+          sum(CASE WHEN coalesce(edge.resolved, false) THEN 0 ELSE 1 END) AS unresolved_edge_count
+        ORDER BY edge_count DESC, edge_type
+        LIMIT $limit
+    """
+
+
+def source_activity_records(session: Any, limit: int) -> list[dict[str, Any]]:
+    sources = [dict(record) for record in session.run(source_metadata_query())]
+    entity_counts = [dict(record) for record in session.run(source_entity_counts_query())]
+    edge_counts = [dict(record) for record in session.run(source_edge_counts_query())]
+    return merge_source_activity(sources, entity_counts, edge_counts, limit)
+
+
+def source_metadata_query() -> str:
+    return """
+        MATCH (source:RepoGraphSource)
+        RETURN
+          source.name AS source_name,
+          coalesce(source.type, "") AS source_type,
+          coalesce(source.ref, "") AS ref,
+          coalesce(source.commit, "") AS commit
+        ORDER BY source.index, source.name
+    """
+
+
+def source_entity_counts_query() -> str:
+    return """
+        MATCH (entity:RepoGraphEntity)
+        WHERE coalesce(entity.source_name, "") <> ""
+        RETURN
+          entity.source_name AS source_name,
+          count(entity) AS entity_count
+    """
+
+
+def source_edge_counts_query() -> str:
+    return """
+        MATCH ()-[edge]->()
+        WHERE edge.edge_id IS NOT NULL
+          AND coalesce(edge.source_name, "") <> ""
+        RETURN
+          edge.source_name AS source_name,
+          count(edge) AS edge_count,
+          sum(CASE WHEN coalesce(edge.resolved, false) THEN 0 ELSE 1 END) AS unresolved_edge_count
+    """
+
+
+def cross_source_edges_query() -> str:
+    return """
+        MATCH ()-[edge]->(to:RepoGraphEntity)
+        WHERE edge.edge_id IS NOT NULL
+          AND coalesce(edge.resolved, false) = true
+          AND coalesce(edge.source_name, "") <> ""
+          AND coalesce(to.source_name, "") <> ""
+          AND edge.source_name <> to.source_name
+        RETURN
+          edge.source_name AS from_source,
+          to.source_name AS to_source,
+          coalesce(edge.edge_type, "unknown") AS edge_type,
+          count(edge) AS edge_count
+        ORDER BY edge_count DESC, from_source, to_source, edge_type
+        LIMIT $limit
+    """
+
+
+def merge_source_activity(
+    sources: Iterable[Mapping[str, Any]],
+    entity_counts: Iterable[Mapping[str, Any]],
+    edge_counts: Iterable[Mapping[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    items = {
+        str(source.get("source_name")): {
+            "source_name": source.get("source_name"),
+            "source_type": source.get("source_type"),
+            "ref": source.get("ref"),
+            "commit": source.get("commit"),
+            "entity_count": 0,
+            "edge_count": 0,
+            "unresolved_edge_count": 0,
+        }
+        for source in sources
+        if source.get("source_name")
+    }
+    for item in entity_counts:
+        source_name = item.get("source_name")
+        if source_name in items:
+            items[source_name]["entity_count"] = item.get("entity_count", 0)
+    for item in edge_counts:
+        source_name = item.get("source_name")
+        if source_name in items:
+            items[source_name]["edge_count"] = item.get("edge_count", 0)
+            items[source_name]["unresolved_edge_count"] = item.get("unresolved_edge_count", 0)
+    return sorted(
+        items.values(),
+        key=lambda item: (-int(item["edge_count"]), -int(item["entity_count"]), str(item["source_name"])),
+    )[:limit]
+
+
 def read_graph_scope(settings: Neo4jSettings) -> dict[str, Any]:
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()

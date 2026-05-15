@@ -258,6 +258,28 @@ Useful source fields:
 - `ref`
 - `commit`
 
+## Explore The Graph
+
+Use Explore before starting broad architecture work:
+
+```bash
+curl "http://localhost:8000/explore"
+```
+
+The response gives bounded aggregate views that are easier to scan than raw
+graph paths:
+
+- `entity_types`: entity type counts with common starting points such as
+  routes, SQL objects, files, services, and packages.
+- `edge_types`: relationship type counts, including resolved and unresolved
+  counts.
+- `sources`: per-source entity, edge, and unresolved edge counts.
+- `cross_source_edges`: resolved relationships where the source and target
+  entity live in different loaded sources.
+
+Use this endpoint to choose a source, entity type, edge type, or unresolved
+hotspot before drilling into Search, Impact, or Unresolved.
+
 ## Search Entities
 
 Find entities by name, file path, ID, alias, or full name:

@@ -252,6 +252,7 @@ Read-only query endpoints are available for agents and local tools:
 ```bash
 curl "http://localhost:8000/scope"
 curl "http://localhost:8000/sources"
+curl "http://localhost:8000/explore"
 curl "http://localhost:8000/entities/search?type=api_route"
 curl "http://localhost:8000/entities/<entity_id>/neighbors"
 curl "http://localhost:8000/entities/<entity_id>/impact?direction=in&depth=2"

@@ -24,6 +24,7 @@ from repo_graph.api import (
     configured_sources_response,
     create_app,
     entity_response,
+    explore_response,
     health_payload,
     impact_response,
     job_response,
@@ -93,6 +94,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "GET", "path": "/scope", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/sources", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/stats", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/explore", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/{entity_id}", "available": True}, payload["endpoints"])
         self.assertIn(
@@ -135,6 +137,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/scope", route_paths)
         self.assertIn("/sources", route_paths)
         self.assertIn("/stats", route_paths)
+        self.assertIn("/explore", route_paths)
         self.assertIn("/entities/search", route_paths)
         self.assertIn("/entities/{entity_id}", route_paths)
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
@@ -151,8 +154,11 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(shell.status_code, 200)
         self.assertIn("Repo Graph", shell.text)
+        self.assertIn("#explore", shell.text)
         self.assertEqual(script.status_code, 200)
         self.assertIn("renderDashboard", script.text)
+        self.assertIn("renderExplore", script.text)
+        self.assertIn("data-search-type", script.text)
         self.assertIn('data-snapshot-action="status"', script.text)
         self.assertIn("/snapshot/status", script.text)
         self.assertIn('data-job-action="refresh"', script.text)
@@ -160,6 +166,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("pollJob", script.text)
         self.assertEqual(styles.status_code, 200)
         self.assertIn(".app-shell", styles.text)
+        self.assertIn(".action-grid", styles.text)
         self.assertIn(".refresh-summary", styles.text)
 
     def test_ui_index_path_points_to_shell(self) -> None:
@@ -580,6 +587,16 @@ class ApiTests(unittest.TestCase):
         scope = {"loaded": True, "scope_name": "example", "sources": [{"name": "api-service"}]}
         with patch("repo_graph.api.read_graph_scope", return_value=scope):
             self.assertEqual(scope_response(settings), scope)
+
+    def test_explore_response_returns_graph_overview(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        overview = {"loaded": True, "entity_types": [{"entity_type": "api_route", "entity_count": 3}]}
+
+        with patch("repo_graph.api.read_graph_overview", return_value=overview) as read_overview:
+            self.assertEqual(explore_response(settings, 25), overview)
+
+        read_overview.assert_called_once()
+        self.assertEqual(read_overview.call_args.kwargs["limit"], 25)
 
     def test_sources_response_wraps_scope_sources(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

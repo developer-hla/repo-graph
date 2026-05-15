@@ -5,12 +5,15 @@ from __future__ import annotations
 import unittest
 
 from repo_graph.storage.neo4j import (
+    cross_source_edges_query,
     delete_current_edges_tx,
     delete_source_data_tx,
     edge_payload,
     edge_record,
+    edge_type_counts_query,
     entity_payload,
     entity_record,
+    entity_type_counts_query,
     graph_node_payload,
     load_summary,
     neighbor_payload,
@@ -23,6 +26,9 @@ from repo_graph.storage.neo4j import (
     prepare_graph_records,
     sanitize_relationship_type,
     scope_payload,
+    source_edge_counts_query,
+    source_entity_counts_query,
+    source_metadata_query,
     source_payload,
     source_record,
     target_payload,
@@ -265,6 +271,16 @@ class Neo4jStorageTests(unittest.TestCase):
 
         self.assertIn("edge.edge_type IN $edge_types", query)
         self.assertIn("[*1..2]", query)
+
+    def test_explore_count_queries_are_limited_and_grouped(self) -> None:
+        self.assertIn("entity.entity_type", entity_type_counts_query())
+        self.assertIn("LIMIT $limit", entity_type_counts_query())
+        self.assertIn("resolved_edge_count", edge_type_counts_query())
+        self.assertIn("unresolved_edge_count", edge_type_counts_query())
+        self.assertIn("source.name", source_metadata_query())
+        self.assertIn("entity.source_name", source_entity_counts_query())
+        self.assertIn("unresolved_edge_count", source_edge_counts_query())
+        self.assertIn("edge.source_name <> to.source_name", cross_source_edges_query())
 
     def test_prepare_graph_records_shapes_all_load_records(self) -> None:
         graph_data = {

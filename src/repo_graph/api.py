@@ -28,6 +28,7 @@ from repo_graph.storage.neo4j import (
     get_entity_neighbors,
     list_unresolved_edges,
     load_graph_path,
+    read_graph_overview,
     read_graph_scope,
     read_graph_stats,
     search_entities,
@@ -213,6 +214,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/scope", "available": True},
             {"method": "GET", "path": "/sources", "available": True},
             {"method": "GET", "path": "/stats", "available": True},
+            {"method": "GET", "path": "/explore", "available": True},
             {"method": "GET", "path": "/entities/search", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
@@ -233,6 +235,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
             "scope_status": "available",
+            "explore_status": "available",
             "impact_status": "available",
             "impact_default_profile": "impact",
             "impact_profiles": sorted(IMPACT_PROFILES),
@@ -581,6 +584,10 @@ def sources_response(settings: RuntimeSettings) -> dict[str, Any]:
         "scope_name": scope.get("scope_name"),
         "generated_at": scope.get("generated_at"),
     }
+
+
+def explore_response(settings: RuntimeSettings, limit: int) -> dict[str, Any]:
+    return read_graph_overview(settings.neo4j_settings(), limit=limit)
 
 
 def entity_response(settings: RuntimeSettings, entity_id: str) -> dict[str, Any]:
@@ -939,6 +946,15 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Neo4j source lookup failed: {exc}") from exc
+
+    @app.get("/explore")
+    def explore(limit: int = Query(default=50, ge=1, le=200)) -> dict[str, Any]:
+        try:
+            return explore_response(runtime_settings, limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Neo4j explore lookup failed: {exc}") from exc
 
     @app.get("/entities/search")
     def search_entities_endpoint(
