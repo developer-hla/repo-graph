@@ -300,6 +300,20 @@ The response shows:
 Use this before answering what a repository owns, what it depends on, what
 depends on it, or where its missing graph coverage is concentrated.
 
+## Inspect Source Snippets
+
+Use source snippets when relationship evidence includes a source name, file
+path, and line number:
+
+```bash
+curl "http://localhost:8000/sources/<source_name>/files/snippet?path=src/app.py&line=42&context=3"
+```
+
+The snippet endpoint reads local files only. The path must stay inside the
+configured or loaded source root, context is capped, and large files are
+rejected. Use this to quote or inspect the local code around an edge before
+making a refactor claim.
+
 ## Search Entities
 
 Find entities by name, file path, ID, alias, or full name:

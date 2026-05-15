@@ -442,6 +442,14 @@ tbody tr:hover {
   background: #f9fbfc;
 }
 
+.snippet-highlight {
+  background: #fff7ed;
+}
+
+.snippet-code {
+  white-space: pre;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;

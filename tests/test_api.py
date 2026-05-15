@@ -39,6 +39,7 @@ from repo_graph.api import (
     scope_response,
     search_entities_response,
     snapshot_status_response,
+    source_file_snippet_response,
     source_overview_response,
     sources_response,
     submit_build_job,
@@ -99,6 +100,10 @@ class ApiTests(unittest.TestCase):
         self.assertIn(
             {"method": "GET", "path": "/sources/{source_name}/overview", "available": True}, payload["endpoints"]
         )
+        self.assertIn(
+            {"method": "GET", "path": "/sources/{source_name}/files/snippet", "available": True},
+            payload["endpoints"],
+        )
         self.assertIn({"method": "GET", "path": "/stats", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/explore", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
@@ -148,6 +153,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/scope", route_paths)
         self.assertIn("/sources", route_paths)
         self.assertIn("/sources/{source_name}/overview", route_paths)
+        self.assertIn("/sources/{source_name}/files/snippet", route_paths)
         self.assertIn("/stats", route_paths)
         self.assertIn("/explore", route_paths)
         self.assertIn("/entities/search", route_paths)
@@ -181,7 +187,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn("data-source-name", script.text)
         self.assertIn("data-entity-source-type", script.text)
         self.assertIn("data-relationship-filter", script.text)
+        self.assertIn("data-snippet-source", script.text)
         self.assertIn("/relationships/search", script.text)
+        self.assertIn("/files/snippet", script.text)
         self.assertIn("/overview", script.text)
         self.assertIn("data-search-type", script.text)
         self.assertIn('data-snapshot-action="status"', script.text)
@@ -662,6 +670,63 @@ class ApiTests(unittest.TestCase):
 
         with patch("repo_graph.api.read_source_overview", return_value=None), self.assertRaises(KeyError):
             source_overview_response(settings, "missing", 10)
+
+    def test_source_file_snippet_response_reads_context_inside_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "service"
+            source_dir.mkdir()
+            (source_dir / "src").mkdir()
+            (source_dir / "src" / "app.py").write_text("one\ntwo\nthree\nfour\n", encoding="utf-8")
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(Source(name="service", source_type="local_path", path=source_dir),),
+            )
+
+            with patch("repo_graph.api.load_config", return_value=config):
+                payload = source_file_snippet_response(
+                    RuntimeSettings(config_path=config.config_path),
+                    "service",
+                    "src/app.py",
+                    line=3,
+                    context=1,
+                )
+
+        self.assertEqual(payload["source_name"], "service")
+        self.assertEqual(payload["file_path"], "src/app.py")
+        self.assertEqual(payload["start_line"], 2)
+        self.assertEqual(payload["end_line"], 4)
+        self.assertEqual([item["text"] for item in payload["lines"]], ["two", "three", "four"])
+        self.assertTrue(payload["lines"][1]["highlight"])
+
+    def test_source_file_snippet_response_blocks_path_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "service"
+            source_dir.mkdir()
+            (root / "secret.txt").write_text("secret\n", encoding="utf-8")
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(Source(name="service", source_type="local_path", path=source_dir),),
+            )
+
+            with (
+                patch("repo_graph.api.load_config", return_value=config),
+                self.assertRaisesRegex(ValueError, "escapes"),
+            ):
+                source_file_snippet_response(
+                    RuntimeSettings(config_path=config.config_path),
+                    "service",
+                    "../secret.txt",
+                    line=1,
+                    context=1,
+                )
 
     def test_sources_response_wraps_scope_sources(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

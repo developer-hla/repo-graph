@@ -105,6 +105,12 @@ const state = {
     resolved: "",
     limit: 100,
   },
+  snippet: {
+    source: "",
+    path: "",
+    line: 1,
+    context: 3,
+  },
   snapshotStatus: null,
 };
 
@@ -333,6 +339,7 @@ async function renderRelationships() {
   view.innerHTML = `
     ${panel("Filters", relationshipsForm())}
     <div id="relationship-results">${loadingMarkup()}</div>
+    <div id="snippet-results"></div>
   `;
   await runRelationshipSearch();
 }
@@ -451,6 +458,22 @@ async function runRelationshipSearch() {
   target.innerHTML = loadingMarkup();
   const result = await fetchMaybe(`/relationships/search?${params}`);
   target.innerHTML = result.ok ? relationshipSearchMarkup(result.data) : errorMarkup(result.error);
+}
+
+async function runSnippetLookup() {
+  const target = document.querySelector("#snippet-results");
+  if (!target) return;
+  if (!state.snippet.source || !state.snippet.path) {
+    target.innerHTML = "";
+    return;
+  }
+  const params = new URLSearchParams();
+  params.set("path", state.snippet.path);
+  params.set("line", String(state.snippet.line || 1));
+  params.set("context", String(state.snippet.context || 3));
+  target.innerHTML = panel("Source Snippet", loadingMarkup());
+  const result = await fetchMaybe(`/sources/${encodeURIComponent(state.snippet.source)}/files/snippet?${params}`);
+  target.innerHTML = panel("Source Snippet", result.ok ? sourceSnippetMarkup(result.data) : errorMarkup(result.error));
 }
 
 async function runUnresolvedReport() {
@@ -609,6 +632,23 @@ function handleDocumentClick(event) {
   if (relationshipButton) {
     state.relationships = relationshipStateFromDataset(relationshipButton.dataset);
     navigateToRoute("relationships");
+    return;
+  }
+  const snippetButton = event.target.closest("[data-snippet-source]");
+  if (snippetButton) {
+    state.snippet = {
+      source: snippetButton.dataset.snippetSource || "",
+      path: snippetButton.dataset.snippetPath || "",
+      line: Number(snippetButton.dataset.snippetLine || 1),
+      context: Number(snippetButton.dataset.snippetContext || 3),
+    };
+    if (state.currentRoute === "relationships") {
+      runSnippetLookup().catch((error) => {
+        document.querySelector("#snippet-results").innerHTML = panel("Source Snippet", errorMarkup(error));
+      });
+    } else {
+      navigateToRoute("relationships");
+    }
     return;
   }
   const entitySourceTypeButton = event.target.closest("[data-entity-source-type]");
@@ -1194,13 +1234,14 @@ function relationshipEvidenceTable(items) {
       const edge = item.edge || {};
       const target = item.target || {};
       const targetId = target.entity_id || "";
+      const sourceName = item.from_source || from.source_name || edge.source_name || "";
       return `
         <tr>
           <td>${status(String(Boolean(edge.resolved)), edge.resolved ? "ok" : "warn")}</td>
           <td>${escapeHtml(edge.edge_type || "")}</td>
           <td>${escapeHtml(item.from_type || from.entity_type || "")}</td>
           <td>${escapeHtml(from.name || "")}</td>
-          <td>${escapeHtml(item.from_source || from.source_name || "")}</td>
+          <td>${escapeHtml(sourceName)}</td>
           <td>${escapeHtml(item.to_type || target.entity_type || target.target_type || "")}</td>
           <td>${escapeHtml(target.name || edge.to_name || "")}</td>
           <td>${escapeHtml(item.to_source || target.source_name || "")}</td>
@@ -1211,6 +1252,7 @@ function relationshipEvidenceTable(items) {
           <td class="row-actions">
             <button class="button secondary" type="button" data-entity-id="${escapeAttr(from.entity_id || "")}">From</button>
             ${targetId ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(targetId)}">To</button>` : ""}
+            ${snippetButton(sourceName, edge.file_path, edge.line_number)}
           </td>
         </tr>`;
     })
@@ -1219,6 +1261,43 @@ function relationshipEvidenceTable(items) {
     ["Resolved", "Edge", "From Type", "From", "From Source", "To Type", "To", "To Source", "File", "Line", "Parser", "Confidence", ""],
     rows
   );
+}
+
+function snippetButton(sourceName, filePath, lineNumber) {
+  if (!sourceName || !filePath) return "";
+  return `
+    <button
+      class="button secondary"
+      type="button"
+      data-snippet-source="${escapeAttr(sourceName)}"
+      data-snippet-path="${escapeAttr(filePath)}"
+      data-snippet-line="${escapeAttr(lineNumber || 1)}"
+      data-snippet-context="3"
+    >Snippet</button>
+  `;
+}
+
+function sourceSnippetMarkup(payload) {
+  const rows = (payload.lines || [])
+    .map(
+      (item) => `
+        <tr class="${item.highlight ? "snippet-highlight" : ""}">
+          <td class="mono">${escapeHtml(item.number || "")}</td>
+          <td class="mono snippet-code">${escapeHtml(item.text || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return `
+    <div class="stack">
+      ${keyValueTable([
+        ["Source", payload.source_name || ""],
+        ["File", payload.file_path || ""],
+        ["Lines", `${payload.start_line || ""}-${payload.end_line || ""}`],
+        ["Highlight", payload.highlight_line || ""],
+      ])}
+      ${table(["Line", "Code"], rows)}
+    </div>
+  `;
 }
 
 function relationshipFilterButton(label, filters) {

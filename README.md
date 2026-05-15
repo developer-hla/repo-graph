@@ -253,6 +253,7 @@ Read-only query endpoints are available for agents and local tools:
 curl "http://localhost:8000/scope"
 curl "http://localhost:8000/sources"
 curl "http://localhost:8000/sources/<source_name>/overview"
+curl "http://localhost:8000/sources/<source_name>/files/snippet?path=src/app.py&line=42"
 curl "http://localhost:8000/explore"
 curl "http://localhost:8000/entities/search?type=api_route"
 curl "http://localhost:8000/relationships/search?from_source=api-service&to_source=database"

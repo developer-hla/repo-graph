@@ -132,6 +132,7 @@ relationships derived from graph edge types.
 - `GET /scope`
 - `GET /sources`
 - `GET /sources/{source_name}/overview`
+- `GET /sources/{source_name}/files/snippet`
 - `GET /explore`
 - `GET /entities/search`
 - `GET /relationships/search`
@@ -193,6 +194,7 @@ The first public query surface should use purpose-built read endpoints:
 - `GET /entities/{entity_id}/neighbors`
 - `GET /entities/{entity_id}/impact`
 - `GET /sources/{source_name}/overview`
+- `GET /sources/{source_name}/files/snippet`
 - `GET /edges/unresolved`
 - `GET /reports/unresolved`
 - `GET /ui`
