@@ -24,6 +24,11 @@ const routes = {
     meta: "Find graph entities",
     render: renderSearch,
   },
+  impact: {
+    title: "Impact",
+    meta: "Trace blast radius from an entity",
+    render: renderImpact,
+  },
   unresolved: {
     title: "Unresolved",
     meta: "Grouped unresolved references",
@@ -51,6 +56,13 @@ const state = {
     type: "",
     limit: 50,
     examples: 3,
+  },
+  impact: {
+    entityId: "",
+    direction: "in",
+    type: "",
+    depth: 2,
+    limit: 100,
   },
   snapshotStatus: null,
 };
@@ -242,6 +254,45 @@ async function renderUnresolved() {
   await runUnresolvedReport();
 }
 
+async function renderImpact() {
+  view.innerHTML = `
+    ${panel(
+      "Impact Query",
+      `<form class="toolbar" data-form="impact">
+        <label class="field wide">
+          <span>Entity ID</span>
+          <input name="entityId" value="${escapeAttr(state.impact.entityId)}" />
+        </label>
+        <label class="field small">
+          <span>Direction</span>
+          <select name="direction">
+            ${option("in", "Incoming", state.impact.direction)}
+            ${option("out", "Outgoing", state.impact.direction)}
+            ${option("both", "Both", state.impact.direction)}
+          </select>
+        </label>
+        <label class="field">
+          <span>Edge Type</span>
+          <input name="type" value="${escapeAttr(state.impact.type)}" placeholder="CALLS_SQL" />
+        </label>
+        <label class="field small">
+          <span>Depth</span>
+          <input name="depth" type="number" min="1" max="3" value="${state.impact.depth}" />
+        </label>
+        <label class="field small">
+          <span>Limit</span>
+          <input name="limit" type="number" min="1" max="200" value="${state.impact.limit}" />
+        </label>
+        <button class="button" type="submit">Run</button>
+      </form>`
+    )}
+    <div id="impact-results">${state.impact.entityId ? loadingMarkup() : emptyMarkup("Open an entity from search or paste an entity ID.")}</div>
+  `;
+  if (state.impact.entityId) {
+    await runImpact();
+  }
+}
+
 async function runSearch() {
   const params = new URLSearchParams();
   if (state.search.q) params.set("q", state.search.q);
@@ -263,6 +314,22 @@ async function runUnresolvedReport() {
   const target = document.querySelector("#unresolved-results");
   const result = await fetchMaybe(`/reports/unresolved?${params}`);
   target.innerHTML = result.ok ? unresolvedReportMarkup(result.data) : errorMarkup(result.error);
+}
+
+async function runImpact() {
+  const target = document.querySelector("#impact-results");
+  if (!state.impact.entityId) {
+    target.innerHTML = emptyMarkup("Open an entity from search or paste an entity ID.");
+    return;
+  }
+  const params = new URLSearchParams();
+  params.set("direction", state.impact.direction);
+  if (state.impact.type) params.set("type", state.impact.type);
+  params.set("depth", String(state.impact.depth));
+  params.set("limit", String(state.impact.limit));
+  target.innerHTML = loadingMarkup();
+  const result = await fetchMaybe(`/entities/${encodeURIComponent(state.impact.entityId)}/impact?${params}`);
+  target.innerHTML = result.ok ? impactMarkup(result.data) : errorMarkup(result.error);
 }
 
 async function loadEntity(entityId) {
@@ -366,6 +433,11 @@ function handleDocumentClick(event) {
   if (snapshotButton) {
     checkSnapshotStatus();
   }
+  const impactButton = event.target.closest("[data-impact-id]");
+  if (impactButton) {
+    state.impact.entityId = impactButton.dataset.impactId;
+    window.location.hash = "#impact";
+  }
 }
 
 function handleDocumentSubmit(event) {
@@ -393,6 +465,18 @@ function handleDocumentSubmit(event) {
     };
     runUnresolvedReport().catch((error) => {
       document.querySelector("#unresolved-results").innerHTML = errorMarkup(error);
+    });
+  }
+  if (form.dataset.form === "impact") {
+    state.impact = {
+      entityId: stringField(data, "entityId"),
+      direction: stringField(data, "direction") || "in",
+      type: stringField(data, "type"),
+      depth: numberField(data, "depth", 2),
+      limit: numberField(data, "limit", 100),
+    };
+    runImpact().catch((error) => {
+      document.querySelector("#impact-results").innerHTML = errorMarkup(error);
     });
   }
 }
@@ -566,6 +650,7 @@ function searchResultsTable(items) {
       (item) => `
         <tr>
           <td><button class="button secondary" type="button" data-entity-id="${escapeAttr(item.entity_id)}">Open</button></td>
+          <td><button class="button secondary" type="button" data-impact-id="${escapeAttr(item.entity_id)}">Impact</button></td>
           <td>${escapeHtml(item.entity_type || "")}</td>
           <td>${escapeHtml(item.name || "")}</td>
           <td>${escapeHtml(item.source_name || "")}</td>
@@ -573,7 +658,7 @@ function searchResultsTable(items) {
         </tr>`
     )
     .join("");
-  return table(["", "Type", "Name", "Source", "File"], rows);
+  return table(["", "", "Type", "Name", "Source", "File"], rows);
 }
 
 function neighborsTable(items) {
@@ -585,6 +670,7 @@ function neighborsTable(items) {
       return `
         <tr>
           <td>${escapeHtml(item.direction || "")}</td>
+          <td>${escapeHtml(item.depth || "")}</td>
           <td>${escapeHtml(edge.edge_type || "")}</td>
           <td>${escapeHtml(neighbor.entity_type || neighbor.target_type || "")}</td>
           <td>${escapeHtml(neighbor.name || "")}</td>
@@ -592,7 +678,38 @@ function neighborsTable(items) {
         </tr>`;
     })
     .join("");
-  return table(["Direction", "Edge", "Type", "Name", "Source"], rows);
+  return table(["Direction", "Depth", "Edge", "Type", "Name", "Source"], rows);
+}
+
+function impactMarkup(payload) {
+  const entity = payload.entity || {};
+  return `
+    <div class="grid three">
+      ${metric("Affected Sources", numberValue(payload.affected_source_count), "grouped by source", true)}
+      ${metric("Paths", numberValue(payload.count), "returned paths", true)}
+      ${metric("Depth", numberValue(payload.depth), payload.direction || "", true)}
+    </div>
+    ${panel("Start Entity", keyValueTable(entityRows(entity)))}
+    ${panel("Affected Sources", affectedSourcesTable(payload.affected_sources || []))}
+    ${panel("Paths", neighborsTable(payload.items || []))}
+  `;
+}
+
+function affectedSourcesTable(items) {
+  if (!items.length) return emptyMarkup("No affected sources.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.min_depth)}</td>
+          <td>${inlineList(item.edge_types || [])}</td>
+          <td>${inlineList(item.entity_types || [])}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Source", "Paths", "Min Depth", "Edges", "Entity Types"], rows);
 }
 
 function unresolvedReportMarkup(report) {
@@ -664,6 +781,10 @@ function table(headers, rows) {
       </table>
     </div>
   `;
+}
+
+function option(value, label, selected) {
+  return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
 }
 
 function runtimeRows(health, manifest) {

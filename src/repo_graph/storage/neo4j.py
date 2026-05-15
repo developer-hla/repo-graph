@@ -255,9 +255,11 @@ def get_entity_neighbors(
     entity_id: str,
     direction: str = "both",
     edge_type: str | None = None,
+    depth: int = 1,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     normalized_direction = normalize_direction(direction)
+    normalized_depth = normalize_depth(depth)
     normalized_limit = normalize_limit(limit, maximum=200)
     params = {
         "entity_id": entity_id,
@@ -269,9 +271,9 @@ def get_entity_neighbors(
         with driver.session(database=settings.database) as session:
             records: list[Any] = []
             if normalized_direction in {"out", "both"}:
-                records.extend(session.run(outgoing_neighbors_query(), **params))
+                records.extend(session.run(outgoing_neighbors_query(normalized_depth), **params))
             if normalized_direction in {"in", "both"}:
-                records.extend(session.run(incoming_neighbors_query(), **params))
+                records.extend(session.run(incoming_neighbors_query(normalized_depth), **params))
 
     return [neighbor_payload(record) for record in records[:normalized_limit]]
 
@@ -305,24 +307,42 @@ def list_unresolved_edges(
             return [unresolved_edge_payload(record) for record in records]
 
 
-def outgoing_neighbors_query() -> str:
-    return """
-        MATCH (:RepoGraphEntity {entity_id: $entity_id})-[edge]->(neighbor)
-        WHERE edge.edge_id IS NOT NULL
-          AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
-        RETURN edge, neighbor, labels(neighbor) AS labels, "out" AS direction
-        ORDER BY edge.edge_type, edge.to_name
+def outgoing_neighbors_query(depth: int) -> str:
+    return f"""
+        MATCH path = (:RepoGraphEntity {{entity_id: $entity_id}})-[*1..{depth}]->(neighbor)
+        WHERE all(edge IN relationships(path)
+          WHERE edge.edge_id IS NOT NULL
+            AND ($edge_type IS NULL OR edge.edge_type = $edge_type))
+        WITH path, last(relationships(path)) AS edge, neighbor
+        RETURN
+          edge,
+          neighbor,
+          labels(neighbor) AS labels,
+          "out" AS direction,
+          length(path) AS depth,
+          [node IN nodes(path) | coalesce(node.entity_id, node.target_id)] AS node_ids,
+          [rel IN relationships(path) | rel.edge_id] AS edge_ids
+        ORDER BY depth, edge.edge_type, edge.to_name
         LIMIT $limit
     """
 
 
-def incoming_neighbors_query() -> str:
-    return """
-        MATCH (neighbor)-[edge]->(:RepoGraphEntity {entity_id: $entity_id})
-        WHERE edge.edge_id IS NOT NULL
-          AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
-        RETURN edge, neighbor, labels(neighbor) AS labels, "in" AS direction
-        ORDER BY edge.edge_type, edge.from_name
+def incoming_neighbors_query(depth: int) -> str:
+    return f"""
+        MATCH path = (neighbor)-[*1..{depth}]->(:RepoGraphEntity {{entity_id: $entity_id}})
+        WHERE all(edge IN relationships(path)
+          WHERE edge.edge_id IS NOT NULL
+            AND ($edge_type IS NULL OR edge.edge_type = $edge_type))
+        WITH path, head(relationships(path)) AS edge, neighbor
+        RETURN
+          edge,
+          neighbor,
+          labels(neighbor) AS labels,
+          "in" AS direction,
+          length(path) AS depth,
+          [node IN nodes(path) | coalesce(node.entity_id, node.target_id)] AS node_ids,
+          [rel IN relationships(path) | rel.edge_id] AS edge_ids
+        ORDER BY depth, edge.edge_type, edge.from_name
         LIMIT $limit
     """
 
@@ -377,11 +397,19 @@ def edge_payload(edge: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def neighbor_payload(record: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "direction": record["direction"],
         "edge": edge_payload(record["edge"]),
         "neighbor": graph_node_payload(record["neighbor"], record.get("labels", [])),
     }
+    depth = record.get("depth")
+    node_ids = record.get("node_ids")
+    edge_ids = record.get("edge_ids")
+    if isinstance(depth, int):
+        payload["depth"] = depth
+    if isinstance(node_ids, list) or isinstance(edge_ids, list):
+        payload["path"] = compact_dict({"node_ids": node_ids, "edge_ids": edge_ids})
+    return payload
 
 
 def unresolved_edge_payload(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -477,6 +505,14 @@ def normalize_direction(value: str) -> str:
     if normalized not in {"in", "out", "both"}:
         raise ValueError("Direction must be one of: in, out, both.")
     return normalized
+
+
+def normalize_depth(value: int) -> int:
+    if value < 1:
+        raise ValueError("Depth must be at least 1.")
+    if value > 3:
+        raise ValueError("Depth must be at most 3.")
+    return value
 
 
 def graph_items(graph_data: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:

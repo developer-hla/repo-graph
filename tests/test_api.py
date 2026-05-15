@@ -25,6 +25,7 @@ from repo_graph.api import (
     create_app,
     entity_response,
     health_payload,
+    impact_response,
     job_response,
     jobs_response,
     load_response,
@@ -98,6 +99,10 @@ class ApiTests(unittest.TestCase):
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
             payload["endpoints"],
         )
+        self.assertIn(
+            {"method": "GET", "path": "/entities/{entity_id}/impact", "available": True},
+            payload["endpoints"],
+        )
         self.assertIn({"method": "GET", "path": "/edges/unresolved", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/reports/unresolved", "available": True}, payload["endpoints"])
         self.assertNotIn("password", str(payload).lower())
@@ -133,6 +138,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/entities/search", route_paths)
         self.assertIn("/entities/{entity_id}", route_paths)
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
+        self.assertIn("/entities/{entity_id}/impact", route_paths)
         self.assertIn("/edges/unresolved", route_paths)
         self.assertIn("/reports/unresolved", route_paths)
 
@@ -604,11 +610,48 @@ class ApiTests(unittest.TestCase):
         with patch("repo_graph.api.get_entity", return_value=None), self.assertRaises(KeyError):
             entity_response(settings, "missing")
 
-    def test_neighbors_response_rejects_depth_above_one(self) -> None:
+    def test_neighbors_response_passes_depth_to_storage(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        item = {"edge": {"edge_id": "edge-1"}, "neighbor": {"entity_id": "entity-2"}}
 
-        with self.assertRaises(ValueError):
-            neighbors_response(settings, "entity-1", "both", None, 2, 25)
+        with patch("repo_graph.api.get_entity_neighbors", return_value=[item]) as neighbors:
+            payload = neighbors_response(settings, "entity-1", "both", "CALLS_SQL", 2, 25)
+
+        self.assertEqual(payload["depth"], 2)
+        self.assertEqual(payload["count"], 1)
+        neighbors.assert_called_once()
+        self.assertEqual(neighbors.call_args.kwargs["depth"], 2)
+
+    def test_impact_response_groups_neighbors_by_source(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        entity = {"entity_id": "entity-1", "name": "dbo.GetThing"}
+        items = [
+            {
+                "depth": 1,
+                "edge": {"edge_type": "CALLS_SQL", "source_name": "api-service"},
+                "neighbor": {"entity_id": "file-1", "entity_type": "file", "source_name": "api-service"},
+            },
+            {
+                "depth": 2,
+                "edge": {"edge_type": "IMPORTS", "source_name": "worker"},
+                "neighbor": {"entity_id": "file-2", "entity_type": "file", "source_name": "worker"},
+            },
+        ]
+
+        with (
+            patch("repo_graph.api.entity_response", return_value=entity),
+            patch("repo_graph.api.get_entity_neighbors", return_value=items) as neighbors,
+        ):
+            payload = impact_response(settings, "entity-1", "in", "CALLS_SQL", 2, 25)
+
+        self.assertEqual(payload["entity"], entity)
+        self.assertEqual(payload["affected_source_count"], 2)
+        self.assertEqual(payload["affected_sources"][0]["source_name"], "api-service")
+        self.assertEqual(payload["affected_sources"][0]["edge_types"], ["CALLS_SQL"])
+        neighbors.assert_called_once()
+        self.assertEqual(neighbors.call_args.kwargs["direction"], "in")
+        self.assertEqual(neighbors.call_args.kwargs["edge_type"], "CALLS_SQL")
+        self.assertEqual(neighbors.call_args.kwargs["depth"], 2)
 
     def test_unresolved_edges_response_wraps_items(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

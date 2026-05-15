@@ -177,6 +177,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/entities/search", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
+            {"method": "GET", "path": "/entities/{entity_id}/impact", "available": True},
             {"method": "GET", "path": "/edges/unresolved", "available": True},
             {"method": "GET", "path": "/reports/unresolved", "available": True},
         ],
@@ -193,6 +194,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "job_api_status": "in-memory local runtime only",
             "graph_loader_status": "available",
             "scope_status": "available",
+            "impact_status": "available",
             "unresolved_report_status": "available",
             "ui_status": "available",
         },
@@ -555,13 +557,12 @@ def neighbors_response(
     depth: int,
     limit: int,
 ) -> dict[str, Any]:
-    if depth != 1:
-        raise ValueError("Only depth=1 is supported.")
     items = get_entity_neighbors(
         settings.neo4j_settings(),
         entity_id,
         direction=direction,
         edge_type=edge_type,
+        depth=depth,
         limit=limit,
     )
     return {
@@ -571,6 +572,97 @@ def neighbors_response(
         "items": items,
         "count": len(items),
     }
+
+
+def impact_response(
+    settings: RuntimeSettings,
+    entity_id: str,
+    direction: str,
+    edge_type: str | None,
+    depth: int,
+    limit: int,
+) -> dict[str, Any]:
+    entity = entity_response(settings, entity_id)
+    items = get_entity_neighbors(
+        settings.neo4j_settings(),
+        entity_id,
+        direction=direction,
+        edge_type=edge_type,
+        depth=depth,
+        limit=limit,
+    )
+    affected_sources = impact_sources(items)
+    return {
+        "entity": entity,
+        "entity_id": entity_id,
+        "direction": direction,
+        "depth": depth,
+        "edge_type": edge_type,
+        "items": items,
+        "count": len(items),
+        "affected_source_count": len(affected_sources),
+        "affected_sources": affected_sources,
+    }
+
+
+def impact_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for item in items:
+        source_name = impact_source_name(item)
+        group = grouped.setdefault(
+            source_name,
+            {
+                "source_name": source_name,
+                "count": 0,
+                "min_depth": item.get("depth"),
+                "entity_types": set(),
+                "edge_types": set(),
+                "examples": [],
+            },
+        )
+        group["count"] += 1
+        group["min_depth"] = min_depth(group["min_depth"], item.get("depth"))
+        neighbor = item.get("neighbor", {})
+        edge = item.get("edge", {})
+        add_if_string(group["entity_types"], neighbor.get("entity_type") or neighbor.get("target_type"))
+        add_if_string(group["edge_types"], edge.get("edge_type"))
+        if len(group["examples"]) < 5:
+            group["examples"].append(item)
+
+    items_by_source = []
+    for group in grouped.values():
+        items_by_source.append(
+            {
+                "source_name": group["source_name"],
+                "count": group["count"],
+                "min_depth": group["min_depth"],
+                "entity_types": sorted(group["entity_types"]),
+                "edge_types": sorted(group["edge_types"]),
+                "examples": group["examples"],
+            }
+        )
+    items_by_source.sort(key=lambda item: (item["min_depth"] or 0, -item["count"], item["source_name"]))
+    return items_by_source
+
+
+def impact_source_name(item: Mapping[str, Any]) -> str:
+    neighbor = item.get("neighbor", {})
+    if isinstance(neighbor, Mapping) and isinstance(neighbor.get("source_name"), str):
+        return neighbor["source_name"]
+    edge = item.get("edge", {})
+    if isinstance(edge, Mapping) and isinstance(edge.get("source_name"), str):
+        return edge["source_name"]
+    return "unknown"
+
+
+def min_depth(left: Any, right: Any) -> int | None:
+    depths = [value for value in (left, right) if isinstance(value, int)]
+    return min(depths) if depths else None
+
+
+def add_if_string(values: set[str], value: Any) -> None:
+    if isinstance(value, str) and value:
+        values.add(value)
 
 
 def unresolved_edges_response(
@@ -811,7 +903,7 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
     def get_neighbors_endpoint(
         entity_id: str,
         direction: str = "both",
-        depth: int = Query(default=1, ge=1, le=1),
+        depth: int = Query(default=1, ge=1, le=3),
         edge_type: str | None = None,
         limit: int = Query(default=50, ge=1, le=200),
     ) -> dict[str, Any]:
@@ -819,6 +911,19 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             return neighbors_response(runtime_settings, entity_id, direction, edge_type, depth, limit)
         except Exception as exc:
             raise neo4j_http_exception("neighbor lookup", exc) from exc
+
+    @app.get("/entities/{entity_id}/impact")
+    def get_impact_endpoint(
+        entity_id: str,
+        direction: str = "in",
+        depth: int = Query(default=2, ge=1, le=3),
+        edge_type: str | None = Query(default=None, alias="type"),
+        limit: int = Query(default=100, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return impact_response(runtime_settings, entity_id, direction, edge_type, depth, limit)
+        except Exception as exc:
+            raise neo4j_http_exception("impact lookup", exc) from exc
 
     @app.get("/edges/unresolved")
     def get_unresolved_edges_endpoint(

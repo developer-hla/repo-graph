@@ -13,6 +13,8 @@ from repo_graph.storage.neo4j import (
     entity_record,
     graph_node_payload,
     load_summary,
+    neighbor_payload,
+    normalize_depth,
     normalize_direction,
     normalize_limit,
     normalize_source_names,
@@ -204,6 +206,29 @@ class Neo4jStorageTests(unittest.TestCase):
         self.assertEqual(payload, target_payload(payload))
         self.assertEqual(payload["target_id"], "target-1")
 
+    def test_neighbor_payload_includes_depth_and_path(self) -> None:
+        payload = neighbor_payload(
+            {
+                "direction": "out",
+                "depth": 2,
+                "edge": {
+                    "edge_id": "edge-1",
+                    "edge_type": "IMPORTS",
+                    "from_entity_id": "file-1",
+                    "to_name": "shared",
+                    "resolved": True,
+                },
+                "neighbor": {"entity_id": "entity-2", "entity_type": "package", "name": "shared"},
+                "labels": ["RepoGraphEntity"],
+                "node_ids": ["entity-1", "entity-2"],
+                "edge_ids": ["edge-1"],
+            }
+        )
+
+        self.assertEqual(payload["depth"], 2)
+        self.assertEqual(payload["path"]["node_ids"], ["entity-1", "entity-2"])
+        self.assertEqual(payload["path"]["edge_ids"], ["edge-1"])
+
     def test_normalize_limit_rejects_out_of_range_values(self) -> None:
         self.assertEqual(normalize_limit(25, maximum=100), 25)
 
@@ -218,6 +243,15 @@ class Neo4jStorageTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             normalize_direction("sideways")
+
+    def test_normalize_depth_accepts_one_to_three(self) -> None:
+        self.assertEqual(normalize_depth(3), 3)
+
+        with self.assertRaises(ValueError):
+            normalize_depth(0)
+
+        with self.assertRaises(ValueError):
+            normalize_depth(4)
 
     def test_prepare_graph_records_shapes_all_load_records(self) -> None:
         graph_data = {

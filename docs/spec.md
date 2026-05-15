@@ -184,6 +184,7 @@ The first public query surface should use purpose-built read endpoints:
 - `GET /entities/search`
 - `GET /entities/{entity_id}`
 - `GET /entities/{entity_id}/neighbors`
+- `GET /entities/{entity_id}/impact`
 - `GET /edges/unresolved`
 - `GET /reports/unresolved`
 - `GET /ui`
@@ -193,8 +194,8 @@ and clear result limits.
 
 The first UI should be a navigable local control plane over these endpoints.
 It should start with pages for source readiness, build/load jobs, graph scope,
-entity search, entity neighbors, and unresolved reports rather than a single
-large graph visualization.
+entity search, entity neighbors, impact queries, and unresolved reports rather
+than a single large graph visualization.
 
 ## CLI MVP
 

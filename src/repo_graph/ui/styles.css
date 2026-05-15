@@ -277,6 +277,11 @@ h3 {
   width: 120px;
 }
 
+.field.wide {
+  min-width: 320px;
+  flex: 1 1 320px;
+}
+
 label {
   color: var(--muted);
   font-size: 12px;
@@ -521,7 +526,8 @@ tbody tr:hover {
   }
 
   .field,
-  .field.small {
+  .field.small,
+  .field.wide {
     width: 100%;
     min-width: 0;
   }

@@ -313,8 +313,44 @@ curl "http://localhost:8000/entities/<entity_id>/neighbors?edge_type=CALLS_SQL"
 curl "http://localhost:8000/entities/<entity_id>/neighbors?edge_type=IMPORTS"
 ```
 
-The current neighbor endpoint supports `depth=1`. Multi-hop traversal should
-wait until the API has clearer safeguards and result shaping.
+Use bounded depth for local traversal:
+
+```bash
+curl "http://localhost:8000/entities/<entity_id>/neighbors?direction=both&depth=2"
+```
+
+The neighbor endpoint supports depth `1` through `3`. When `edge_type` is set
+on a multi-hop request, every edge in the returned path must match that type.
+
+## Get Impact
+
+Use impact when you need a blast-radius view for a refactor, API change, SQL
+object change, or service boundary question:
+
+```bash
+curl "http://localhost:8000/entities/<entity_id>/impact"
+```
+
+Impact defaults to incoming relationships at depth `2`, which answers "what
+appears to depend on this entity?" Use `direction=out` to ask what the entity
+touches, and use `type` to restrict the traversal to one edge type:
+
+```bash
+curl "http://localhost:8000/entities/<entity_id>/impact?direction=in&depth=3"
+curl "http://localhost:8000/entities/<entity_id>/impact?direction=out&type=CALLS_SQL"
+curl "http://localhost:8000/entities/<entity_id>/impact?direction=in&type=CALLS_HTTP"
+```
+
+Useful response fields:
+
+- `entity`: the root entity being investigated
+- `items`: bounded neighbor/path examples
+- `affected_sources`: groups by source name with count, minimum depth, entity
+  types, edge types, and examples
+- `affected_source_count`: number of source groups in the result
+
+Agents should treat this as evidence for likely blast radius, not a proof that
+all runtime dependencies were discovered.
 
 ## List Unresolved Edges
 
@@ -383,6 +419,13 @@ Explain what a file touches:
 1. Search for the file entity by path.
 2. Fetch its neighbors.
 3. Group outgoing edges by `edge_type`.
+
+Estimate refactor blast radius:
+
+1. Search for the API route, symbol, SQL object, service, file, or package.
+2. Call `/entities/<entity_id>/impact?direction=in&depth=2`.
+3. Review `affected_sources` before drilling into individual `items`.
+4. Repeat with a narrower `type` filter when one relationship kind matters.
 
 Find missing graph scope:
 
