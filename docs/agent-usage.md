@@ -333,6 +333,26 @@ curl "http://localhost:8000/entities/<entity_id>"
 Use this after search when you need stable identity, source provenance, file
 path, line number, aliases, or parser-specific properties.
 
+## Inspect One Entity
+
+Use entity overview when a question starts from one route, package, symbol,
+SQL object, service, or file:
+
+```bash
+curl "http://localhost:8000/entities/<entity_id>/overview"
+```
+
+The response bundles:
+
+- entity metadata
+- direct incoming relationships and grouped counts
+- direct outgoing relationships and grouped counts
+- example relationship records for each direction
+
+Use this before jumping to impact when you need local context around one graph
+entity, such as who directly calls it, what it directly uses, or which source
+owns the neighboring entities.
+
 ## Get Neighbors
 
 Show incoming and outgoing relationships for an entity:

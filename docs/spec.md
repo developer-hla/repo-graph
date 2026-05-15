@@ -135,6 +135,7 @@ relationships derived from graph edge types.
 - `GET /explore`
 - `GET /entities/search`
 - `GET /entities/neighbors`
+- `GET /entities/{entity_id}/overview`
 - `GET /manifest`
 
 The manifest tells agents how to use the running graph and what scope was
@@ -186,6 +187,7 @@ The first public query surface should use purpose-built read endpoints:
 - `GET /explore`
 - `GET /entities/search`
 - `GET /entities/{entity_id}`
+- `GET /entities/{entity_id}/overview`
 - `GET /entities/{entity_id}/neighbors`
 - `GET /entities/{entity_id}/impact`
 - `GET /sources/{source_name}/overview`

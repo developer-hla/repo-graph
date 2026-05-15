@@ -29,6 +29,11 @@ const routes = {
     meta: "Inspect one repository's surface and dependencies",
     render: renderSource,
   },
+  entity: {
+    title: "Entity",
+    meta: "Inspect one graph entity and its direct relationships",
+    render: renderEntity,
+  },
   search: {
     title: "Entity Search",
     meta: "Find graph entities",
@@ -80,6 +85,10 @@ const state = {
   },
   source: {
     name: "",
+    limit: 50,
+  },
+  entity: {
+    id: "",
     limit: 50,
   },
   snapshotStatus: null,
@@ -279,9 +288,31 @@ async function renderSearch() {
       </form>`
     )}
     <div id="search-results"></div>
-    <div id="entity-detail"></div>
   `;
   await runSearch();
+}
+
+async function renderEntity() {
+  view.innerHTML = `
+    ${panel(
+      "Entity Lookup",
+      `<form class="toolbar" data-form="entity">
+        <label class="field wide">
+          <span>Entity ID</span>
+          <input name="entityId" value="${escapeAttr(state.entity.id)}" />
+        </label>
+        <label class="field small">
+          <span>Limit</span>
+          <input name="limit" type="number" min="1" max="200" value="${state.entity.limit}" />
+        </label>
+        <button class="button" type="submit">Open</button>
+      </form>`
+    )}
+    <div id="entity-results">${state.entity.id ? loadingMarkup() : emptyMarkup("Open an entity from search or paste an entity ID.")}</div>
+  `;
+  if (state.entity.id) {
+    await runEntityOverview();
+  }
 }
 
 async function renderUnresolved() {
@@ -372,6 +403,19 @@ async function runSearch() {
   target.innerHTML = result.ok ? panel("Results", searchResultsTable(result.data.items || [])) : errorMarkup(result.error);
 }
 
+async function runEntityOverview() {
+  const target = document.querySelector("#entity-results");
+  if (!state.entity.id) {
+    target.innerHTML = emptyMarkup("Open an entity from search or paste an entity ID.");
+    return;
+  }
+  const params = new URLSearchParams();
+  params.set("limit", String(state.entity.limit));
+  target.innerHTML = loadingMarkup();
+  const result = await fetchMaybe(`/entities/${encodeURIComponent(state.entity.id)}/overview?${params}`);
+  target.innerHTML = result.ok ? entityOverviewMarkup(result.data) : errorMarkup(result.error);
+}
+
 async function runUnresolvedReport() {
   const params = new URLSearchParams();
   if (state.unresolved.source) params.set("source", state.unresolved.source);
@@ -398,26 +442,6 @@ async function runImpact() {
   target.innerHTML = loadingMarkup();
   const result = await fetchMaybe(`/entities/${encodeURIComponent(state.impact.entityId)}/impact?${params}`);
   target.innerHTML = result.ok ? impactMarkup(result.data) : errorMarkup(result.error);
-}
-
-async function loadEntity(entityId) {
-  const detail = document.querySelector("#entity-detail");
-  detail.innerHTML = loadingMarkup();
-  const [entity, neighbors] = await Promise.all([
-    fetchMaybe(`/entities/${encodeURIComponent(entityId)}`),
-    fetchMaybe(`/entities/${encodeURIComponent(entityId)}/neighbors?limit=25`),
-  ]);
-  if (!entity.ok) {
-    detail.innerHTML = errorMarkup(entity.error);
-    return;
-  }
-  detail.innerHTML = panel(
-    "Entity Detail",
-    `<div class="entity-detail">
-      ${keyValueTable(entityRows(entity.data))}
-      ${neighbors.ok ? neighborsTable(neighbors.data.items || []) : errorMarkup(neighbors.error)}
-    </div>`
-  );
 }
 
 async function submitJob(kind) {
@@ -544,9 +568,21 @@ function handleDocumentClick(event) {
     navigateToRoute("source");
     return;
   }
+  const entitySourceTypeButton = event.target.closest("[data-entity-source-type]");
+  if (entitySourceTypeButton) {
+    state.search = {
+      q: "",
+      type: entitySourceTypeButton.dataset.entitySourceType,
+      source: entitySourceTypeButton.dataset.entitySourceName || "",
+      limit: 25,
+    };
+    navigateToRoute("search");
+    return;
+  }
   const entityButton = event.target.closest("[data-entity-id]");
   if (entityButton) {
-    loadEntity(entityButton.dataset.entityId);
+    state.entity.id = entityButton.dataset.entityId;
+    navigateToRoute("entity");
     return;
   }
   const jobButton = event.target.closest("[data-job-action]");
@@ -589,6 +625,15 @@ function handleDocumentSubmit(event) {
     };
     runSearch().catch((error) => {
       document.querySelector("#search-results").innerHTML = errorMarkup(error);
+    });
+  }
+  if (form.dataset.form === "entity") {
+    state.entity = {
+      id: stringField(data, "entityId"),
+      limit: numberField(data, "limit", 50),
+    };
+    runEntityOverview().catch((error) => {
+      document.querySelector("#entity-results").innerHTML = errorMarkup(error);
     });
   }
   if (form.dataset.form === "unresolved") {
@@ -972,6 +1017,77 @@ function sourceUsesTable(items) {
   return table(["Edge", "Target Type", "Target", "Target Source", "Count", "Unresolved", "Example File"], rows);
 }
 
+function entityOverviewMarkup(payload) {
+  const entity = payload.entity || {};
+  const incoming = payload.incoming || {};
+  const outgoing = payload.outgoing || {};
+  return `
+    <div class="grid three">
+      ${metric("Incoming", numberValue(incoming.count), "direct relationships", true)}
+      ${metric("Outgoing", numberValue(outgoing.count), "direct relationships", true)}
+      ${metric("Limit", numberValue(payload.limit), "per direction", true)}
+    </div>
+    ${panel("Entity", entityWorkbench(entity))}
+    <div class="grid two">
+      ${panel("Incoming Groups", relationshipGroupsTable(incoming.groups || []))}
+      ${panel("Outgoing Groups", relationshipGroupsTable(outgoing.groups || []))}
+    </div>
+    ${panel("Incoming Relationships", neighborsTable(incoming.items || []))}
+    ${panel("Outgoing Relationships", neighborsTable(outgoing.items || []))}
+  `;
+}
+
+function entityWorkbench(entity) {
+  const entityId = entity.entity_id || state.entity.id;
+  return `
+    <div class="stack">
+      ${keyValueTable(entityRows(entity))}
+      <div class="action-grid">
+        ${actionButton("Impact", "Trace dependency blast radius", "data-impact-id", entityId)}
+        ${actionButton("Open Source", "Inspect repository context", "data-source-name", entity.source_name || "")}
+        ${actionButton("Same Source", "Search entities in this source", "data-search-source", entity.source_name || "")}
+        ${actionButton("Same Type", "Search entities of this type", "data-search-type", entity.entity_type || "")}
+        ${entitySourceTypeButton(entity)}
+      </div>
+    </div>
+  `;
+}
+
+function entitySourceTypeButton(entity) {
+  return `
+    <button
+      class="action-button"
+      type="button"
+      data-entity-source-type="${escapeAttr(entity.entity_type || "")}"
+      data-entity-source-name="${escapeAttr(entity.source_name || "")}"
+    >
+      <span>Same Type In Source</span>
+      <small>${escapeHtml(entity.entity_type || "entity")} in ${escapeHtml(entity.source_name || "source")}</small>
+    </button>
+  `;
+}
+
+function relationshipGroupsTable(items) {
+  if (!items.length) return emptyMarkup("No relationship groups.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${escapeHtml(item.neighbor_type || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.min_depth)}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-search-source="${escapeAttr(item.source_name || "")}">Search</button>
+            <button class="button secondary" type="button" data-source-name="${escapeAttr(item.source_name || "")}">Source</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Edge", "Source", "Neighbor Type", "Count", "Min Depth", ""], rows);
+}
+
 function outgoingSourceLinksTable(items) {
   if (!items.length) return emptyMarkup("No outgoing cross-source links in the returned sample.");
   const rows = items
@@ -1100,6 +1216,11 @@ function neighborsTable(items) {
     .map((item) => {
       const edge = item.edge || {};
       const neighbor = item.neighbor || {};
+      const entityId = neighbor.entity_id || "";
+      const actions = entityId
+        ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(entityId)}">Open</button>
+           <button class="button secondary" type="button" data-impact-id="${escapeAttr(entityId)}">Impact</button>`
+        : "";
       return `
         <tr>
           <td>${escapeHtml(item.direction || "")}</td>
@@ -1108,10 +1229,11 @@ function neighborsTable(items) {
           <td>${escapeHtml(neighbor.entity_type || neighbor.target_type || "")}</td>
           <td>${escapeHtml(neighbor.name || "")}</td>
           <td>${escapeHtml(edge.source_name || "")}</td>
+          <td class="row-actions">${actions}</td>
         </tr>`;
     })
     .join("");
-  return table(["Direction", "Depth", "Edge", "Type", "Name", "Source"], rows);
+  return table(["Direction", "Depth", "Edge", "Type", "Name", "Source", ""], rows);
 }
 
 function impactMarkup(payload) {

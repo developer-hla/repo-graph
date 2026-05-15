@@ -23,6 +23,7 @@ from repo_graph.api import (
     config_response,
     configured_sources_response,
     create_app,
+    entity_overview_response,
     entity_response,
     explore_response,
     health_payload,
@@ -102,6 +103,10 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/{entity_id}", "available": True}, payload["endpoints"])
         self.assertIn(
+            {"method": "GET", "path": "/entities/{entity_id}/overview", "available": True},
+            payload["endpoints"],
+        )
+        self.assertIn(
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
             payload["endpoints"],
         )
@@ -145,6 +150,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/explore", route_paths)
         self.assertIn("/entities/search", route_paths)
         self.assertIn("/entities/{entity_id}", route_paths)
+        self.assertIn("/entities/{entity_id}/overview", route_paths)
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
         self.assertIn("/entities/{entity_id}/impact", route_paths)
         self.assertIn("/edges/unresolved", route_paths)
@@ -161,11 +167,15 @@ class ApiTests(unittest.TestCase):
         self.assertIn("Repo Graph", shell.text)
         self.assertIn("#explore", shell.text)
         self.assertIn("#source", shell.text)
+        self.assertIn("#entity", shell.text)
         self.assertEqual(script.status_code, 200)
         self.assertIn("renderDashboard", script.text)
         self.assertIn("renderExplore", script.text)
         self.assertIn("renderSource", script.text)
+        self.assertIn("renderEntity", script.text)
         self.assertIn("data-source-name", script.text)
+        self.assertIn("data-entity-source-type", script.text)
+        self.assertIn("/overview", script.text)
         self.assertIn("data-search-type", script.text)
         self.assertIn('data-snapshot-action="status"', script.text)
         self.assertIn("/snapshot/status", script.text)
@@ -674,6 +684,54 @@ class ApiTests(unittest.TestCase):
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
         with patch("repo_graph.api.get_entity", return_value=None), self.assertRaises(KeyError):
             entity_response(settings, "missing")
+
+    def test_entity_overview_response_groups_direct_relationships(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        entity = {
+            "entity_id": "entity-1",
+            "entity_type": "api_route",
+            "name": "GET /accounts",
+            "source_name": "api-service",
+        }
+        incoming = [
+            {
+                "direction": "in",
+                "depth": 1,
+                "edge": {"edge_type": "CALLS_HTTP", "source_name": "web-service"},
+                "neighbor": {"entity_id": "entity-2", "entity_type": "service", "source_name": "web-service"},
+            }
+        ]
+        outgoing = [
+            {
+                "direction": "out",
+                "depth": 1,
+                "edge": {"edge_type": "CALLS_SQL", "source_name": "api-service"},
+                "neighbor": {"target_id": "target-1", "target_type": "stored_procedure", "name": "dbo.load"},
+            }
+        ]
+
+        with (
+            patch("repo_graph.api.get_entity", return_value=entity),
+            patch("repo_graph.api.get_entity_neighbors", side_effect=[incoming, outgoing]) as neighbors,
+        ):
+            payload = entity_overview_response(settings, "entity-1", 20)
+
+        self.assertEqual(payload["entity"], entity)
+        self.assertEqual(payload["incoming"]["count"], 1)
+        self.assertEqual(payload["incoming"]["groups"][0]["source_name"], "web-service")
+        self.assertEqual(payload["incoming"]["groups"][0]["neighbor_type"], "service")
+        self.assertEqual(payload["outgoing"]["groups"][0]["edge_type"], "CALLS_SQL")
+        self.assertEqual(payload["outgoing"]["groups"][0]["source_name"], "api-service")
+        self.assertEqual(payload["outgoing"]["groups"][0]["neighbor_type"], "stored_procedure")
+        self.assertEqual(neighbors.call_args_list[0].kwargs["direction"], "in")
+        self.assertEqual(neighbors.call_args_list[1].kwargs["direction"], "out")
+        self.assertEqual(neighbors.call_args_list[0].kwargs["limit"], 20)
+
+    def test_entity_overview_response_raises_for_missing_entity(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+
+        with patch("repo_graph.api.get_entity", return_value=None), self.assertRaises(KeyError):
+            entity_overview_response(settings, "missing", 10)
 
     def test_neighbors_response_passes_depth_to_storage(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

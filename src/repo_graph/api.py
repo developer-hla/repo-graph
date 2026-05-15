@@ -219,6 +219,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/explore", "available": True},
             {"method": "GET", "path": "/entities/search", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}", "available": True},
+            {"method": "GET", "path": "/entities/{entity_id}/overview", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/impact", "available": True},
             {"method": "GET", "path": "/edges/unresolved", "available": True},
@@ -239,6 +240,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "graph_loader_status": "available",
             "scope_status": "available",
             "explore_status": "available",
+            "entity_overview_status": "available",
             "impact_status": "available",
             "impact_default_profile": "impact",
             "impact_profiles": sorted(IMPACT_PROFILES),
@@ -625,6 +627,42 @@ def entity_response(settings: RuntimeSettings, entity_id: str) -> dict[str, Any]
     return entity
 
 
+def entity_overview_response(settings: RuntimeSettings, entity_id: str, limit: int) -> dict[str, Any]:
+    neo4j_settings = settings.neo4j_settings()
+    entity = get_entity(neo4j_settings, entity_id)
+    if entity is None:
+        raise KeyError(entity_id)
+    incoming = get_entity_neighbors(
+        neo4j_settings,
+        entity_id,
+        direction="in",
+        depth=1,
+        limit=limit,
+    )
+    outgoing = get_entity_neighbors(
+        neo4j_settings,
+        entity_id,
+        direction="out",
+        depth=1,
+        limit=limit,
+    )
+    return {
+        "entity": entity,
+        "entity_id": entity_id,
+        "limit": limit,
+        "incoming": {
+            "items": incoming,
+            "groups": relationship_groups(incoming),
+            "count": len(incoming),
+        },
+        "outgoing": {
+            "items": outgoing,
+            "groups": relationship_groups(outgoing),
+            "count": len(outgoing),
+        },
+    }
+
+
 def neighbors_response(
     settings: RuntimeSettings,
     entity_id: str,
@@ -738,6 +776,69 @@ def impact_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
     items_by_source.sort(key=lambda item: (item["min_depth"] or 0, -item["count"], item["source_name"]))
     return items_by_source
+
+
+def relationship_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for item in items:
+        edge = item.get("edge", {})
+        neighbor = item.get("neighbor", {})
+        direction = str(item.get("direction") or "unknown")
+        edge_type = string_mapping_value(edge, "edge_type") or "unknown"
+        source_name = relationship_source_name(edge, neighbor)
+        neighbor_type = relationship_neighbor_type(neighbor)
+        key = (direction, edge_type, source_name, neighbor_type)
+        group = grouped.setdefault(
+            key,
+            {
+                "direction": direction,
+                "edge_type": edge_type,
+                "source_name": source_name,
+                "neighbor_type": neighbor_type,
+                "count": 0,
+                "min_depth": item.get("depth"),
+                "examples": [],
+            },
+        )
+        group["count"] += 1
+        group["min_depth"] = min_depth(group["min_depth"], item.get("depth"))
+        if len(group["examples"]) < 5:
+            group["examples"].append(item)
+
+    result = list(grouped.values())
+    result.sort(
+        key=lambda item: (
+            item["direction"],
+            -item["count"],
+            item["source_name"],
+            item["edge_type"],
+            item["neighbor_type"],
+        )
+    )
+    return result
+
+
+def relationship_source_name(edge: Any, neighbor: Any) -> str:
+    neighbor_source = string_mapping_value(neighbor, "source_name")
+    if neighbor_source:
+        return neighbor_source
+    edge_source = string_mapping_value(edge, "source_name")
+    if edge_source:
+        return edge_source
+    return "unknown"
+
+
+def relationship_neighbor_type(neighbor: Any) -> str:
+    return string_mapping_value(neighbor, "entity_type") or string_mapping_value(neighbor, "target_type") or "unknown"
+
+
+def string_mapping_value(value: Any, key: str) -> str | None:
+    if not isinstance(value, Mapping):
+        return None
+    item = value.get(key)
+    if isinstance(item, str) and item:
+        return item
+    return None
 
 
 def impact_source_name(item: Mapping[str, Any]) -> str:
@@ -1013,6 +1114,16 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             return entity_response(runtime_settings, entity_id)
         except Exception as exc:
             raise neo4j_http_exception("entity lookup", exc) from exc
+
+    @app.get("/entities/{entity_id}/overview")
+    def get_entity_overview_endpoint(
+        entity_id: str,
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return entity_overview_response(runtime_settings, entity_id, limit)
+        except Exception as exc:
+            raise neo4j_http_exception("entity overview lookup", exc) from exc
 
     @app.get("/entities/{entity_id}/neighbors")
     def get_neighbors_endpoint(
