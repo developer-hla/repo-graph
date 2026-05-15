@@ -31,6 +31,7 @@ from repo_graph.storage.neo4j import (
     read_graph_overview,
     read_graph_scope,
     read_graph_stats,
+    read_source_overview,
     search_entities,
 )
 
@@ -213,6 +214,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "POST", "path": "/query", "available": False},
             {"method": "GET", "path": "/scope", "available": True},
             {"method": "GET", "path": "/sources", "available": True},
+            {"method": "GET", "path": "/sources/{source_name}/overview", "available": True},
             {"method": "GET", "path": "/stats", "available": True},
             {"method": "GET", "path": "/explore", "available": True},
             {"method": "GET", "path": "/entities/search", "available": True},
@@ -227,6 +229,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "query_api_status": "safe read endpoints available",
             "raw_cypher_status": "planned",
             "source_status": "available",
+            "source_overview_status": "available",
             "sync_status": "available",
             "build_api_status": "available",
             "snapshot_status": "available",
@@ -590,6 +593,31 @@ def explore_response(settings: RuntimeSettings, limit: int) -> dict[str, Any]:
     return read_graph_overview(settings.neo4j_settings(), limit=limit)
 
 
+def source_overview_response(settings: RuntimeSettings, source_name: str, limit: int) -> dict[str, Any]:
+    overview = read_source_overview(
+        settings.neo4j_settings(),
+        source_name,
+        limit=limit,
+        use_edge_types=IMPACT_EDGE_TYPES,
+    )
+    if overview is None:
+        raise KeyError(source_name)
+    unresolved_items = list_unresolved_edges(
+        settings.neo4j_settings(),
+        source_name=source_name,
+        edge_type=None,
+        limit=UNRESOLVED_REPORT_EDGE_LIMIT,
+    )
+    overview["unresolved_report"] = unresolved_report_from_items(
+        unresolved_items,
+        source_name=source_name,
+        edge_type=None,
+        group_limit=limit,
+        examples_per_group=3,
+    )
+    return overview
+
+
 def entity_response(settings: RuntimeSettings, entity_id: str) -> dict[str, Any]:
     entity = get_entity(settings.neo4j_settings(), entity_id)
     if entity is None:
@@ -946,6 +974,17 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Neo4j source lookup failed: {exc}") from exc
+
+    @app.get("/sources/{source_name}/overview")
+    def source_overview(source_name: str, limit: int = Query(default=50, ge=1, le=200)) -> dict[str, Any]:
+        try:
+            return source_overview_response(runtime_settings, source_name, limit)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Source not found: {exc.args[0]}") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Neo4j source overview lookup failed: {exc}") from exc
 
     @app.get("/explore")
     def explore(limit: int = Query(default=50, ge=1, le=200)) -> dict[str, Any]:

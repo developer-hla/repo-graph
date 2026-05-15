@@ -26,11 +26,19 @@ from repo_graph.storage.neo4j import (
     prepare_graph_records,
     sanitize_relationship_type,
     scope_payload,
+    source_detail_query,
     source_edge_counts_query,
+    source_edge_type_counts_query,
     source_entity_counts_query,
+    source_entity_type_counts_query,
+    source_incoming_cross_source_query,
     source_metadata_query,
+    source_outgoing_cross_source_query,
+    source_owned_surface_query,
     source_payload,
     source_record,
+    source_summary_query,
+    source_uses_query,
     target_payload,
     unloaded_scope_payload,
     unresolved_target_records,
@@ -281,6 +289,16 @@ class Neo4jStorageTests(unittest.TestCase):
         self.assertIn("entity.source_name", source_entity_counts_query())
         self.assertIn("unresolved_edge_count", source_edge_counts_query())
         self.assertIn("edge.source_name <> to.source_name", cross_source_edges_query())
+
+    def test_source_overview_queries_are_scoped_to_source(self) -> None:
+        self.assertIn("RepoGraphSource {name: $source_name}", source_detail_query())
+        self.assertIn("edge.source_name = $source_name", source_summary_query())
+        self.assertIn("entity.source_name = $source_name", source_entity_type_counts_query())
+        self.assertIn("edge.source_name = $source_name", source_edge_type_counts_query())
+        self.assertIn("entity.entity_type IN $surface_entity_types", source_owned_surface_query())
+        self.assertIn("edge.edge_type IN $use_edge_types", source_uses_query())
+        self.assertIn("target.source_name <> $source_name", source_outgoing_cross_source_query())
+        self.assertIn("target.source_name = $source_name", source_incoming_cross_source_query())
 
     def test_prepare_graph_records_shapes_all_load_records(self) -> None:
         graph_data = {

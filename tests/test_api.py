@@ -37,6 +37,7 @@ from repo_graph.api import (
     scope_response,
     search_entities_response,
     snapshot_status_response,
+    source_overview_response,
     sources_response,
     submit_build_job,
     submit_build_load_job,
@@ -93,6 +94,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "POST", "path": "/load", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/scope", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/sources", "available": True}, payload["endpoints"])
+        self.assertIn(
+            {"method": "GET", "path": "/sources/{source_name}/overview", "available": True}, payload["endpoints"]
+        )
         self.assertIn({"method": "GET", "path": "/stats", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/explore", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
@@ -136,6 +140,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/load", route_paths)
         self.assertIn("/scope", route_paths)
         self.assertIn("/sources", route_paths)
+        self.assertIn("/sources/{source_name}/overview", route_paths)
         self.assertIn("/stats", route_paths)
         self.assertIn("/explore", route_paths)
         self.assertIn("/entities/search", route_paths)
@@ -155,9 +160,12 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(shell.status_code, 200)
         self.assertIn("Repo Graph", shell.text)
         self.assertIn("#explore", shell.text)
+        self.assertIn("#source", shell.text)
         self.assertEqual(script.status_code, 200)
         self.assertIn("renderDashboard", script.text)
         self.assertIn("renderExplore", script.text)
+        self.assertIn("renderSource", script.text)
+        self.assertIn("data-source-name", script.text)
         self.assertIn("data-search-type", script.text)
         self.assertIn('data-snapshot-action="status"', script.text)
         self.assertIn("/snapshot/status", script.text)
@@ -597,6 +605,46 @@ class ApiTests(unittest.TestCase):
 
         read_overview.assert_called_once()
         self.assertEqual(read_overview.call_args.kwargs["limit"], 25)
+
+    def test_source_overview_response_adds_unresolved_report(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        overview = {
+            "source": {"name": "api-service"},
+            "summary": {"entity_count": 1},
+            "entity_types": [],
+            "edge_types": [],
+        }
+        unresolved = {
+            "edge": {
+                "edge_id": "edge-1",
+                "edge_type": "CALLS_SQL",
+                "to_type": "stored_procedure",
+                "to_name": "dbo.load",
+                "source_name": "api-service",
+                "resolved": False,
+                "properties": {},
+            }
+        }
+
+        with (
+            patch("repo_graph.api.read_source_overview", return_value=overview) as read_overview,
+            patch("repo_graph.api.list_unresolved_edges", return_value=[unresolved]) as unresolved_edges,
+        ):
+            payload = source_overview_response(settings, "api-service", 10)
+
+        self.assertEqual(payload["source"], {"name": "api-service"})
+        self.assertEqual(payload["unresolved_report"]["summary"]["unresolved_edge_count"], 1)
+        read_overview.assert_called_once()
+        self.assertEqual(read_overview.call_args.kwargs["limit"], 10)
+        self.assertIn("CALLS_SQL", read_overview.call_args.kwargs["use_edge_types"])
+        unresolved_edges.assert_called_once()
+        self.assertEqual(unresolved_edges.call_args.kwargs["source_name"], "api-service")
+
+    def test_source_overview_response_raises_for_missing_source(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+
+        with patch("repo_graph.api.read_source_overview", return_value=None), self.assertRaises(KeyError):
+            source_overview_response(settings, "missing", 10)
 
     def test_sources_response_wraps_scope_sources(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

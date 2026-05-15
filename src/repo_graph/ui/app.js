@@ -24,6 +24,11 @@ const routes = {
     meta: "Understand graph shape and drill into evidence",
     render: renderExplore,
   },
+  source: {
+    title: "Source",
+    meta: "Inspect one repository's surface and dependencies",
+    render: renderSource,
+  },
   search: {
     title: "Entity Search",
     meta: "Find graph entities",
@@ -71,6 +76,10 @@ const state = {
     limit: 100,
   },
   explore: {
+    limit: 50,
+  },
+  source: {
+    name: "",
     limit: 50,
   },
   snapshotStatus: null,
@@ -225,6 +234,24 @@ async function renderExplore() {
     ${panel("Cross Source Relationships", crossSourceEdgesTable(payload.cross_source_edges || []))}
     ${panel("Unresolved Hotspots", unresolved.ok ? unresolvedHotspotsTable(unresolved.data.items || []) : errorMarkup(unresolved.error))}
   `;
+}
+
+async function renderSource() {
+  if (!state.source.name) {
+    const overview = await fetchMaybe(`/explore?limit=${state.source.limit}`);
+    view.innerHTML = `
+      ${panel("Select Source", overview.ok ? sourceActivityTable(overview.data.sources || []) : errorMarkup(overview.error))}
+    `;
+    return;
+  }
+  const result = await fetchMaybe(
+    `/sources/${encodeURIComponent(state.source.name)}/overview?limit=${state.source.limit}`
+  );
+  if (!result.ok) {
+    view.innerHTML = errorMarkup(result.error);
+    return;
+  }
+  view.innerHTML = sourceOverviewMarkup(result.data);
 }
 
 async function renderSearch() {
@@ -477,9 +504,31 @@ function handleDocumentClick(event) {
     navigateToRoute("search");
     return;
   }
+  const sourceSearchTypeButton = event.target.closest("[data-source-search-type]");
+  if (sourceSearchTypeButton) {
+    state.search = {
+      q: "",
+      type: sourceSearchTypeButton.dataset.sourceSearchType,
+      source: state.source.name,
+      limit: 25,
+    };
+    navigateToRoute("search");
+    return;
+  }
   const unresolvedTypeButton = event.target.closest("[data-unresolved-type]");
   if (unresolvedTypeButton) {
     state.unresolved = { source: "", type: unresolvedTypeButton.dataset.unresolvedType, limit: 50, examples: 3 };
+    navigateToRoute("unresolved");
+    return;
+  }
+  const sourceUnresolvedTypeButton = event.target.closest("[data-source-unresolved-type]");
+  if (sourceUnresolvedTypeButton) {
+    state.unresolved = {
+      source: state.source.name,
+      type: sourceUnresolvedTypeButton.dataset.sourceUnresolvedType,
+      limit: 50,
+      examples: 3,
+    };
     navigateToRoute("unresolved");
     return;
   }
@@ -487,6 +536,12 @@ function handleDocumentClick(event) {
   if (unresolvedSourceButton) {
     state.unresolved = { source: unresolvedSourceButton.dataset.unresolvedSource, type: "", limit: 50, examples: 3 };
     navigateToRoute("unresolved");
+    return;
+  }
+  const sourceButton = event.target.closest("[data-source-name]");
+  if (sourceButton) {
+    state.source.name = sourceButton.dataset.sourceName;
+    navigateToRoute("source");
     return;
   }
   const entityButton = event.target.closest("[data-entity-id]");
@@ -652,10 +707,13 @@ function loadedSourcesTable(items) {
           <td class="mono">${escapeHtml(item.ref || "")}</td>
           <td class="mono">${escapeHtml(item.commit || "")}</td>
           <td class="mono">${escapeHtml(item.path || "")}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-source-name="${escapeAttr(item.name || "")}">Open</button>
+          </td>
         </tr>`
     )
     .join("");
-  return table(["Name", "Type", "Ref", "Commit", "Path"], rows);
+  return table(["Name", "Type", "Ref", "Commit", "Path", ""], rows);
 }
 
 function exploreMetrics(payload) {
@@ -742,6 +800,7 @@ function sourceActivityTable(items) {
           <td>${numberValue(item.edge_count)}</td>
           <td>${numberValue(item.unresolved_edge_count)}</td>
           <td class="row-actions">
+            <button class="button secondary" type="button" data-source-name="${escapeAttr(item.source_name || "")}">Open</button>
             <button class="button secondary" type="button" data-search-source="${escapeAttr(item.source_name || "")}">Search</button>
             <button class="button secondary" type="button" data-unresolved-source="${escapeAttr(item.source_name || "")}">Unresolved</button>
           </td>
@@ -789,6 +848,166 @@ function unresolvedHotspotsTable(items) {
     )
     .join("");
   return table(["Class", "Edge", "Target", "Count", "Sources", ""], rows);
+}
+
+function sourceOverviewMarkup(payload) {
+  const source = payload.source || {};
+  const summary = payload.summary || {};
+  return `
+    <div class="grid three">
+      ${metric("Entities", numberValue(summary.entity_count), "owned by source", true)}
+      ${metric("Edges", numberValue(summary.edge_count), "discovered in source", true)}
+      ${metric("Unresolved", numberValue(summary.unresolved_edge_count), "needs review", true)}
+    </div>
+    ${panel("Source", sourceWorkbench(source))}
+    <div class="grid two">
+      ${panel("Entity Types", sourceEntityTypesTable(payload.entity_types || []))}
+      ${panel("Relationship Types", sourceEdgeTypesTable(payload.edge_types || []))}
+    </div>
+    ${panel("Owned Surface", ownedSurfaceTable(payload.owned_surface || []))}
+    ${panel("Uses", sourceUsesTable(payload.uses || []))}
+    <div class="grid two">
+      ${panel("Calls Out", outgoingSourceLinksTable(payload.outgoing_cross_source_edges || []))}
+      ${panel("Called By", incomingSourceLinksTable(payload.incoming_cross_source_edges || []))}
+    </div>
+    ${panel("Unresolved Hotspots", unresolvedHotspotsTable(payload.unresolved_report?.items || []))}
+  `;
+}
+
+function sourceWorkbench(source) {
+  const sourceName = source.name || state.source.name;
+  return `
+    <div class="stack">
+      ${keyValueTable([
+        ["Name", sourceName],
+        ["Type", source.type || ""],
+        ["Ref", source.ref || ""],
+        ["Commit", source.commit || ""],
+        ["Path", source.path || ""],
+      ])}
+      <div class="action-grid">
+        ${actionButton("Search Source", "All entities in this source", "data-search-source", sourceName)}
+        ${actionButton("API Routes", "Routes owned by this source", "data-source-search-type", "api_route")}
+        ${actionButton("Stored Procedures", "Procedures owned by this source", "data-source-search-type", "stored_procedure")}
+        ${actionButton("SQL Tables", "Tables owned by this source", "data-source-search-type", "sql_table")}
+        ${actionButton("SQL Calls", "Unresolved SQL calls here", "data-source-unresolved-type", "CALLS_SQL")}
+        ${actionButton("Service Calls", "Unresolved service calls here", "data-source-unresolved-type", "CALLS_SERVICE")}
+      </div>
+    </div>
+  `;
+}
+
+function sourceEntityTypesTable(items) {
+  if (!items.length) return emptyMarkup("No entity types.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.entity_type || "")}</td>
+          <td>${numberValue(item.entity_count)}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-source-search-type="${escapeAttr(item.entity_type || "")}">Search</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Type", "Entities", ""], rows);
+}
+
+function sourceEdgeTypesTable(items) {
+  if (!items.length) return emptyMarkup("No relationship types.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${numberValue(item.edge_count)}</td>
+          <td>${numberValue(item.resolved_edge_count)}</td>
+          <td>${numberValue(item.unresolved_edge_count)}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-source-unresolved-type="${escapeAttr(item.edge_type || "")}">Unresolved</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Edge", "Total", "Resolved", "Unresolved", ""], rows);
+}
+
+function ownedSurfaceTable(items) {
+  if (!items.length) return emptyMarkup("No owned surface in the returned sample.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.entity_type || "")}</td>
+          <td>${escapeHtml(item.name || "")}</td>
+          <td class="mono">${escapeHtml(item.file_path || "")}</td>
+          <td>${escapeHtml(item.line_number || "")}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-entity-id="${escapeAttr(item.entity_id || "")}">Open</button>
+            <button class="button secondary" type="button" data-impact-id="${escapeAttr(item.entity_id || "")}">Impact</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Type", "Name", "File", "Line", ""], rows);
+}
+
+function sourceUsesTable(items) {
+  if (!items.length) return emptyMarkup("No dependency/use relationships in the returned sample.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${escapeHtml(item.target_type || "")}</td>
+          <td>${escapeHtml(item.target_name || "")}</td>
+          <td>${escapeHtml(item.target_source || "")}</td>
+          <td>${numberValue(item.edge_count)}</td>
+          <td>${numberValue(item.unresolved_edge_count)}</td>
+          <td class="mono">${escapeHtml(item.file_path || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Edge", "Target Type", "Target", "Target Source", "Count", "Unresolved", "Example File"], rows);
+}
+
+function outgoingSourceLinksTable(items) {
+  if (!items.length) return emptyMarkup("No outgoing cross-source links in the returned sample.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.target_source || "")}</td>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${escapeHtml(item.target_type || "")}</td>
+          <td>${numberValue(item.edge_count)}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-source-name="${escapeAttr(item.target_source || "")}">Open</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Target Source", "Edge", "Target Type", "Count", ""], rows);
+}
+
+function incomingSourceLinksTable(items) {
+  if (!items.length) return emptyMarkup("No incoming cross-source links in the returned sample.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${escapeHtml(item.source_type || "")}</td>
+          <td>${numberValue(item.edge_count)}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-source-name="${escapeAttr(item.source_name || "")}">Open</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Source", "Edge", "Source Type", "Count", ""], rows);
 }
 
 function snapshotStatusPanel() {

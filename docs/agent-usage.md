@@ -280,6 +280,26 @@ graph paths:
 Use this endpoint to choose a source, entity type, edge type, or unresolved
 hotspot before drilling into Search, Impact, or Unresolved.
 
+## Inspect One Source
+
+Use source overview when a question starts from one repository or source:
+
+```bash
+curl "http://localhost:8000/sources/<source_name>/overview"
+```
+
+The response shows:
+
+- source metadata and summary counts
+- entity and relationship type counts scoped to that source
+- owned surface examples, such as routes, packages, services, and SQL objects
+- dependency/use targets discovered in that source
+- outgoing and incoming cross-source relationships
+- unresolved hotspots for that source
+
+Use this before answering what a repository owns, what it depends on, what
+depends on it, or where its missing graph coverage is concentrated.
+
 ## Search Entities
 
 Find entities by name, file path, ID, alias, or full name:
