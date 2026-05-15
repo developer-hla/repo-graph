@@ -35,6 +35,7 @@ from repo_graph.api import (
     neighbors_response,
     refresh_changed_response,
     refresh_response,
+    relationship_search_response,
     scope_response,
     search_entities_response,
     snapshot_status_response,
@@ -101,6 +102,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn({"method": "GET", "path": "/stats", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/explore", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/search", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/relationships/search", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/entities/{entity_id}", "available": True}, payload["endpoints"])
         self.assertIn(
             {"method": "GET", "path": "/entities/{entity_id}/overview", "available": True},
@@ -149,6 +151,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/stats", route_paths)
         self.assertIn("/explore", route_paths)
         self.assertIn("/entities/search", route_paths)
+        self.assertIn("/relationships/search", route_paths)
         self.assertIn("/entities/{entity_id}", route_paths)
         self.assertIn("/entities/{entity_id}/overview", route_paths)
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
@@ -168,13 +171,17 @@ class ApiTests(unittest.TestCase):
         self.assertIn("#explore", shell.text)
         self.assertIn("#source", shell.text)
         self.assertIn("#entity", shell.text)
+        self.assertIn("#relationships", shell.text)
         self.assertEqual(script.status_code, 200)
         self.assertIn("renderDashboard", script.text)
         self.assertIn("renderExplore", script.text)
         self.assertIn("renderSource", script.text)
         self.assertIn("renderEntity", script.text)
+        self.assertIn("renderRelationships", script.text)
         self.assertIn("data-source-name", script.text)
         self.assertIn("data-entity-source-type", script.text)
+        self.assertIn("data-relationship-filter", script.text)
+        self.assertIn("/relationships/search", script.text)
         self.assertIn("/overview", script.text)
         self.assertIn("data-search-type", script.text)
         self.assertIn('data-snapshot-action="status"', script.text)
@@ -679,6 +686,40 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(payload, {"items": [item], "count": 1})
         search.assert_called_once()
+
+    def test_relationship_search_response_groups_evidence(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        item = {
+            "from_entity": {"entity_id": "entity-1", "entity_type": "api_route", "source_name": "api-service"},
+            "edge": {"edge_id": "edge-1", "edge_type": "CALLS_SQL", "resolved": True},
+            "target": {"entity_id": "entity-2", "entity_type": "stored_procedure", "source_name": "database"},
+            "from_source": "api-service",
+            "to_source": "database",
+            "from_type": "api_route",
+            "to_type": "stored_procedure",
+        }
+
+        with patch("repo_graph.api.search_relationships", return_value=[item]) as search:
+            payload = relationship_search_response(
+                settings,
+                "api-service",
+                "database",
+                "CALLS_SQL",
+                "api_route",
+                "stored_procedure",
+                True,
+                25,
+            )
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["filters"]["from_source"], "api-service")
+        self.assertEqual(payload["filters"]["resolved"], True)
+        self.assertEqual(payload["groups"][0]["edge_type"], "CALLS_SQL")
+        self.assertEqual(payload["groups"][0]["from_source"], "api-service")
+        self.assertEqual(payload["groups"][0]["to_source"], "database")
+        search.assert_called_once()
+        self.assertEqual(search.call_args.kwargs["edge_type"], "CALLS_SQL")
+        self.assertEqual(search.call_args.kwargs["resolved"], True)
 
     def test_entity_response_raises_for_missing_entity(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")

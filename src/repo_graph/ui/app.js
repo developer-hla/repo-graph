@@ -39,6 +39,11 @@ const routes = {
     meta: "Find graph entities",
     render: renderSearch,
   },
+  relationships: {
+    title: "Relationships",
+    meta: "Find edge evidence between sources and entity types",
+    render: renderRelationships,
+  },
   impact: {
     title: "Impact",
     meta: "Trace blast radius from an entity",
@@ -90,6 +95,15 @@ const state = {
   entity: {
     id: "",
     limit: 50,
+  },
+  relationships: {
+    fromSource: "",
+    toSource: "",
+    type: "",
+    fromType: "",
+    toType: "",
+    resolved: "",
+    limit: 100,
   },
   snapshotStatus: null,
 };
@@ -315,6 +329,14 @@ async function renderEntity() {
   }
 }
 
+async function renderRelationships() {
+  view.innerHTML = `
+    ${panel("Filters", relationshipsForm())}
+    <div id="relationship-results">${loadingMarkup()}</div>
+  `;
+  await runRelationshipSearch();
+}
+
 async function renderUnresolved() {
   view.innerHTML = `
     ${panel(
@@ -414,6 +436,21 @@ async function runEntityOverview() {
   target.innerHTML = loadingMarkup();
   const result = await fetchMaybe(`/entities/${encodeURIComponent(state.entity.id)}/overview?${params}`);
   target.innerHTML = result.ok ? entityOverviewMarkup(result.data) : errorMarkup(result.error);
+}
+
+async function runRelationshipSearch() {
+  const params = new URLSearchParams();
+  if (state.relationships.fromSource) params.set("from_source", state.relationships.fromSource);
+  if (state.relationships.toSource) params.set("to_source", state.relationships.toSource);
+  if (state.relationships.type) params.set("type", state.relationships.type);
+  if (state.relationships.fromType) params.set("from_type", state.relationships.fromType);
+  if (state.relationships.toType) params.set("to_type", state.relationships.toType);
+  if (state.relationships.resolved) params.set("resolved", state.relationships.resolved);
+  params.set("limit", String(state.relationships.limit));
+  const target = document.querySelector("#relationship-results");
+  target.innerHTML = loadingMarkup();
+  const result = await fetchMaybe(`/relationships/search?${params}`);
+  target.innerHTML = result.ok ? relationshipSearchMarkup(result.data) : errorMarkup(result.error);
 }
 
 async function runUnresolvedReport() {
@@ -568,6 +605,12 @@ function handleDocumentClick(event) {
     navigateToRoute("source");
     return;
   }
+  const relationshipButton = event.target.closest("[data-relationship-filter]");
+  if (relationshipButton) {
+    state.relationships = relationshipStateFromDataset(relationshipButton.dataset);
+    navigateToRoute("relationships");
+    return;
+  }
   const entitySourceTypeButton = event.target.closest("[data-entity-source-type]");
   if (entitySourceTypeButton) {
     state.search = {
@@ -611,6 +654,18 @@ function navigateToRoute(routeName) {
   }
 }
 
+function relationshipStateFromDataset(dataset) {
+  return {
+    fromSource: dataset.relationshipFromSource || "",
+    toSource: dataset.relationshipToSource || "",
+    type: dataset.relationshipType || "",
+    fromType: dataset.relationshipFromType || "",
+    toType: dataset.relationshipToType || "",
+    resolved: dataset.relationshipResolved || "",
+    limit: Number(dataset.relationshipLimit || 100),
+  };
+}
+
 function handleDocumentSubmit(event) {
   const form = event.target.closest("form[data-form]");
   if (!form) return;
@@ -634,6 +689,20 @@ function handleDocumentSubmit(event) {
     };
     runEntityOverview().catch((error) => {
       document.querySelector("#entity-results").innerHTML = errorMarkup(error);
+    });
+  }
+  if (form.dataset.form === "relationships") {
+    state.relationships = {
+      fromSource: stringField(data, "fromSource"),
+      toSource: stringField(data, "toSource"),
+      type: stringField(data, "type"),
+      fromType: stringField(data, "fromType"),
+      toType: stringField(data, "toType"),
+      resolved: stringField(data, "resolved"),
+      limit: numberField(data, "limit", 100),
+    };
+    runRelationshipSearch().catch((error) => {
+      document.querySelector("#relationship-results").innerHTML = errorMarkup(error);
     });
   }
   if (form.dataset.form === "unresolved") {
@@ -868,6 +937,12 @@ function crossSourceEdgesTable(items) {
           <td class="row-actions">
             <button class="button secondary" type="button" data-search-source="${escapeAttr(item.from_source || "")}">From</button>
             <button class="button secondary" type="button" data-search-source="${escapeAttr(item.to_source || "")}">To</button>
+            ${relationshipFilterButton("Evidence", {
+              fromSource: item.from_source,
+              toSource: item.to_source,
+              type: item.edge_type,
+              resolved: "true",
+            })}
           </td>
         </tr>`
     )
@@ -971,6 +1046,10 @@ function sourceEdgeTypesTable(items) {
           <td>${numberValue(item.unresolved_edge_count)}</td>
           <td class="row-actions">
             <button class="button secondary" type="button" data-source-unresolved-type="${escapeAttr(item.edge_type || "")}">Unresolved</button>
+            ${relationshipFilterButton("Evidence", {
+              fromSource: state.source.name,
+              type: item.edge_type,
+            })}
           </td>
         </tr>`
     )
@@ -1011,10 +1090,152 @@ function sourceUsesTable(items) {
           <td>${numberValue(item.edge_count)}</td>
           <td>${numberValue(item.unresolved_edge_count)}</td>
           <td class="mono">${escapeHtml(item.file_path || "")}</td>
+          <td class="row-actions">
+            ${relationshipFilterButton("Evidence", {
+              fromSource: state.source.name,
+              toSource: item.target_source,
+              type: item.edge_type,
+              toType: item.target_type,
+            })}
+          </td>
         </tr>`
     )
     .join("");
-  return table(["Edge", "Target Type", "Target", "Target Source", "Count", "Unresolved", "Example File"], rows);
+  return table(["Edge", "Target Type", "Target", "Target Source", "Count", "Unresolved", "Example File", ""], rows);
+}
+
+function relationshipsForm() {
+  return `
+    <form class="toolbar" data-form="relationships">
+      <label class="field">
+        <span>From Source</span>
+        <input name="fromSource" value="${escapeAttr(state.relationships.fromSource)}" />
+      </label>
+      <label class="field">
+        <span>To Source</span>
+        <input name="toSource" value="${escapeAttr(state.relationships.toSource)}" />
+      </label>
+      <label class="field">
+        <span>Edge Type</span>
+        <input name="type" value="${escapeAttr(state.relationships.type)}" placeholder="CALLS_SQL" />
+      </label>
+      <label class="field">
+        <span>From Type</span>
+        <input name="fromType" value="${escapeAttr(state.relationships.fromType)}" placeholder="api_route" />
+      </label>
+      <label class="field">
+        <span>To Type</span>
+        <input name="toType" value="${escapeAttr(state.relationships.toType)}" placeholder="stored_procedure" />
+      </label>
+      <label class="field small">
+        <span>Resolved</span>
+        <select name="resolved">
+          ${option("", "Any", state.relationships.resolved)}
+          ${option("true", "true", state.relationships.resolved)}
+          ${option("false", "false", state.relationships.resolved)}
+        </select>
+      </label>
+      <label class="field small">
+        <span>Limit</span>
+        <input name="limit" type="number" min="1" max="200" value="${state.relationships.limit}" />
+      </label>
+      <button class="button" type="submit">Search</button>
+    </form>
+  `;
+}
+
+function relationshipSearchMarkup(payload) {
+  return `
+    <div class="grid three">
+      ${metric("Edges", numberValue(payload.count), "returned evidence", true)}
+      ${metric("Groups", numberValue((payload.groups || []).length), "summaries", true)}
+      ${metric("Limit", numberValue(payload.limit), "edge records", true)}
+    </div>
+    ${panel("Active Filters", keyValueTable(objectRows(payload.filters || {})))}
+    ${panel("Grouped Evidence", relationshipSearchGroupsTable(payload.groups || []))}
+    ${panel("Edge Evidence", relationshipEvidenceTable(payload.items || []))}
+  `;
+}
+
+function relationshipSearchGroupsTable(items) {
+  if (!items.length) return emptyMarkup("No relationship groups.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${escapeHtml(item.from_source || "")}</td>
+          <td>${escapeHtml(item.to_source || "")}</td>
+          <td>${escapeHtml(item.from_type || "")}</td>
+          <td>${escapeHtml(item.to_type || "")}</td>
+          <td>${status(String(Boolean(item.resolved)), item.resolved ? "ok" : "warn")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td class="row-actions">
+            ${relationshipFilterButton("Open", {
+              fromSource: item.from_source,
+              toSource: item.to_source,
+              type: item.edge_type,
+              fromType: item.from_type,
+              toType: item.to_type,
+              resolved: String(Boolean(item.resolved)),
+            })}
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Edge", "From Source", "To Source", "From Type", "To Type", "Resolved", "Count", ""], rows);
+}
+
+function relationshipEvidenceTable(items) {
+  if (!items.length) return emptyMarkup("No relationship evidence.");
+  const rows = items
+    .map((item) => {
+      const from = item.from_entity || {};
+      const edge = item.edge || {};
+      const target = item.target || {};
+      const targetId = target.entity_id || "";
+      return `
+        <tr>
+          <td>${status(String(Boolean(edge.resolved)), edge.resolved ? "ok" : "warn")}</td>
+          <td>${escapeHtml(edge.edge_type || "")}</td>
+          <td>${escapeHtml(item.from_type || from.entity_type || "")}</td>
+          <td>${escapeHtml(from.name || "")}</td>
+          <td>${escapeHtml(item.from_source || from.source_name || "")}</td>
+          <td>${escapeHtml(item.to_type || target.entity_type || target.target_type || "")}</td>
+          <td>${escapeHtml(target.name || edge.to_name || "")}</td>
+          <td>${escapeHtml(item.to_source || target.source_name || "")}</td>
+          <td class="mono">${escapeHtml(edge.file_path || "")}</td>
+          <td>${escapeHtml(edge.line_number || "")}</td>
+          <td>${escapeHtml(edge.parser || "")}</td>
+          <td>${escapeHtml(edge.confidence || "")}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-entity-id="${escapeAttr(from.entity_id || "")}">From</button>
+            ${targetId ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(targetId)}">To</button>` : ""}
+          </td>
+        </tr>`;
+    })
+    .join("");
+  return table(
+    ["Resolved", "Edge", "From Type", "From", "From Source", "To Type", "To", "To Source", "File", "Line", "Parser", "Confidence", ""],
+    rows
+  );
+}
+
+function relationshipFilterButton(label, filters) {
+  return `
+    <button
+      class="button secondary"
+      type="button"
+      data-relationship-filter="true"
+      data-relationship-from-source="${escapeAttr(filters.fromSource || "")}"
+      data-relationship-to-source="${escapeAttr(filters.toSource || "")}"
+      data-relationship-type="${escapeAttr(filters.type || "")}"
+      data-relationship-from-type="${escapeAttr(filters.fromType || "")}"
+      data-relationship-to-type="${escapeAttr(filters.toType || "")}"
+      data-relationship-resolved="${escapeAttr(filters.resolved || "")}"
+      data-relationship-limit="${escapeAttr(filters.limit || 100)}"
+    >${escapeHtml(label)}</button>
+  `;
 }
 
 function entityOverviewMarkup(payload) {
@@ -1029,8 +1250,8 @@ function entityOverviewMarkup(payload) {
     </div>
     ${panel("Entity", entityWorkbench(entity))}
     <div class="grid two">
-      ${panel("Incoming Groups", relationshipGroupsTable(incoming.groups || []))}
-      ${panel("Outgoing Groups", relationshipGroupsTable(outgoing.groups || []))}
+      ${panel("Incoming Groups", entityRelationshipGroupsTable(incoming.groups || [], entity, "in"))}
+      ${panel("Outgoing Groups", entityRelationshipGroupsTable(outgoing.groups || [], entity, "out"))}
     </div>
     ${panel("Incoming Relationships", neighborsTable(incoming.items || []))}
     ${panel("Outgoing Relationships", neighborsTable(outgoing.items || []))}
@@ -1067,11 +1288,27 @@ function entitySourceTypeButton(entity) {
   `;
 }
 
-function relationshipGroupsTable(items) {
+function entityRelationshipGroupsTable(items, entity, direction) {
   if (!items.length) return emptyMarkup("No relationship groups.");
   const rows = items
-    .map(
-      (item) => `
+    .map((item) => {
+      const filters =
+        direction === "in"
+          ? {
+              fromSource: item.source_name,
+              toSource: entity.source_name,
+              type: item.edge_type,
+              fromType: item.neighbor_type,
+              toType: entity.entity_type,
+            }
+          : {
+              fromSource: entity.source_name,
+              toSource: item.source_name,
+              type: item.edge_type,
+              fromType: entity.entity_type,
+              toType: item.neighbor_type,
+            };
+      return `
         <tr>
           <td>${escapeHtml(item.edge_type || "")}</td>
           <td>${escapeHtml(item.source_name || "")}</td>
@@ -1081,9 +1318,10 @@ function relationshipGroupsTable(items) {
           <td class="row-actions">
             <button class="button secondary" type="button" data-search-source="${escapeAttr(item.source_name || "")}">Search</button>
             <button class="button secondary" type="button" data-source-name="${escapeAttr(item.source_name || "")}">Source</button>
+            ${relationshipFilterButton("Evidence", filters)}
           </td>
-        </tr>`
-    )
+        </tr>`;
+    })
     .join("");
   return table(["Edge", "Source", "Neighbor Type", "Count", "Min Depth", ""], rows);
 }
@@ -1100,6 +1338,13 @@ function outgoingSourceLinksTable(items) {
           <td>${numberValue(item.edge_count)}</td>
           <td class="row-actions">
             <button class="button secondary" type="button" data-source-name="${escapeAttr(item.target_source || "")}">Open</button>
+            ${relationshipFilterButton("Evidence", {
+              fromSource: state.source.name,
+              toSource: item.target_source,
+              type: item.edge_type,
+              toType: item.target_type,
+              resolved: "true",
+            })}
           </td>
         </tr>`
     )
@@ -1119,6 +1364,13 @@ function incomingSourceLinksTable(items) {
           <td>${numberValue(item.edge_count)}</td>
           <td class="row-actions">
             <button class="button secondary" type="button" data-source-name="${escapeAttr(item.source_name || "")}">Open</button>
+            ${relationshipFilterButton("Evidence", {
+              fromSource: item.source_name,
+              toSource: state.source.name,
+              type: item.edge_type,
+              fromType: item.source_type,
+              resolved: "true",
+            })}
           </td>
         </tr>`
     )

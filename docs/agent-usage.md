@@ -322,6 +322,29 @@ Filter by source:
 curl "http://localhost:8000/entities/search?source=api-service"
 ```
 
+## Search Relationship Evidence
+
+Use relationship search when you need proof for why one source depends on
+another source or why one kind of entity points at another:
+
+```bash
+curl "http://localhost:8000/relationships/search?from_source=api-service&to_source=database"
+```
+
+Useful filters:
+
+```bash
+curl "http://localhost:8000/relationships/search?type=CALLS_SQL"
+curl "http://localhost:8000/relationships/search?from_type=api_route&to_type=stored_procedure"
+curl "http://localhost:8000/relationships/search?from_source=api-service&to_source=database&type=CALLS_SQL"
+curl "http://localhost:8000/relationships/search?resolved=false"
+```
+
+The response includes grouped counts plus exact edge evidence: from entity,
+target entity or unresolved target, source names, file path, line number,
+parser, confidence, and edge properties. Use this before making a refactor
+claim that needs file-level evidence.
+
 ## Get Entity Details
 
 Fetch one entity by ID:

@@ -24,6 +24,8 @@ from repo_graph.storage.neo4j import (
     normalize_source_names,
     outgoing_neighbors_query,
     prepare_graph_records,
+    relationship_evidence_payload,
+    relationship_search_query,
     sanitize_relationship_type,
     scope_payload,
     source_detail_query,
@@ -299,6 +301,50 @@ class Neo4jStorageTests(unittest.TestCase):
         self.assertIn("edge.edge_type IN $use_edge_types", source_uses_query())
         self.assertIn("target.source_name <> $source_name", source_outgoing_cross_source_query())
         self.assertIn("target.source_name = $source_name", source_incoming_cross_source_query())
+
+    def test_relationship_search_query_filters_relationship_evidence(self) -> None:
+        query = relationship_search_query()
+
+        self.assertIn("$from_source", query)
+        self.assertIn("$to_source", query)
+        self.assertIn("$edge_type", query)
+        self.assertIn("$from_type", query)
+        self.assertIn("$to_type", query)
+        self.assertIn("$resolved", query)
+        self.assertIn("labels(target) AS target_labels", query)
+
+    def test_relationship_evidence_payload_shapes_resolved_target(self) -> None:
+        payload = relationship_evidence_payload(
+            {
+                "source": {
+                    "entity_id": "entity-1",
+                    "entity_type": "api_route",
+                    "name": "GET /accounts",
+                    "source_name": "api-service",
+                },
+                "edge": {
+                    "edge_id": "edge-1",
+                    "edge_type": "CALLS_SQL",
+                    "from_type": "api_route",
+                    "to_type": "stored_procedure",
+                    "resolved": True,
+                    "source_name": "api-service",
+                },
+                "target": {
+                    "entity_id": "entity-2",
+                    "entity_type": "stored_procedure",
+                    "name": "dbo.load_accounts",
+                    "source_name": "database",
+                },
+                "target_labels": ["RepoGraphEntity"],
+            }
+        )
+
+        self.assertEqual(payload["from_source"], "api-service")
+        self.assertEqual(payload["to_source"], "database")
+        self.assertEqual(payload["from_type"], "api_route")
+        self.assertEqual(payload["to_type"], "stored_procedure")
+        self.assertEqual(payload["target"]["entity_id"], "entity-2")
 
     def test_prepare_graph_records_shapes_all_load_records(self) -> None:
         graph_data = {

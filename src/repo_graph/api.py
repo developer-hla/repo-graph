@@ -33,6 +33,7 @@ from repo_graph.storage.neo4j import (
     read_graph_stats,
     read_source_overview,
     search_entities,
+    search_relationships,
 )
 
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
@@ -218,6 +219,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/stats", "available": True},
             {"method": "GET", "path": "/explore", "available": True},
             {"method": "GET", "path": "/entities/search", "available": True},
+            {"method": "GET", "path": "/relationships/search", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/overview", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
@@ -240,6 +242,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "graph_loader_status": "available",
             "scope_status": "available",
             "explore_status": "available",
+            "relationship_search_status": "available",
             "entity_overview_status": "available",
             "impact_status": "available",
             "impact_default_profile": "impact",
@@ -573,6 +576,66 @@ def search_entities_response(
     return {"items": items, "count": len(items)}
 
 
+def relationship_search_response(
+    settings: RuntimeSettings,
+    from_source: str | None,
+    to_source: str | None,
+    edge_type: str | None,
+    from_type: str | None,
+    to_type: str | None,
+    resolved: bool | None,
+    limit: int,
+) -> dict[str, Any]:
+    items = search_relationships(
+        settings.neo4j_settings(),
+        from_source=from_source,
+        to_source=to_source,
+        edge_type=edge_type,
+        from_type=from_type,
+        to_type=to_type,
+        resolved=resolved,
+        limit=limit,
+    )
+    return {
+        "filters": relationship_filters_payload(
+            from_source=from_source,
+            to_source=to_source,
+            edge_type=edge_type,
+            from_type=from_type,
+            to_type=to_type,
+            resolved=resolved,
+        ),
+        "items": items,
+        "groups": relationship_evidence_groups(items),
+        "count": len(items),
+        "limit": limit,
+    }
+
+
+def relationship_filters_payload(
+    from_source: str | None,
+    to_source: str | None,
+    edge_type: str | None,
+    from_type: str | None,
+    to_type: str | None,
+    resolved: bool | None,
+) -> dict[str, Any]:
+    filters: dict[str, Any] = {}
+    add_optional_filter(filters, "from_source", from_source)
+    add_optional_filter(filters, "to_source", to_source)
+    add_optional_filter(filters, "type", edge_type)
+    add_optional_filter(filters, "from_type", from_type)
+    add_optional_filter(filters, "to_type", to_type)
+    if resolved is not None:
+        filters["resolved"] = resolved
+    return filters
+
+
+def add_optional_filter(filters: dict[str, Any], name: str, value: str | None) -> None:
+    if value is not None and value.strip():
+        filters[name] = value.strip()
+
+
 def scope_response(settings: RuntimeSettings) -> dict[str, Any]:
     return read_graph_scope(settings.neo4j_settings())
 
@@ -813,6 +876,48 @@ def relationship_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             item["source_name"],
             item["edge_type"],
             item["neighbor_type"],
+        )
+    )
+    return result
+
+
+def relationship_evidence_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str, str, str, bool], dict[str, Any]] = {}
+    for item in items:
+        edge = item.get("edge", {})
+        edge_type = string_mapping_value(edge, "edge_type") or ""
+        from_type = string_mapping_value(item, "from_type") or ""
+        to_type = string_mapping_value(item, "to_type") or ""
+        from_source = string_mapping_value(item, "from_source") or ""
+        to_source = string_mapping_value(item, "to_source") or ""
+        resolved = bool(edge.get("resolved")) if isinstance(edge, Mapping) else False
+        key = (edge_type, from_type, to_type, from_source, to_source, resolved)
+        group = grouped.setdefault(
+            key,
+            {
+                "edge_type": edge_type,
+                "from_type": from_type,
+                "to_type": to_type,
+                "from_source": from_source,
+                "to_source": to_source,
+                "resolved": resolved,
+                "count": 0,
+                "examples": [],
+            },
+        )
+        group["count"] += 1
+        if len(group["examples"]) < 5:
+            group["examples"].append(item)
+
+    result = list(grouped.values())
+    result.sort(
+        key=lambda item: (
+            -item["count"],
+            item["from_source"],
+            item["to_source"],
+            item["edge_type"],
+            item["from_type"],
+            item["to_type"],
         )
     )
     return result
@@ -1107,6 +1212,30 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             return search_entities_response(runtime_settings, q, entity_type, source, limit)
         except Exception as exc:
             raise neo4j_http_exception("entity search", exc) from exc
+
+    @app.get("/relationships/search")
+    def search_relationships_endpoint(
+        from_source: str | None = None,
+        to_source: str | None = None,
+        edge_type: str | None = Query(default=None, alias="type"),
+        from_type: str | None = None,
+        to_type: str | None = None,
+        resolved: bool | None = None,
+        limit: int = Query(default=100, ge=1, le=200),
+    ) -> dict[str, Any]:
+        try:
+            return relationship_search_response(
+                runtime_settings,
+                from_source,
+                to_source,
+                edge_type,
+                from_type,
+                to_type,
+                resolved,
+                limit,
+            )
+        except Exception as exc:
+            raise neo4j_http_exception("relationship search", exc) from exc
 
     @app.get("/entities/{entity_id}")
     def get_entity_endpoint(entity_id: str) -> dict[str, Any]:

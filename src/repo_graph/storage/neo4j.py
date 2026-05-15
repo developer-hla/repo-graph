@@ -569,6 +569,59 @@ def search_entities(
             return [entity_payload(record["entity"]) for record in records]
 
 
+def search_relationships(
+    settings: Neo4jSettings,
+    from_source: str | None = None,
+    to_source: str | None = None,
+    edge_type: str | None = None,
+    from_type: str | None = None,
+    to_type: str | None = None,
+    resolved: bool | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    params = {
+        "from_source": optional_filter(from_source),
+        "to_source": optional_filter(to_source),
+        "edge_type": optional_filter(edge_type),
+        "from_type": optional_filter(from_type),
+        "to_type": optional_filter(to_type),
+        "resolved": resolved,
+        "limit": normalize_limit(limit, maximum=200),
+    }
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            records = session.run(relationship_search_query(), **params)
+            return [relationship_evidence_payload(record) for record in records]
+
+
+def relationship_search_query() -> str:
+    return """
+        MATCH (source:RepoGraphEntity)-[edge]->(target)
+        WHERE edge.edge_id IS NOT NULL
+          AND ($from_source IS NULL OR coalesce(edge.source_name, source.source_name, "") = $from_source)
+          AND ($to_source IS NULL OR coalesce(target.source_name, "") = $to_source)
+          AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
+          AND ($from_type IS NULL OR coalesce(edge.from_type, source.entity_type, "") = $from_type)
+          AND ($to_type IS NULL OR coalesce(edge.to_type, target.entity_type, target.target_type, "") = $to_type)
+          AND ($resolved IS NULL OR coalesce(edge.resolved, false) = $resolved)
+        WITH source, edge, target
+        LIMIT $limit
+        RETURN
+          source,
+          edge,
+          target,
+          labels(target) AS target_labels
+        ORDER BY
+          coalesce(edge.source_name, source.source_name, ""),
+          coalesce(target.source_name, ""),
+          edge.edge_type,
+          edge.file_path,
+          edge.line_number,
+          edge.to_name
+    """
+
+
 def get_entity(settings: Neo4jSettings, entity_id: str) -> dict[str, Any] | None:
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()
@@ -757,6 +810,21 @@ def unresolved_edge_payload(record: Mapping[str, Any]) -> dict[str, Any]:
         "source": entity_payload(record["source"]),
         "edge": edge_payload(record["edge"]),
         "target": target_payload(record["target"]),
+    }
+
+
+def relationship_evidence_payload(record: Mapping[str, Any]) -> dict[str, Any]:
+    source = entity_payload(record["source"])
+    edge = edge_payload(record["edge"])
+    target = graph_node_payload(record["target"], record.get("target_labels", []))
+    return {
+        "from_entity": source,
+        "edge": edge,
+        "target": target,
+        "from_source": edge.get("source_name") or source.get("source_name"),
+        "to_source": target.get("source_name"),
+        "from_type": edge.get("from_type") or source.get("entity_type"),
+        "to_type": edge.get("to_type") or target.get("entity_type") or target.get("target_type"),
     }
 
 
