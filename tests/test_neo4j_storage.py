@@ -238,6 +238,20 @@ class Neo4jStorageTests(unittest.TestCase):
                 },
                 "neighbor": {"entity_id": "entity-2", "entity_type": "package", "name": "shared"},
                 "labels": ["RepoGraphEntity"],
+                "path_nodes": [
+                    {"entity_id": "entity-1", "entity_type": "file", "name": "index.ts"},
+                    {"entity_id": "entity-2", "entity_type": "package", "name": "shared"},
+                ],
+                "path_node_labels": [["RepoGraphEntity"], ["RepoGraphEntity"]],
+                "path_edges": [
+                    {
+                        "edge_id": "edge-1",
+                        "edge_type": "IMPORTS",
+                        "from_entity_id": "file-1",
+                        "to_name": "shared",
+                        "resolved": True,
+                    }
+                ],
                 "node_ids": ["entity-1", "entity-2"],
                 "edge_ids": ["edge-1"],
             }
@@ -246,6 +260,9 @@ class Neo4jStorageTests(unittest.TestCase):
         self.assertEqual(payload["depth"], 2)
         self.assertEqual(payload["path"]["node_ids"], ["entity-1", "entity-2"])
         self.assertEqual(payload["path"]["edge_ids"], ["edge-1"])
+        self.assertEqual(payload["path"]["steps"][0]["from"]["entity_id"], "entity-1")
+        self.assertEqual(payload["path"]["steps"][0]["edge"]["edge_type"], "IMPORTS")
+        self.assertEqual(payload["path"]["steps"][0]["to"]["entity_id"], "entity-2")
 
     def test_normalize_limit_rejects_out_of_range_values(self) -> None:
         self.assertEqual(normalize_limit(25, maximum=100), 25)
@@ -281,6 +298,8 @@ class Neo4jStorageTests(unittest.TestCase):
 
         self.assertIn("edge.edge_type IN $edge_types", query)
         self.assertIn("[*1..2]", query)
+        self.assertIn("nodes(path) AS path_nodes", query)
+        self.assertIn("relationships(path) AS path_edges", query)
 
     def test_explore_count_queries_are_limited_and_grouped(self) -> None:
         self.assertIn("entity.entity_type", entity_type_counts_query())

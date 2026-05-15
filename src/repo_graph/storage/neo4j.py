@@ -712,6 +712,9 @@ def outgoing_neighbors_query(depth: int) -> str:
           labels(neighbor) AS labels,
           "out" AS direction,
           length(path) AS depth,
+          nodes(path) AS path_nodes,
+          [node IN nodes(path) | labels(node)] AS path_node_labels,
+          relationships(path) AS path_edges,
           [node IN nodes(path) | coalesce(node.entity_id, node.target_id)] AS node_ids,
           [rel IN relationships(path) | rel.edge_id] AS edge_ids
         ORDER BY depth, edge.edge_type, edge.to_name
@@ -733,6 +736,9 @@ def incoming_neighbors_query(depth: int) -> str:
           labels(neighbor) AS labels,
           "in" AS direction,
           length(path) AS depth,
+          nodes(path) AS path_nodes,
+          [node IN nodes(path) | labels(node)] AS path_node_labels,
+          relationships(path) AS path_edges,
           [node IN nodes(path) | coalesce(node.entity_id, node.target_id)] AS node_ids,
           [rel IN relationships(path) | rel.edge_id] AS edge_ids
         ORDER BY depth, edge.edge_type, edge.from_name
@@ -796,12 +802,50 @@ def neighbor_payload(record: Mapping[str, Any]) -> dict[str, Any]:
         "neighbor": graph_node_payload(record["neighbor"], record.get("labels", [])),
     }
     depth = record.get("depth")
-    node_ids = record.get("node_ids")
-    edge_ids = record.get("edge_ids")
     if isinstance(depth, int):
         payload["depth"] = depth
-    if isinstance(node_ids, list) or isinstance(edge_ids, list):
-        payload["path"] = compact_dict({"node_ids": node_ids, "edge_ids": edge_ids})
+    path = path_payload(record)
+    if path:
+        payload["path"] = path
+    return payload
+
+
+def path_payload(record: Mapping[str, Any]) -> dict[str, Any]:
+    node_ids = record.get("node_ids")
+    edge_ids = record.get("edge_ids")
+    payload = compact_dict(
+        {
+            "node_ids": node_ids if isinstance(node_ids, list) else None,
+            "edge_ids": edge_ids if isinstance(edge_ids, list) else None,
+        }
+    )
+    path_nodes = record.get("path_nodes")
+    path_node_labels = record.get("path_node_labels")
+    path_edges = record.get("path_edges")
+    if not (
+        isinstance(path_nodes, list)
+        and isinstance(path_node_labels, list)
+        and isinstance(path_edges, list)
+        and len(path_nodes) == len(path_node_labels)
+        and len(path_nodes) == len(path_edges) + 1
+    ):
+        return payload
+    nodes = [
+        graph_node_payload(node, labels if isinstance(labels, list) else [])
+        for node, labels in zip(path_nodes, path_node_labels, strict=True)
+    ]
+    edges = [edge_payload(edge) for edge in path_edges]
+    payload["nodes"] = nodes
+    payload["edges"] = edges
+    payload["steps"] = [
+        {
+            "index": index + 1,
+            "from": nodes[index],
+            "edge": edge,
+            "to": nodes[index + 1],
+        }
+        for index, edge in enumerate(edges)
+    ]
     return payload
 
 

@@ -914,6 +914,7 @@ def impact_response(
         "count": len(items),
         "affected_source_count": len(affected_sources),
         "affected_sources": affected_sources,
+        "path_groups": impact_path_groups(items),
     }
 
 
@@ -968,6 +969,33 @@ def impact_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
     items_by_source.sort(key=lambda item: (item["min_depth"] or 0, -item["count"], item["source_name"]))
     return items_by_source
+
+
+def impact_path_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in items:
+        source_name = impact_source_name(item)
+        edge = item.get("edge", {})
+        edge_type = string_mapping_value(edge, "edge_type") or "unknown"
+        key = (source_name, edge_type)
+        group = grouped.setdefault(
+            key,
+            {
+                "source_name": source_name,
+                "edge_type": edge_type,
+                "count": 0,
+                "min_depth": item.get("depth"),
+                "examples": [],
+            },
+        )
+        group["count"] += 1
+        group["min_depth"] = min_depth(group["min_depth"], item.get("depth"))
+        if len(group["examples"]) < 5:
+            group["examples"].append(item)
+
+    result = list(grouped.values())
+    result.sort(key=lambda item: (item["min_depth"] or 0, -item["count"], item["source_name"], item["edge_type"]))
+    return result
 
 
 def relationship_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

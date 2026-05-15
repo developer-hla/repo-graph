@@ -1577,7 +1577,8 @@ function impactMarkup(payload) {
     </div>
     ${panel("Start Entity", keyValueTable(entityRows(entity)))}
     ${panel("Affected Sources", affectedSourcesTable(payload.affected_sources || []))}
-    ${panel("Paths", neighborsTable(payload.items || []))}
+    ${panel("Path Groups", impactPathGroupsTable(payload.path_groups || []))}
+    ${panel("Path Evidence", impactPathEvidenceTable(payload.items || []))}
   `;
 }
 
@@ -1596,6 +1597,89 @@ function affectedSourcesTable(items) {
     )
     .join("");
   return table(["Source", "Paths", "Min Depth", "Edges", "Entity Types"], rows);
+}
+
+function impactPathGroupsTable(items) {
+  if (!items.length) return emptyMarkup("No path groups.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${escapeHtml(item.edge_type || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.min_depth)}</td>
+          <td class="row-actions">
+            ${relationshipFilterButton("Evidence", {
+              fromSource: item.source_name,
+              type: item.edge_type,
+            })}
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Source", "Edge", "Paths", "Min Depth", ""], rows);
+}
+
+function impactPathEvidenceTable(items) {
+  if (!items.length) return emptyMarkup("No impact paths.");
+  const rows = items
+    .flatMap((item, pathIndex) =>
+      impactPathSteps(item).map((step) => {
+        const from = step.from || {};
+        const edge = step.edge || {};
+        const to = step.to || {};
+        const fromId = from.entity_id || "";
+        const toId = to.entity_id || "";
+        const sourceName = edge.source_name || from.source_name || "";
+        return `
+          <tr>
+            <td>${pathIndex + 1}</td>
+            <td>${escapeHtml(item.direction || "")}</td>
+            <td>${escapeHtml(item.depth || "")}</td>
+            <td>${escapeHtml(step.index || "")}</td>
+            <td>${escapeHtml(from.entity_type || from.target_type || edge.from_type || "")}</td>
+            <td>${escapeHtml(from.name || edge.from_name || "")}</td>
+            <td>${escapeHtml(from.source_name || edge.source_name || "")}</td>
+            <td>${escapeHtml(edge.edge_type || "")}</td>
+            <td>${escapeHtml(to.entity_type || to.target_type || edge.to_type || "")}</td>
+            <td>${escapeHtml(to.name || edge.to_name || "")}</td>
+            <td>${escapeHtml(to.source_name || "")}</td>
+            <td class="mono">${escapeHtml(edge.file_path || "")}</td>
+            <td>${escapeHtml(edge.line_number || "")}</td>
+            <td>${escapeHtml(edge.parser || "")}</td>
+            <td class="row-actions">
+              ${fromId ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(fromId)}">From</button>` : ""}
+              ${toId ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(toId)}">To</button>` : ""}
+              ${snippetButton(sourceName, edge.file_path, edge.line_number)}
+            </td>
+          </tr>`;
+      })
+    )
+    .join("");
+  return table(
+    ["Path", "Direction", "Depth", "Step", "From Type", "From", "From Source", "Edge", "To Type", "To", "To Source", "File", "Line", "Parser", ""],
+    rows
+  );
+}
+
+function impactPathSteps(item) {
+  const steps = item.path?.steps || [];
+  if (steps.length) return steps;
+  const edge = item.edge || {};
+  return [
+    {
+      index: 1,
+      from: {
+        entity_id: edge.from_entity_id || "",
+        entity_type: edge.from_type || "",
+        name: edge.from_name || "",
+        source_name: edge.source_name || "",
+      },
+      edge,
+      to: item.neighbor || {},
+    },
+  ];
 }
 
 function unresolvedReportMarkup(report) {

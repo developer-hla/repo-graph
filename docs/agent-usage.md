@@ -469,9 +469,15 @@ Useful response fields:
 - `allowed_edge_types`: edge types used by the selected profile, or null when
   `profile=all` or `type` is provided
 - `items`: bounded neighbor/path examples
+- `items[].path.steps`: ordered edge-by-edge proof chain for each returned path
 - `affected_sources`: groups by source name with count, minimum depth, entity
   types, edge types, and examples
 - `affected_source_count`: number of source groups in the result
+- `path_groups`: counts grouped by affected source and edge type
+
+Each path step includes `from`, `edge`, and `to`. The edge carries file path,
+line number, parser, confidence, and source metadata when the parser found it.
+Use source snippets for any step with file and line evidence.
 
 Agents should treat this as evidence for likely blast radius, not a proof that
 all runtime dependencies were discovered.

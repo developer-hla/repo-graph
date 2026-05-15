@@ -211,6 +211,8 @@ Impact queries should default to dependency and usage edges so refactor
 blast-radius results are not dominated by containment or declaration paths.
 Agents can request `profile=all` for raw graph traversal or
 `profile=structural` for containment and declaration paths.
+Impact responses should include ordered path steps with edge evidence so users
+can see the proof chain for each affected entity.
 
 ## CLI MVP
 
