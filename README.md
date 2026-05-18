@@ -1,43 +1,117 @@
 # Repo Graph
 
-Repo Graph builds a local graph of interactions across one or more code
-repositories. It is designed to run at different scopes: a small service group,
-a team domain, or every repository a developer can access.
+[![repo-graph-ci](https://github.com/developer-hla/repo-graph/actions/workflows/repo-graph-ci.yaml/badge.svg)](https://github.com/developer-hla/repo-graph/actions/workflows/repo-graph-ci.yaml)
 
-The project is intentionally source-agnostic. Repository lists, organization
-names, branch choices, and private conventions live in local config files, not
-in the tool.
+Repo Graph builds a local interaction graph from one or more source
+repositories. It helps developers and agents answer questions about API calls,
+imports, package dependencies, project references, SQL objects, Kubernetes
+topology, and unresolved references without relying on stale diagrams or
+tribal knowledge.
 
-Repo Graph is alpha software. The current implementation can inspect source
-configs, sync Git sources, scan local repositories, export a portable JSON
-graph, load Neo4j, and expose a local HTTP runtime with safe read endpoints.
-The scanner discovers repository, project, file, package, route, exported
-symbol, Python code and manifest, HTTP call, modern C#/.NET code and manifest,
-legacy VB/.NET Framework config, Kubernetes topology, and SQL relationships
-from local source files.
+It is designed to run at different scopes: a few repositories for one
+developer, a product area for a team, or a larger source set for architecture
+work. Private repository lists, organization names, tokens, generated graphs,
+and company-specific conventions stay in local ignored config files.
 
-## Goals
+Repo Graph is alpha software. The current runtime can inspect source configs,
+sync Git sources, scan local repositories, export JSON, load Neo4j, and expose
+a local HTTP API plus a navigable UI.
 
-- Clone or update repositories into a local cache.
-- Parse code, package manifests, API routes, HTTP calls, Python project and
-  code metadata, C#/.NET project and code metadata, legacy VB services, SQL,
-  Kubernetes manifests, and database objects without requiring users to define
-  relationships up front.
-- Emit an entity/edge graph with source provenance.
-- Load the graph into a queryable store.
-- Expose a local API that agents and developers can query.
+## What It Does
 
-## Quickstart
+- Clones or updates configured Git repositories into a local cache.
+- Scans local paths, explicit Git URLs, or GitHub organization source sets.
+- Extracts repository, project, file, package, route, symbol, service, SQL,
+  Kubernetes, Python, JavaScript/TypeScript, modern .NET, and legacy VB/.NET
+  relationships.
+- Emits deterministic entity and edge records with source, file, line, parser,
+  and confidence metadata.
+- Keeps unresolved references as first-class graph evidence instead of hiding
+  them.
+- Loads Neo4j for graph queries and exposes safe read endpoints for agents and
+  local tools.
+- Provides a local UI for search, impact analysis, unresolved triage, evidence
+  snippets, and refresh jobs.
+
+## Example Questions
+
+Repo Graph is useful for questions like:
+
+- What depends on this route, stored procedure, package, or source file?
+- Which repositories call this service or SQL object?
+- What is the known blast radius of changing this entity?
+- Which references did the graph fail to resolve, and why?
+- Which missing repositories, parser gaps, or ambiguous targets should we fix
+  before trusting a refactor plan?
+- Which sources changed since the last graph build?
+
+## Five-Minute Docker Quick Start
+
+Start the local API, UI, and Neo4j with the synthetic example sources:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+- Repo Graph UI: `http://localhost:8000/ui`
+- Repo Graph API: `http://localhost:8000`
+- Neo4j Browser: `http://localhost:7475`
+
+Build and load the example graph:
+
+```bash
+curl -X POST http://localhost:8000/build-load \
+  -H "content-type: application/json" \
+  -d '{"strict":true}'
+```
+
+Check that the graph is loaded:
+
+```bash
+curl http://localhost:8000/scope
+curl http://localhost:8000/stats
+```
+
+Then use the UI:
+
+1. Open `http://localhost:8000/ui#search?type=api_route`.
+2. Open an entity from the search results.
+3. Click `Impact` to inspect known blast radius.
+4. Review `Coverage Warnings` before trusting the result.
+5. Open `Unresolved` to see missing-source, parser-gap, and ambiguous-target
+   triage.
+
+UI state is encoded in hash routes, so links can be refreshed or shared:
+
+```text
+/ui#search?q=orders&type=api_route
+/ui#impact?entityId=<entity_id>&direction=in&depth=2
+/ui#unresolved?source=api-service&type=CALLS_SQL
+/ui#relationships?fromSource=api-service&type=CALLS_SQL&resolved=false
+```
+
+## Local Pixi Quick Start
+
+Install Pixi, then run the scanner against the built-in examples:
 
 ```bash
 pixi run repo-graph inspect --config config/local-example.yaml
-pixi run repo-graph build --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml --strict
-pixi run repo-graph build --cached --config config/local-example.yaml --strict
-pixi run repo-graph refresh --config config/local-example.yaml
-pixi run repo-graph snapshot status --config config/local-example.yaml
-pixi run repo-graph source-graphs write --config config/local-example.yaml
 pixi run repo-graph report unresolved --graph .repo-graph/output/graph.json
+```
+
+Run the local API without Docker:
+
+```bash
+pixi run serve
+```
+
+Run the full local verification suite:
+
+```bash
+pixi run audit
 ```
 
 The example config scans only synthetic repositories under `examples/`. It
@@ -45,17 +119,42 @@ includes API, shared package, inventory, Python, modern .NET, legacy VB, and
 database projects so package, HTTP, project reference, Kubernetes service,
 service config, and SQL relationships can resolve locally.
 
-To scan your own repositories, create a local config outside this repository or
-use an ignored local file. Sources may be local paths, explicit Git URLs, or a
-GitHub organization query that expands to matching repositories through the
-GitHub REST API. Keep real organization names, repository URLs, and generated
-graphs out of public commits.
+## Scanning Your Own Repositories
 
-Use `dependency_filter` when third-party package edges would drown out the
-organization graph. Repo Graph still extracts all sources first and resolves
-package references globally. Resolved package/import edges are kept even when
-they do not match the patterns; unresolved package references are kept only
-when they look organization-owned.
+Create a local config outside this repository or use an ignored file such as
+`config/private-my-sources.yaml`. Sources may be local paths, explicit Git
+URLs, or a GitHub organization query that expands to matching repositories
+through the GitHub REST API.
+
+```yaml
+name: example-domain
+cache_dir: .repo-graph/cache/repos
+
+sources:
+  - type: git
+    name: api-service
+    url: https://github.com/example/api-service.git
+    ref: default
+
+  - type: github_org
+    name: example-org
+    org: example
+    visibility: all
+    ref: default
+    limit: 50
+    include:
+      archived: false
+      forks: false
+      name_patterns:
+        - "-service$"
+
+  - type: local_path
+    name: local-library
+    path: ../local-library
+```
+
+Use `dependency_filter` when third-party package references would drown out
+organization-owned dependencies:
 
 ```yaml
 dependency_filter:
@@ -66,77 +165,19 @@ dependency_filter:
   include_relative_imports: true
 ```
 
+Typical private-source workflow:
+
 ```bash
 pixi run repo-graph inspect --config ../my-repo-graph-sources.yaml
 pixi run repo-graph sync --config ../my-repo-graph-sources.yaml
 pixi run repo-graph snapshot status --config ../my-repo-graph-sources.yaml
-pixi run repo-graph source-graphs write --config ../my-repo-graph-sources.yaml
 pixi run repo-graph build --cached --config ../my-repo-graph-sources.yaml --sync --strict
 pixi run repo-graph refresh --config ../my-repo-graph-sources.yaml --sync --strict
-pixi run repo-graph build --config ../my-repo-graph-sources.yaml --sync --strict
 ```
 
-## Local API Runtime
-
-Run the API directly with Pixi:
-
-```bash
-pixi run serve
-```
-
-Then open the UI at `http://localhost:8000/ui` and check:
-
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/manifest
-curl http://localhost:8000/config
-curl http://localhost:8000/sources/configured
-```
-
-The runtime exposes a navigable local UI organized around overview, search,
-impact, unresolved-reference review, and graph refresh jobs. Lower-level source,
-relationship, and entity evidence views are opened from those workflows. The
-manifest tells agents which API capabilities are available and which graph
-capabilities are still planned.
-UI state is encoded in hash routes such as
-`/ui#search?q=orders&type=api_route` and
-`/ui#impact?entityId=<entity_id>&direction=in`, so result views can be
-refreshed or shared.
-
-Print a Markdown snippet for another repository's `AGENTS.md`:
-
-```bash
-pixi run repo-graph agent-instructions \
-  --api-url http://localhost:8000 \
-  --config ../my-repo-graph-sources.yaml
-```
-
-The snippet points agents at `/manifest` as the runtime source of truth. It is
-intended for private working repositories, not as a generated public artifact.
-
-## Docker Runtime
-
-Start Repo Graph with Neo4j:
-
-```bash
-docker compose up --build
-```
-
-Services:
-
-- Repo Graph API: `http://localhost:8000`
-- Repo Graph UI: `http://localhost:8000/ui`
-- Neo4j browser: `http://localhost:7475`
-- Neo4j Bolt: `bolt://localhost:7688`
-
-The default Compose file scans only the synthetic examples in this repository.
-Mount your own config and source/cache locations when scanning private
-repositories. Do not bake private source configs, tokens, generated graphs, or
-database volumes into a public image.
-
-For private GitHub repositories, copy `.env.example` to `.env` and set
-`GITHUB_TOKEN`. Docker Compose reads `.env` automatically. Repo Graph uses the
-token for GitHub org discovery and HTTPS clone/fetch through temporary Git
+For private GitHub repositories in Docker, copy `.env.example` to `.env` and
+set `GITHUB_TOKEN`. Docker Compose reads `.env` automatically. Repo Graph uses
+the token for GitHub org discovery and HTTPS clone/fetch through temporary Git
 environment config, without writing the token into source configs, generated
 graphs, or cloned repository remotes.
 
@@ -147,15 +188,23 @@ To run Docker against a private config mounted from `./config`, set
 REPO_GRAPH_CONFIG=/app/config/private-my-sources.yaml
 ```
 
-Override the Neo4j host ports with `REPO_GRAPH_NEO4J_HTTP_PORT` and
-`REPO_GRAPH_NEO4J_BOLT_PORT` if those ports are already in use.
+## Runtime API
 
-Build and load the example graph into Neo4j:
+The runtime exposes health, config, source status, sync, build, refresh, load,
+job, scope, stats, graph query, unresolved report, and UI endpoints.
+
+Useful setup endpoints:
 
 ```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/manifest
 curl http://localhost:8000/config
 curl http://localhost:8000/sources/configured
+```
 
+Build, load, and refresh:
+
+```bash
 curl -X POST http://localhost:8000/sync \
   -H "content-type: application/json" \
   -d '{}'
@@ -171,29 +220,14 @@ curl -X POST http://localhost:8000/snapshot/status \
 curl -X POST http://localhost:8000/refresh \
   -H "content-type: application/json" \
   -d '{"strict":true,"load":true}'
-
-curl http://localhost:8000/stats
 ```
 
-For larger source sets, use the in-memory job API and poll until the job
-finishes:
+For larger source sets, submit long-running operations as local in-memory jobs:
 
 ```bash
-curl -X POST http://localhost:8000/jobs/sync \
-  -H "content-type: application/json" \
-  -d '{}'
-
 curl -X POST http://localhost:8000/jobs/build-load \
   -H "content-type: application/json" \
   -d '{"strict":true}'
-
-curl -X POST http://localhost:8000/jobs/snapshot-status \
-  -H "content-type: application/json" \
-  -d '{}'
-
-curl -X POST http://localhost:8000/jobs/refresh \
-  -H "content-type: application/json" \
-  -d '{"strict":true,"load":true}'
 
 curl -X POST http://localhost:8000/jobs/refresh-changed \
   -H "content-type: application/json" \
@@ -205,72 +239,37 @@ curl http://localhost:8000/jobs/<job_id>
 Job history is local to the running API process. If the container restarts,
 jobs disappear.
 
-Build without loading:
-
-```bash
-curl -X POST http://localhost:8000/build \
-  -H "content-type: application/json" \
-  -d '{"strict":true,"output_path":".repo-graph/output/graph.json"}'
-```
-
-Load an existing graph:
-
-```bash
-curl -X POST http://localhost:8000/load \
-  -H "content-type: application/json" \
-  -d '{}'
-```
-
-The API loads `.repo-graph/output/graph.json` by default based on the active
-config file. Pass `graph_path` in the request body to load a different graph
-inside the running container:
-
-```bash
-curl -X POST http://localhost:8000/load \
-  -H "content-type: application/json" \
-  -d '{"graph_path":"/app/.repo-graph/output/graph.json"}'
-```
-
-For local CLI loading against the Compose Neo4j service:
-
-```bash
-REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
-REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
-pixi run repo-graph load --graph .repo-graph/output/graph.json
-
-REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
-REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
-pixi run repo-graph load --graph .repo-graph/output/graph.json \
-  --replace-source api-service
-
-REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
-REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
-pixi run repo-graph refresh --config config/local-example.yaml --load
-
-REPO_GRAPH_NEO4J_URI=bolt://localhost:7688 \
-REPO_GRAPH_NEO4J_PASSWORD=repo-graph-password \
-pixi run repo-graph stats
-```
-
-Read-only query endpoints are available for agents and local tools:
+Read-only query endpoints for agents and local tools:
 
 ```bash
 curl "http://localhost:8000/scope"
 curl "http://localhost:8000/sources"
-curl "http://localhost:8000/sources/<source_name>/overview"
-curl "http://localhost:8000/sources/<source_name>/files/snippet?path=src/app.py&line=42"
 curl "http://localhost:8000/explore"
 curl "http://localhost:8000/entities/search?type=api_route"
-curl "http://localhost:8000/relationships/search?from_source=api-service&to_source=database"
 curl "http://localhost:8000/entities/<entity_id>/overview"
-curl "http://localhost:8000/entities/<entity_id>/neighbors"
 curl "http://localhost:8000/entities/<entity_id>/impact?direction=in&depth=2"
-curl "http://localhost:8000/edges/unresolved"
+curl "http://localhost:8000/relationships/search?from_source=api-service&to_source=database"
+curl "http://localhost:8000/sources/<source_name>/overview"
+curl "http://localhost:8000/sources/<source_name>/files/snippet?path=src/app.py&line=42"
 curl "http://localhost:8000/reports/unresolved"
 ```
 
 See [docs/agent-usage.md](docs/agent-usage.md) for endpoint examples and agent
 guidance. Raw Cypher is intentionally not exposed yet.
+
+## Agent Integration
+
+Generate a short Markdown snippet for another repository's private
+`AGENTS.md`:
+
+```bash
+pixi run repo-graph agent-instructions \
+  --api-url http://localhost:8000 \
+  --config ../my-repo-graph-sources.yaml
+```
+
+The snippet points agents at `/manifest` as the runtime source of truth. It is
+intended for private working repositories, not as a generated public artifact.
 
 ## Repository Layout
 
@@ -302,15 +301,21 @@ Run the full local check before opening a PR:
 pixi run audit
 ```
 
-## Privacy Model
+GitHub Actions runs the same audit plus a UI JavaScript syntax check on pushes
+and pull requests.
 
-This repo should be safe to publish publicly. Keep private repository lists,
+## Public And Private Boundary
+
+This repository is meant to be public-safe. Keep private repository lists,
 generated graph output, tokens, internal database names, and company-specific
 examples outside this repository.
 
-Generated graphs can reveal private architecture even when the source code is
-not included. Treat generated output, graph database volumes, and local source
+Generated graphs can reveal private architecture even when source code is not
+included. Treat generated output, graph database volumes, and local source
 configs as sensitive when scanning private repositories.
+
+Ignored local files include `.env`, `.env.*`, `.repo-graph/`, `.pixi/`, and
+`config/private*.yaml`.
 
 Neo4j credentials are read from environment variables:
 
