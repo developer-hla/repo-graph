@@ -12,12 +12,24 @@ on:
       - reopened
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: prefix-dev/setup-pixi@v0.9.0
+      - uses: actions/checkout@v6.0.2
+      - uses: prefix-dev/setup-pixi@v0.9.4
         with:
           pixi-version: v0.53.0
-      - run: pixi run audit
+      - name: Install locked Pixi environment
+        run: pixi install --locked
+      - name: Run audit
+        run: pixi run audit
+      - name: Check UI JavaScript syntax
+        run: node --check src/repo_graph/ui/app.js
