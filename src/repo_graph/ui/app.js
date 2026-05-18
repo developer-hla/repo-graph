@@ -383,6 +383,7 @@ async function renderRelationships() {
     <div id="snippet-results"></div>
   `;
   await runRelationshipSearch();
+  await runSnippetLookup();
 }
 
 async function renderUnresolved() {
@@ -649,6 +650,12 @@ function handleDocumentClick(event) {
     navigateToRoute("search");
     return;
   }
+  const searchQueryButton = event.target.closest("[data-search-query]");
+  if (searchQueryButton) {
+    state.search = { q: searchQueryButton.dataset.searchQuery || "", type: "", source: "", limit: 25 };
+    navigateToRoute("search");
+    return;
+  }
   const sourceSearchTypeButton = event.target.closest("[data-source-search-type]");
   if (sourceSearchTypeButton) {
     state.search = {
@@ -692,6 +699,7 @@ function handleDocumentClick(event) {
   const relationshipButton = event.target.closest("[data-relationship-filter]");
   if (relationshipButton) {
     state.relationships = relationshipStateFromDataset(relationshipButton.dataset);
+    state.snippet = { source: "", path: "", line: 1, context: 3 };
     navigateToRoute("relationships");
     return;
   }
@@ -1801,46 +1809,219 @@ function impactPathSteps(item) {
 function unresolvedReportMarkup(report) {
   const summary = report.summary || {};
   const groups = report.items || [];
-  const groupMarkup = groups.length
-    ? groups.map((group) => unresolvedGroupMarkup(group)).join("")
-    : emptyMarkup("No unresolved groups.");
   return `
     <div class="grid three">
       ${metric("Unresolved Edges", numberValue(summary.unresolved_edge_count), "matching edges", true)}
       ${metric("Groups", numberValue(summary.group_count), "target groups", true)}
       ${metric("Returned", numberValue(summary.returned_group_count), "visible groups", true)}
     </div>
-    ${panel("Classification Edge Counts", keyValueTable(objectRows(summary.classification_edge_counts || {})))}
-    <div class="stack">${groupMarkup}</div>
+    ${panel("Triage Summary", unresolvedTriageSummaryTable(report.classification_groups || []))}
+    <div class="grid two">
+      ${panel("Top Sources", unresolvedSourceHotspotsTable(report.source_hotspots || []))}
+      ${panel("Top Targets", unresolvedTargetHotspotsTable(report.target_hotspots || []))}
+    </div>
+    ${groups.length ? unresolvedClassificationSections(groups, report.classification_groups || []) : emptyMarkup("No unresolved groups.")}
   `;
 }
 
-function unresolvedGroupMarkup(group) {
-  const examples = group.examples || [];
-  const exampleRows = examples
+function unresolvedTriageSummaryTable(items) {
+  if (!items.length) return emptyMarkup("No triage summaries.");
+  const rows = items
     .map(
-      (example) => `
+      (item) => `
         <tr>
-          <td>${escapeHtml(example.source_name || "")}</td>
-          <td class="mono">${escapeHtml(example.file_path || "")}</td>
-          <td>${escapeHtml(example.line_number || "")}</td>
-          <td>${escapeHtml(example.parser || "")}</td>
-          <td class="mono">${escapeHtml(example.raw_target || example.normalized_target || "")}</td>
+          <td>${status(item.classification || "", classificationTone(item.classification))}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.group_count)}</td>
+          <td>${inlineList(item.edge_types || [])}</td>
+          <td>${inlineList(item.source_names || [])}</td>
+          <td>${escapeHtml(item.recommended_action || unresolvedRecommendedAction(item.classification))}</td>
         </tr>`
     )
     .join("");
-  return panel(
-    `${group.edge_type} to ${group.to_name}`,
-    `<div class="stack">
-      <div class="inline-list">
-        ${status(group.classification, classificationTone(group.classification))}
-        <span class="chip">${escapeHtml(group.to_type)}</span>
+  return table(["Class", "Edges", "Groups", "Edge Types", "Sources", "Recommended Action"], rows);
+}
+
+function unresolvedSourceHotspotsTable(items) {
+  if (!items.length) return emptyMarkup("No source hotspots.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.group_count)}</td>
+          <td>${inlineList(item.classifications || [])}</td>
+          <td>${inlineList(item.edge_types || [])}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-search-source="${escapeAttr(item.source_name || "")}">Search</button>
+            <button class="button secondary" type="button" data-unresolved-source="${escapeAttr(item.source_name || "")}">Unresolved</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Source", "Edges", "Groups", "Classes", "Edge Types", ""], rows);
+}
+
+function unresolvedTargetHotspotsTable(items) {
+  if (!items.length) return emptyMarkup("No target hotspots.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.to_name || "")}</td>
+          <td>${escapeHtml(item.to_type || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.group_count)}</td>
+          <td>${inlineList(item.source_names || [])}</td>
+          <td>${inlineList(item.classifications || [])}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-search-query="${escapeAttr(item.to_name || "")}">Search Target</button>
+            <button class="button secondary" type="button" data-unresolved-type="${escapeAttr((item.edge_types || [])[0] || "")}">Same Edge</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Target", "Type", "Edges", "Groups", "Sources", "Classes", ""], rows);
+}
+
+function unresolvedClassificationSections(groups, summaries) {
+  const groupsByClassification = groups.reduce((result, group) => {
+    const classification = group.classification || "needs_review";
+    if (!result.has(classification)) result.set(classification, []);
+    result.get(classification).push(group);
+    return result;
+  }, new Map());
+  const summaryByClassification = new Map(summaries.map((summary) => [summary.classification, summary]));
+  return unresolvedClassificationOrder(groupsByClassification)
+    .map((classification) =>
+      unresolvedClassificationSection(
+        classification,
+        summaryByClassification.get(classification) || unresolvedClassificationSummary(classification, groupsByClassification.get(classification) || []),
+        groupsByClassification.get(classification) || []
+      )
+    )
+    .join("");
+}
+
+function unresolvedClassificationOrder(groupsByClassification) {
+  const knownOrder = ["likely_missing_source", "likely_parser_gap", "ambiguous_target", "needs_review"];
+  const unknown = [...groupsByClassification.keys()].filter((classification) => !knownOrder.includes(classification)).sort();
+  return knownOrder.filter((classification) => groupsByClassification.has(classification)).concat(unknown);
+}
+
+function unresolvedClassificationSummary(classification, groups) {
+  return {
+    classification,
+    recommended_action: unresolvedRecommendedAction(classification),
+    count: groups.reduce((total, group) => total + Number(group.count || 0), 0),
+    group_count: groups.length,
+  };
+}
+
+function unresolvedClassificationSection(classification, summary, groups) {
+  return `
+    <section class="triage-section">
+      <div class="triage-section-header">
+        <div>
+          <h2>${escapeHtml(unresolvedClassificationLabel(classification))}</h2>
+          <div class="muted">${escapeHtml(summary.recommended_action || unresolvedRecommendedAction(classification))}</div>
+        </div>
+        <div class="inline-list">
+          ${status(classification, classificationTone(classification))}
+          <span class="chip">${numberValue(summary.count)} edges</span>
+          <span class="chip">${numberValue(summary.group_count)} groups</span>
+        </div>
+      </div>
+      <div class="triage-card-grid">
+        ${groups.map((group) => unresolvedGroupCard(group)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function unresolvedGroupCard(group) {
+  return `
+    <article class="triage-card">
+      <div class="triage-card-header">
+        <div>
+          <h3>${escapeHtml(group.to_name || "unknown target")}</h3>
+          <div class="muted">${escapeHtml(group.edge_type || "")} to ${escapeHtml(group.to_type || "")}</div>
+        </div>
         <span class="chip">${numberValue(group.count)} edges</span>
-        ${inlineList(group.source_names || [])}
       </div>
       <div class="muted">${escapeHtml(group.classification_reason || "")}</div>
-      ${table(["Source", "File", "Line", "Parser", "Target"], exampleRows)}
-    </div>`
+      <div class="triage-action">${escapeHtml(group.recommended_action || unresolvedRecommendedAction(group.classification))}</div>
+      <div class="inline-list">
+        ${(group.source_names || [])
+          .slice(0, 6)
+          .map(
+            (sourceName) =>
+              `<button class="button secondary" type="button" data-search-source="${escapeAttr(sourceName)}">${escapeHtml(sourceName)}</button>`
+          )
+          .join("")}
+        <button class="button secondary" type="button" data-search-query="${escapeAttr(group.to_name || "")}">Search Target</button>
+        ${relationshipFilterButton("Evidence", {
+          type: group.edge_type,
+          toType: group.to_type,
+          resolved: "false",
+        })}
+      </div>
+      ${unresolvedExampleEvidenceTable(group)}
+    </article>
+  `;
+}
+
+function unresolvedExampleEvidenceTable(group) {
+  const examples = group.examples || [];
+  if (!examples.length) return emptyMarkup("No examples.");
+  const rows = examples
+    .map((example) => {
+      const sourceName = example.source_name || "";
+      const target = example.raw_target || example.normalized_target || group.to_name || "";
+      return `
+        <tr>
+          <td>${escapeHtml(sourceName)}</td>
+          <td class="mono">${escapeHtml(example.file_path || "")}</td>
+          <td>${escapeHtml(example.line_number || "")}</td>
+          <td>${escapeHtml(example.parser || "")}</td>
+          <td class="mono">${escapeHtml(target)}</td>
+          <td class="row-actions">
+            ${snippetButton(sourceName, example.file_path, example.line_number)}
+            <button class="button secondary" type="button" data-search-source="${escapeAttr(sourceName)}">Source</button>
+            <button class="button secondary" type="button" data-search-query="${escapeAttr(group.to_name || target)}">Target</button>
+            ${relationshipFilterButton("Evidence", {
+              fromSource: sourceName,
+              type: group.edge_type,
+              toType: group.to_type,
+              resolved: "false",
+            })}
+          </td>
+        </tr>`;
+    })
+    .join("");
+  return table(["Source", "File", "Line", "Parser", "Target", ""], rows);
+}
+
+function unresolvedClassificationLabel(classification) {
+  return (
+    {
+      likely_missing_source: "Likely Missing Source",
+      likely_parser_gap: "Likely Parser Gap",
+      ambiguous_target: "Ambiguous Target",
+      needs_review: "Needs Review",
+    }[classification] || classification
+  );
+}
+
+function unresolvedRecommendedAction(classification) {
+  return (
+    {
+      likely_missing_source: "Add or sync the repository, package, service, or database project that owns this target.",
+      likely_parser_gap: "Improve extractor coverage or add a parser slice for this declaration or reference shape.",
+      ambiguous_target: "Review the candidates and add enough context for Repo Graph to resolve the target safely.",
+      needs_review: "Inspect the evidence and decide whether this is missing scope, a parser gap, or expected dynamic behavior.",
+    }[classification] || "Inspect the evidence and decide the next action."
   );
 }
 

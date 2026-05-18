@@ -521,9 +521,14 @@ Report groups include:
 
 - `classification`: a hint such as `likely_missing_source`,
   `ambiguous_target`, `likely_parser_gap`, or `needs_review`
+- `recommended_action`: the next triage step suggested by the classification
 - `count`: how many unresolved edges matched the same target
 - `source_names`: which sources reference that target
 - `examples`: bounded file and line evidence
+
+The response also includes `classification_groups`, `source_hotspots`, and
+`target_hotspots` so agents can summarize the highest-value follow-up work
+before inspecting individual evidence examples.
 
 Treat classifications as triage hints. They are not proof that code is unused
 or that a repository is definitely missing.

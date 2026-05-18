@@ -175,12 +175,43 @@ and from the loaded graph through the API.
       "likely_parser_gap": 1
     }
   },
+  "classification_groups": [
+    {
+      "classification": "likely_missing_source",
+      "recommended_action": "Add or sync the repository, package, service, or database project that owns this target.",
+      "count": 2,
+      "group_count": 1,
+      "source_names": ["api-service"],
+      "edge_types": ["CALLS_SQL"]
+    }
+  ],
+  "source_hotspots": [
+    {
+      "source_name": "api-service",
+      "count": 4,
+      "group_count": 2,
+      "classifications": ["likely_missing_source"],
+      "edge_types": ["CALLS_SQL"]
+    }
+  ],
+  "target_hotspots": [
+    {
+      "to_type": "stored_procedure",
+      "to_name": "dbo.load",
+      "count": 4,
+      "group_count": 1,
+      "classifications": ["likely_missing_source"],
+      "edge_types": ["CALLS_SQL"],
+      "source_names": ["api-service"]
+    }
+  ],
   "items": [
     {
       "edge_type": "CALLS_SQL",
       "to_type": "stored_procedure",
       "to_name": "dbo.load",
       "classification": "likely_missing_source",
+      "recommended_action": "Add or sync the repository, package, service, or database project that owns this target.",
       "count": 4,
       "source_names": ["api-service"],
       "parsers": ["sql_reference"],

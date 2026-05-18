@@ -190,6 +190,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn("impactPathEvidenceTable", script.text)
         self.assertIn("advancedControls", script.text)
         self.assertIn("data-impact-direction", script.text)
+        self.assertIn("unresolvedClassificationSections", script.text)
+        self.assertIn("unresolvedSourceHotspotsTable", script.text)
+        self.assertIn("data-search-query", script.text)
         self.assertIn("data-source-name", script.text)
         self.assertIn("data-entity-source-type", script.text)
         self.assertIn("data-relationship-filter", script.text)
@@ -207,6 +210,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn(".app-shell", styles.text)
         self.assertIn(".global-search", styles.text)
         self.assertIn(".advanced-controls", styles.text)
+        self.assertIn(".triage-card", styles.text)
         self.assertIn(".action-grid", styles.text)
         self.assertIn(".refresh-summary", styles.text)
 
@@ -958,6 +962,9 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(payload["summary"]["unresolved_edge_count"], 1)
         self.assertEqual(payload["items"][0]["classification"], "likely_missing_source")
+        self.assertEqual(payload["classification_groups"][0]["classification"], "likely_missing_source")
+        self.assertEqual(payload["source_hotspots"][0]["source_name"], "api-service")
+        self.assertEqual(payload["target_hotspots"][0]["to_name"], "dbo.load")
         self.assertEqual(payload["edge_sample_limit"], 1000)
         self.assertFalse(payload["edge_sample_truncated"])
         unresolved.assert_called_once()

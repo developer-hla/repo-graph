@@ -47,6 +47,20 @@ PARSER_GAP_TARGET_TYPES = {
     "interface",
     "module",
 }
+CLASSIFICATION_ORDER = {
+    "likely_missing_source": 0,
+    "likely_parser_gap": 1,
+    "ambiguous_target": 2,
+    "needs_review": 3,
+}
+CLASSIFICATION_ACTIONS = {
+    "likely_missing_source": "Add or sync the repository, package, service, or database project that owns this target.",
+    "likely_parser_gap": "Improve extractor coverage or add a parser slice for this declaration or reference shape.",
+    "ambiguous_target": "Review the candidates and add enough context for Repo Graph to resolve the target safely.",
+    "needs_review": (
+        "Inspect the evidence and decide whether this is missing scope, a parser gap, or expected dynamic behavior."
+    ),
+}
 
 
 def unresolved_report_from_graph(
@@ -137,6 +151,9 @@ def unresolved_report(
             "generated_at": generated_at,
             "filters": compact_dict({"source": source_name, "edge_type": edge_type}),
             "summary": report_summary(filtered_edges, items, limited_items),
+            "classification_groups": classification_group_summaries(items),
+            "source_hotspots": source_hotspots_from_edges(filtered_edges),
+            "target_hotspots": target_hotspots(items),
             "items": limited_items,
         }
     )
@@ -206,17 +223,139 @@ def edge_example(edge: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def finalize_group(group: Mapping[str, Any]) -> dict[str, Any]:
+    classification = group["classification"]
     return {
         "edge_type": group["edge_type"],
         "to_type": group["to_type"],
         "to_name": group["to_name"],
-        "classification": group["classification"],
+        "classification": classification,
         "classification_reason": group["classification_reason"],
+        "recommended_action": recommended_action(classification),
         "count": group["count"],
         "source_names": sorted(group["source_names"]),
         "parsers": sorted(group["parsers"]),
         "examples": group["examples"],
     }
+
+
+def recommended_action(classification: str) -> str:
+    return CLASSIFICATION_ACTIONS.get(classification, CLASSIFICATION_ACTIONS["needs_review"])
+
+
+def classification_group_summaries(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for item in items:
+        classification = item["classification"]
+        group = groups.setdefault(
+            classification,
+            {
+                "classification": classification,
+                "recommended_action": recommended_action(classification),
+                "count": 0,
+                "group_count": 0,
+                "source_names": set(),
+                "edge_types": set(),
+            },
+        )
+        group["count"] += item["count"]
+        group["group_count"] += 1
+        group["source_names"].update(item["source_names"])
+        add_if_present(group["edge_types"], item["edge_type"])
+
+    summaries = [
+        {
+            "classification": group["classification"],
+            "recommended_action": group["recommended_action"],
+            "count": group["count"],
+            "group_count": group["group_count"],
+            "source_names": sorted(group["source_names"]),
+            "edge_types": sorted(group["edge_types"]),
+        }
+        for group in groups.values()
+    ]
+    summaries.sort(key=lambda group: (classification_rank(group["classification"]), -group["count"]))
+    return summaries
+
+
+def source_hotspots_from_edges(edges: list[Mapping[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    hotspots: dict[str, dict[str, Any]] = {}
+    for edge in edges:
+        source_name = string_value(edge.get("source_name")) or "unknown"
+        classification, _reason = classify_unresolved_edge(edge)
+        edge_type = string_value(edge.get("edge_type")) or "unknown"
+        target_type = string_value(edge.get("to_type")) or "unknown"
+        target_name = string_value(edge.get("to_name")) or "unknown"
+        hotspot = hotspots.setdefault(
+            source_name,
+            {
+                "source_name": source_name,
+                "count": 0,
+                "group_keys": set(),
+                "classifications": set(),
+                "edge_types": set(),
+            },
+        )
+        hotspot["count"] += 1
+        hotspot["group_keys"].add((edge_type, target_type, target_name, classification))
+        add_if_present(hotspot["classifications"], classification)
+        add_if_present(hotspot["edge_types"], edge_type)
+
+    return sorted(
+        (
+            {
+                "source_name": hotspot["source_name"],
+                "count": hotspot["count"],
+                "group_count": len(hotspot["group_keys"]),
+                "classifications": sorted(hotspot["classifications"], key=classification_rank),
+                "edge_types": sorted(hotspot["edge_types"]),
+            }
+            for hotspot in hotspots.values()
+        ),
+        key=lambda hotspot: (-hotspot["count"], hotspot["source_name"]),
+    )[:limit]
+
+
+def target_hotspots(items: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    hotspots: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in items:
+        key = (item["to_type"], item["to_name"])
+        hotspot = hotspots.setdefault(
+            key,
+            {
+                "to_type": item["to_type"],
+                "to_name": item["to_name"],
+                "count": 0,
+                "group_count": 0,
+                "classifications": set(),
+                "edge_types": set(),
+                "source_names": set(),
+            },
+        )
+        hotspot["count"] += item["count"]
+        hotspot["group_count"] += 1
+        add_if_present(hotspot["classifications"], item["classification"])
+        add_if_present(hotspot["edge_types"], item["edge_type"])
+        hotspot["source_names"].update(item["source_names"])
+
+    return sorted(
+        (
+            {
+                "to_type": hotspot["to_type"],
+                "to_name": hotspot["to_name"],
+                "count": hotspot["count"],
+                "group_count": hotspot["group_count"],
+                "classifications": sorted(hotspot["classifications"], key=classification_rank),
+                "edge_types": sorted(hotspot["edge_types"]),
+                "source_names": sorted(hotspot["source_names"]),
+            }
+            for hotspot in hotspots.values()
+        ),
+        key=lambda hotspot: (-hotspot["count"], hotspot["to_type"], hotspot["to_name"]),
+    )[:limit]
+
+
+def classification_rank(classification: str) -> int:
+    return CLASSIFICATION_ORDER.get(classification, len(CLASSIFICATION_ORDER))
 
 
 def report_summary(
