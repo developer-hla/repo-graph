@@ -98,6 +98,10 @@ impact, unresolved-reference review, and graph refresh jobs. Lower-level source,
 relationship, and entity evidence views are opened from those workflows. The
 manifest tells agents which API capabilities are available and which graph
 capabilities are still planned.
+UI state is encoded in hash routes such as
+`/ui#search?q=orders&type=api_route` and
+`/ui#impact?entityId=<entity_id>&direction=in`, so result views can be
+refreshed or shared.
 
 Print a Markdown snippet for another repository's `AGENTS.md`:
 

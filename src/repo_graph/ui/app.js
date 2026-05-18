@@ -137,12 +137,12 @@ checkRuntime();
 renderRoute();
 
 function activeRoute() {
-  const hash = window.location.hash.replace(/^#/, "");
-  return routes[hash] ? hash : "overview";
+  return parseHashRoute().routeName;
 }
 
 function renderRoute() {
-  const routeName = activeRoute();
+  const { routeName, params } = parseHashRoute();
+  hydrateRouteState(routeName, params);
   state.currentRoute = routeName;
   const route = routes[routeName];
   const navRoute = route.navRoute || routeName;
@@ -155,6 +155,84 @@ function renderRoute() {
   route.render().catch((error) => {
     view.innerHTML = errorMarkup(error);
   });
+}
+
+function parseHashRoute() {
+  const rawHash = window.location.hash.replace(/^#/, "");
+  const [rawRoute, rawQuery = ""] = rawHash.split("?", 2);
+  const routeName = routes[rawRoute] ? rawRoute : "overview";
+  return { routeName, params: new URLSearchParams(rawQuery) };
+}
+
+function hydrateRouteState(routeName, params) {
+  if (routeName === "search") {
+    state.search = {
+      q: stringParam(params, "q"),
+      type: stringParam(params, "type"),
+      source: stringParam(params, "source"),
+      limit: numberParam(params, "limit", 25),
+    };
+  }
+  if (routeName === "unresolved") {
+    state.unresolved = {
+      source: stringParam(params, "source"),
+      type: stringParam(params, "type"),
+      limit: numberParam(params, "limit", 50),
+      examples: numberParam(params, "examples", 3),
+    };
+  }
+  if (routeName === "impact") {
+    state.impact = {
+      entityId: stringParam(params, "entityId"),
+      direction: stringParam(params, "direction", "in") || "in",
+      profile: stringParam(params, "profile", "impact") || "impact",
+      type: stringParam(params, "type"),
+      depth: numberParam(params, "depth", 2),
+      limit: numberParam(params, "limit", 100),
+    };
+  }
+  if (routeName === "entity") {
+    state.entity = {
+      id: stringParam(params, "id", stringParam(params, "entityId")),
+      limit: numberParam(params, "limit", 50),
+    };
+  }
+  if (routeName === "source") {
+    state.source = {
+      name: stringParam(params, "name"),
+      limit: numberParam(params, "limit", 50),
+    };
+  }
+  if (routeName === "relationships") {
+    state.relationships = {
+      fromSource: stringParam(params, "fromSource"),
+      toSource: stringParam(params, "toSource"),
+      type: stringParam(params, "type"),
+      fromType: stringParam(params, "fromType"),
+      toType: stringParam(params, "toType"),
+      resolved: stringParam(params, "resolved"),
+      limit: numberParam(params, "limit", 100),
+    };
+    state.snippet = {
+      source: stringParam(params, "snippetSource"),
+      path: stringParam(params, "snippetPath"),
+      line: numberParam(params, "snippetLine", 1),
+      context: numberParam(params, "snippetContext", 3),
+    };
+  }
+  if (routeName === "explore") {
+    state.explore.limit = numberParam(params, "limit", 50);
+  }
+}
+
+function stringParam(params, name, fallback = "") {
+  return params.has(name) ? (params.get(name) || "").trim() : fallback;
+}
+
+function numberParam(params, name, fallback) {
+  if (!params.has(name)) return fallback;
+  const value = Number(params.get(name));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 async function checkRuntime() {
@@ -635,7 +713,7 @@ async function refreshJobsPanel() {
 function handleDocumentClick(event) {
   const routeLink = event.target.closest("[data-route-link]");
   if (routeLink) {
-    navigateToRoute(routeLink.dataset.routeLink);
+    navigateToRoute(routeLink.dataset.routeLink, {});
     return;
   }
   const searchTypeButton = event.target.closest("[data-search-type]");
@@ -722,13 +800,7 @@ function handleDocumentClick(event) {
       line: Number(snippetButton.dataset.snippetLine || 1),
       context: Number(snippetButton.dataset.snippetContext || 3),
     };
-    if (state.currentRoute === "relationships") {
-      runSnippetLookup().catch((error) => {
-        document.querySelector("#snippet-results").innerHTML = panel("Source Snippet", errorMarkup(error));
-      });
-    } else {
-      navigateToRoute("relationships");
-    }
+    navigateToRoute("relationships");
     return;
   }
   const entitySourceTypeButton = event.target.closest("[data-entity-source-type]");
@@ -764,11 +836,7 @@ function handleDocumentClick(event) {
     if (directionSelect) {
       directionSelect.value = state.impact.direction;
     }
-    if (state.currentRoute === "impact" && state.impact.entityId) {
-      runImpact().catch((error) => {
-        document.querySelector("#impact-results").innerHTML = errorMarkup(error);
-      });
-    }
+    navigateToRoute("impact");
     return;
   }
   const impactButton = event.target.closest("[data-impact-id]");
@@ -778,14 +846,54 @@ function handleDocumentClick(event) {
   }
 }
 
-function navigateToRoute(routeName) {
+function navigateToRoute(routeName, params = routeParams(routeName)) {
   if (!routes[routeName]) return;
-  const nextHash = `#${routeName}`;
+  writeHashRoute(routeName, params);
+}
+
+function writeHashRoute(routeName, params = {}) {
+  const nextHash = hashForRoute(routeName, params);
   if (window.location.hash === nextHash) {
     renderRoute();
   } else {
     window.location.hash = nextHash;
   }
+}
+
+function hashForRoute(routeName, params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.set(key, String(value));
+    }
+  });
+  const queryText = query.toString();
+  return queryText ? `#${routeName}?${queryText}` : `#${routeName}`;
+}
+
+function routeParams(routeName) {
+  if (routeName === "search") return compactParams(state.search);
+  if (routeName === "unresolved") return compactParams(state.unresolved);
+  if (routeName === "impact") return compactParams(state.impact);
+  if (routeName === "entity") return compactParams({ id: state.entity.id, limit: state.entity.limit });
+  if (routeName === "source") return compactParams({ name: state.source.name, limit: state.source.limit });
+  if (routeName === "relationships") {
+    return compactParams({
+      ...state.relationships,
+      snippetSource: state.snippet.source,
+      snippetPath: state.snippet.path,
+      snippetLine: state.snippet.line,
+      snippetContext: state.snippet.context,
+    });
+  }
+  if (routeName === "explore") return compactParams(state.explore);
+  return {};
+}
+
+function compactParams(params) {
+  return Object.fromEntries(
+    Object.entries(params || {}).filter(([_key, value]) => value !== undefined && value !== null && value !== "")
+  );
 }
 
 function relationshipStateFromDataset(dataset) {
@@ -822,18 +930,14 @@ function handleDocumentSubmit(event) {
       source: stringField(data, "source"),
       limit: numberField(data, "limit", 25),
     };
-    runSearch().catch((error) => {
-      document.querySelector("#search-results").innerHTML = errorMarkup(error);
-    });
+    navigateToRoute("search");
   }
   if (form.dataset.form === "entity") {
     state.entity = {
       id: stringField(data, "entityId"),
       limit: numberField(data, "limit", 50),
     };
-    runEntityOverview().catch((error) => {
-      document.querySelector("#entity-results").innerHTML = errorMarkup(error);
-    });
+    navigateToRoute("entity");
   }
   if (form.dataset.form === "relationships") {
     state.relationships = {
@@ -845,9 +949,7 @@ function handleDocumentSubmit(event) {
       resolved: stringField(data, "resolved"),
       limit: numberField(data, "limit", 100),
     };
-    runRelationshipSearch().catch((error) => {
-      document.querySelector("#relationship-results").innerHTML = errorMarkup(error);
-    });
+    navigateToRoute("relationships");
   }
   if (form.dataset.form === "unresolved") {
     state.unresolved = {
@@ -856,9 +958,7 @@ function handleDocumentSubmit(event) {
       limit: numberField(data, "limit", 50),
       examples: numberField(data, "examples", 3),
     };
-    runUnresolvedReport().catch((error) => {
-      document.querySelector("#unresolved-results").innerHTML = errorMarkup(error);
-    });
+    navigateToRoute("unresolved");
   }
   if (form.dataset.form === "impact") {
     state.impact = {
@@ -869,9 +969,7 @@ function handleDocumentSubmit(event) {
       depth: numberField(data, "depth", 2),
       limit: numberField(data, "limit", 100),
     };
-    runImpact().catch((error) => {
-      document.querySelector("#impact-results").innerHTML = errorMarkup(error);
-    });
+    navigateToRoute("impact");
   }
 }
 

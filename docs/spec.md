@@ -209,6 +209,9 @@ relationship, and snippet evidence views should remain available as contextual
 drilldowns rather than primary navigation items. Advanced filters should stay
 available, but the default surface should emphasize the question a user is
 trying to answer rather than every query parameter.
+UI routes should be shareable through hash query parameters so developers and
+agents can link directly to a search, entity overview, impact query,
+unresolved triage filter, or relationship evidence view.
 
 Impact queries should default to dependency and usage edges so refactor
 blast-radius results are not dominated by containment or declaration paths.
