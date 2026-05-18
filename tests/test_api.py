@@ -193,6 +193,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("unresolvedClassificationSections", script.text)
         self.assertIn("unresolvedSourceHotspotsTable", script.text)
         self.assertIn("data-search-query", script.text)
+        self.assertIn("coverageWarningsPanel", script.text)
+        self.assertIn("data-unresolved-filter", script.text)
         self.assertIn("data-source-name", script.text)
         self.assertIn("data-entity-source-type", script.text)
         self.assertIn("data-relationship-filter", script.text)
@@ -211,6 +213,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn(".global-search", styles.text)
         self.assertIn(".advanced-controls", styles.text)
         self.assertIn(".triage-card", styles.text)
+        self.assertIn(".coverage-strip", styles.text)
         self.assertIn(".action-grid", styles.text)
         self.assertIn(".refresh-summary", styles.text)
 
@@ -831,10 +834,15 @@ class ApiTests(unittest.TestCase):
         with (
             patch("repo_graph.api.get_entity", return_value=entity),
             patch("repo_graph.api.get_entity_neighbors", side_effect=[incoming, outgoing]) as neighbors,
+            patch("repo_graph.api.list_unresolved_edges", return_value=[]) as unresolved,
         ):
             payload = entity_overview_response(settings, "entity-1", 20)
 
         self.assertEqual(payload["entity"], entity)
+        self.assertEqual(payload["coverage"]["status"], "ok")
+        self.assertFalse(payload["coverage"]["edge_sample_truncated"])
+        unresolved.assert_called_once()
+        self.assertEqual(unresolved.call_args.kwargs["source_name"], "api-service")
         self.assertEqual(payload["incoming"]["count"], 1)
         self.assertEqual(payload["incoming"]["groups"][0]["source_name"], "web-service")
         self.assertEqual(payload["incoming"]["groups"][0]["neighbor_type"], "service")
@@ -844,6 +852,54 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(neighbors.call_args_list[0].kwargs["direction"], "in")
         self.assertEqual(neighbors.call_args_list[1].kwargs["direction"], "out")
         self.assertEqual(neighbors.call_args_list[0].kwargs["limit"], 20)
+
+    def test_entity_overview_response_adds_coverage_warnings(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        entity = {
+            "entity_id": "entity-1",
+            "entity_type": "api_route",
+            "name": "GET /accounts",
+            "source_name": "api-service",
+        }
+        unresolved_items = [
+            {
+                "edge": {
+                    "edge_id": "edge-1",
+                    "edge_type": "CALLS_SQL",
+                    "to_type": "stored_procedure",
+                    "to_name": "dbo.load",
+                    "source_name": "api-service",
+                    "resolved": False,
+                    "properties": {},
+                }
+            },
+            {
+                "edge": {
+                    "edge_id": "edge-2",
+                    "edge_type": "IMPORTS",
+                    "to_type": "module",
+                    "to_name": "internal.module",
+                    "source_name": "api-service",
+                    "resolved": False,
+                    "properties": {},
+                }
+            },
+        ]
+
+        with (
+            patch("repo_graph.api.get_entity", return_value=entity),
+            patch("repo_graph.api.get_entity_neighbors", return_value=[]),
+            patch("repo_graph.api.list_unresolved_edges", return_value=unresolved_items),
+        ):
+            payload = entity_overview_response(settings, "entity-1", 20)
+
+        self.assertEqual(payload["coverage"]["status"], "warning")
+        self.assertEqual(payload["coverage"]["source_name"], "api-service")
+        self.assertEqual(payload["coverage"]["unresolved_edge_count"], 2)
+        self.assertFalse(payload["coverage"]["edge_sample_truncated"])
+        self.assertEqual(payload["coverage"]["warnings"][0]["code"], "missing_source")
+        self.assertEqual(payload["coverage"]["warnings"][1]["code"], "parser_gap")
+        self.assertTrue(any(warning["code"] == "unresolved_sql_calls" for warning in payload["coverage"]["warnings"]))
 
     def test_entity_overview_response_raises_for_missing_entity(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
@@ -865,7 +921,7 @@ class ApiTests(unittest.TestCase):
 
     def test_impact_response_groups_neighbors_by_source(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
-        entity = {"entity_id": "entity-1", "name": "dbo.GetThing"}
+        entity = {"entity_id": "entity-1", "name": "dbo.GetThing", "source_name": "database"}
         items = [
             {
                 "depth": 1,
@@ -882,10 +938,12 @@ class ApiTests(unittest.TestCase):
         with (
             patch("repo_graph.api.entity_response", return_value=entity),
             patch("repo_graph.api.get_entity_neighbors", return_value=items) as neighbors,
+            patch("repo_graph.api.list_unresolved_edges", return_value=[]),
         ):
             payload = impact_response(settings, "entity-1", "in", "CALLS_SQL", 2, 25)
 
         self.assertEqual(payload["entity"], entity)
+        self.assertEqual(payload["coverage"]["status"], "ok")
         self.assertEqual(payload["profile"], "impact")
         self.assertIsNone(payload["allowed_edge_types"])
         self.assertEqual(payload["affected_source_count"], 2)

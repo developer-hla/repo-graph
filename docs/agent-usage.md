@@ -382,13 +382,17 @@ curl "http://localhost:8000/entities/<entity_id>/overview"
 The response bundles:
 
 - entity metadata
+- `coverage`: unresolved-reference warnings for the entity's source, including
+  sample truncation metadata
 - direct incoming relationships and grouped counts
 - direct outgoing relationships and grouped counts
 - example relationship records for each direction
 
 Use this before jumping to impact when you need local context around one graph
 entity, such as who directly calls it, what it directly uses, or which source
-owns the neighboring entities.
+owns the neighboring entities. If `coverage.status` is `warning`, mention that
+direct relationship context may be incomplete and link the warning back to
+`/reports/unresolved?source=<source_name>`.
 
 ## Get Neighbors
 
@@ -470,6 +474,8 @@ Useful response fields:
   `profile=all` or `type` is provided
 - `items`: bounded neighbor/path examples
 - `items[].path.steps`: ordered edge-by-edge proof chain for each returned path
+- `coverage`: unresolved-reference warnings for the start entity's source,
+  including sample truncation metadata
 - `affected_sources`: groups by source name with count, minimum depth, entity
   types, edge types, and examples
 - `affected_source_count`: number of source groups in the result
@@ -480,7 +486,10 @@ line number, parser, confidence, and source metadata when the parser found it.
 Use source snippets for any step with file and line evidence.
 
 Agents should treat this as evidence for likely blast radius, not a proof that
-all runtime dependencies were discovered.
+all runtime dependencies were discovered. If `coverage.warnings` is non-empty,
+state that the known impact paths may be incomplete and inspect
+`/reports/unresolved` for the same source before making a high-confidence
+refactor claim.
 
 ## List Unresolved Edges
 

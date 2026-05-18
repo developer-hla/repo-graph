@@ -842,6 +842,7 @@ def entity_overview_response(settings: RuntimeSettings, entity_id: str, limit: i
         "entity": entity,
         "entity_id": entity_id,
         "limit": limit,
+        "coverage": coverage_warnings_for_entity_source(settings, entity),
         "incoming": {
             "items": incoming,
             "groups": relationship_groups(incoming),
@@ -915,7 +916,139 @@ def impact_response(
         "affected_source_count": len(affected_sources),
         "affected_sources": affected_sources,
         "path_groups": impact_path_groups(items),
+        "coverage": coverage_warnings_for_entity_source(settings, entity),
     }
+
+
+def coverage_warnings_for_entity_source(settings: RuntimeSettings, entity: Mapping[str, Any]) -> dict[str, Any]:
+    source_name = string_mapping_value(entity, "source_name")
+    if not source_name:
+        return {
+            "source_name": None,
+            "status": "unknown",
+            "unresolved_edge_count": 0,
+            "warnings": [
+                {
+                    "code": "source_unknown",
+                    "message": "Coverage could not be checked because this entity has no source.",
+                    "severity": "info",
+                }
+            ],
+        }
+
+    items = list_unresolved_edges(
+        settings.neo4j_settings(),
+        source_name=source_name,
+        edge_type=None,
+        limit=UNRESOLVED_REPORT_EDGE_LIMIT,
+    )
+    report = unresolved_report_from_items(
+        items,
+        source_name=source_name,
+        edge_type=None,
+        group_limit=25,
+        examples_per_group=1,
+    )
+    warnings = coverage_warnings_from_report(report)
+    return {
+        "source_name": source_name,
+        "status": "warning" if warnings else "ok",
+        "unresolved_edge_count": report.get("summary", {}).get("unresolved_edge_count", 0),
+        "edge_sample_limit": UNRESOLVED_REPORT_EDGE_LIMIT,
+        "edge_sample_truncated": len(items) >= UNRESOLVED_REPORT_EDGE_LIMIT,
+        "warnings": warnings,
+    }
+
+
+def coverage_warnings_from_report(report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+    groups = report.get("items", [])
+    if not isinstance(groups, list):
+        return warnings
+    warnings.extend(coverage_edge_type_warnings(groups))
+    warnings.extend(coverage_classification_warnings(report))
+    warnings.sort(key=lambda item: (coverage_severity_rank(item["severity"]), -item["count"], item["code"]))
+    return warnings[:8]
+
+
+def coverage_edge_type_warnings(groups: list[Any]) -> list[dict[str, Any]]:
+    edge_counts: dict[str, int] = {}
+    for group in groups:
+        if not isinstance(group, Mapping):
+            continue
+        edge_type = string_mapping_value(group, "edge_type")
+        if not edge_type:
+            continue
+        edge_counts[edge_type] = edge_counts.get(edge_type, 0) + int(group.get("count") or 0)
+
+    warning_defs = [
+        ("CALLS_SQL", "unresolved_sql_calls", "This source has unresolved SQL calls.", "warning"),
+        ("READS_SQL_OBJECT", "unresolved_sql_reads", "This source has unresolved SQL object reads.", "warning"),
+        ("CALLS_SERVICE", "unresolved_service_calls", "This source has unresolved service calls.", "warning"),
+        ("CALLS_HTTP", "unresolved_http_calls", "This source has unresolved HTTP calls.", "warning"),
+        ("IMPORTS", "unresolved_imports", "This source has unresolved imports.", "info"),
+    ]
+    return [
+        coverage_warning(code, message, count, severity, edge_type=edge_type)
+        for edge_type, code, message, severity in warning_defs
+        if (count := edge_counts.get(edge_type, 0)) > 0
+    ]
+
+
+def coverage_classification_warnings(report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    summary = report.get("summary", {})
+    if not isinstance(summary, Mapping):
+        return []
+    classification_counts = summary.get("classification_edge_counts", {})
+    if not isinstance(classification_counts, Mapping):
+        return []
+    warning_defs = [
+        (
+            "likely_parser_gap",
+            "parser_gap",
+            "Parser gaps may hide local symbol, route, or import relationships.",
+            "warning",
+        ),
+        (
+            "ambiguous_target",
+            "ambiguous_targets",
+            "Ambiguous targets exist and were not linked.",
+            "warning",
+        ),
+        (
+            "likely_missing_source",
+            "missing_source",
+            "Missing source coverage may hide additional blast radius.",
+            "warning",
+        ),
+    ]
+    return [
+        coverage_warning(code, message, count, severity, classification=classification)
+        for classification, code, message, severity in warning_defs
+        if (count := int(classification_counts.get(classification) or 0)) > 0
+    ]
+
+
+def coverage_warning(
+    code: str,
+    message: str,
+    count: int,
+    severity: str,
+    edge_type: str | None = None,
+    classification: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "code": code,
+        "message": message,
+        "count": count,
+        "severity": severity,
+        "edge_type": edge_type,
+        "classification": classification,
+    }
+
+
+def coverage_severity_rank(severity: str) -> int:
+    return {"warning": 0, "info": 1}.get(severity, 2)
 
 
 def normalize_impact_profile(value: str) -> str:

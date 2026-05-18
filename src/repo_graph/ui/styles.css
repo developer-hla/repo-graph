@@ -476,6 +476,27 @@ button:focus {
   color: var(--text);
 }
 
+.coverage-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(168, 98, 0, 0.3);
+  border-radius: 8px;
+  background: #fff8e8;
+  color: var(--text);
+}
+
+.coverage-strip div {
+  display: grid;
+  gap: 3px;
+}
+
+.coverage-strip span {
+  color: var(--muted);
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -686,7 +707,8 @@ tbody tr:hover {
 
   .query-row,
   .topbar-actions,
-  .global-search {
+  .global-search,
+  .coverage-strip {
     display: grid;
   }
 

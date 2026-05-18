@@ -690,6 +690,17 @@ function handleDocumentClick(event) {
     navigateToRoute("unresolved");
     return;
   }
+  const unresolvedFilterButton = event.target.closest("[data-unresolved-filter]");
+  if (unresolvedFilterButton) {
+    state.unresolved = {
+      source: unresolvedFilterButton.dataset.unresolvedSourceValue || "",
+      type: unresolvedFilterButton.dataset.unresolvedTypeValue || "",
+      limit: 50,
+      examples: 3,
+    };
+    navigateToRoute("unresolved");
+    return;
+  }
   const sourceButton = event.target.closest("[data-source-name]");
   if (sourceButton) {
     state.source.name = sourceButton.dataset.sourceName;
@@ -1441,6 +1452,87 @@ function relationshipFilterButton(label, filters) {
   `;
 }
 
+function coverageWarningStrip(coverage) {
+  const warnings = coverage?.warnings || [];
+  if (!warnings.length || coverage.status === "ok") return "";
+  const sourceName = coverage.source_name || "";
+  const warningText = warnings
+    .slice(0, 2)
+    .map((warning) => warning.message)
+    .join(" ");
+  return `
+    <div class="coverage-strip">
+      <div>
+        <strong>Coverage warnings</strong>
+        <span>${escapeHtml(warningText)}</span>
+      </div>
+      ${coverageUnresolvedButton("Review", sourceName, "")}
+    </div>
+  `;
+}
+
+function coverageWarningsPanel(coverage) {
+  return panel("Coverage Warnings", coverageWarningsMarkup(coverage));
+}
+
+function coverageWarningsMarkup(coverage) {
+  if (!coverage) return emptyMarkup("Coverage has not been checked.");
+  const sourceName = coverage.source_name || "";
+  const warnings = coverage.warnings || [];
+  if (coverage.status === "unknown") {
+    return emptyMarkup(warnings[0]?.message || "Coverage could not be checked for this entity.");
+  }
+  if (coverage.status === "ok" || !warnings.length) {
+    return emptyMarkup(`No unresolved references found for ${sourceName || "this source"}.`);
+  }
+  const rows = warnings
+    .map(
+      (warning) => `
+        <tr>
+          <td>${status(warning.severity || "info", coverageSeverityTone(warning.severity))}</td>
+          <td>${escapeHtml(warning.message || "")}</td>
+          <td>${numberValue(warning.count)}</td>
+          <td>${escapeHtml(warning.edge_type || warning.classification || "")}</td>
+          <td class="row-actions">
+            ${coverageUnresolvedButton("Open Triage", sourceName, warning.edge_type || "")}
+          </td>
+        </tr>`
+    )
+    .join("");
+  return `
+    <div class="stack">
+      <div class="message">
+        Known impact paths may be incomplete while ${coverageCountLabel(coverage)} unresolved
+        references remain in ${escapeHtml(sourceName || "this source")}.
+      </div>
+      ${table(["Level", "Warning", "Count", "Filter", ""], rows)}
+    </div>
+  `;
+}
+
+function coverageUnresolvedButton(label, sourceName, edgeType) {
+  return `
+    <button
+      class="button secondary"
+      type="button"
+      data-unresolved-filter="true"
+      data-unresolved-source-value="${escapeAttr(sourceName || "")}"
+      data-unresolved-type-value="${escapeAttr(edgeType || "")}"
+    >${escapeHtml(label)}</button>
+  `;
+}
+
+function coverageSeverityTone(severity) {
+  if (severity === "warning") return "warn";
+  if (severity === "error") return "bad";
+  return "";
+}
+
+function coverageCountLabel(coverage) {
+  const count = numberValue(coverage.unresolved_edge_count);
+  return coverage.edge_sample_truncated ? `at least ${count}` : count;
+}
+
 function entityOverviewMarkup(payload) {
   const entity = payload.entity || {};
   const incoming = payload.incoming || {};
@@ -1451,6 +1543,7 @@ function entityOverviewMarkup(payload) {
       ${metric("Outgoing", numberValue(outgoing.count), "direct relationships", true)}
       ${metric("Limit", numberValue(payload.limit), "per direction", true)}
     </div>
+    ${coverageWarningStrip(payload.coverage)}
     ${panel("Entity", entityWorkbench(entity))}
     <div class="grid two">
       ${panel("Incoming Groups", entityRelationshipGroupsTable(incoming.groups || [], entity, "in"))}
@@ -1699,6 +1792,7 @@ function impactMarkup(payload) {
       ${metric("Paths", numberValue(payload.count), "returned paths", true)}
       ${metric("Depth", numberValue(payload.depth), `${payload.direction || ""} / ${payload.profile || ""}`, true)}
     </div>
+    ${coverageWarningsPanel(payload.coverage)}
     ${panel("Start Entity", keyValueTable(entityRows(entity)))}
     ${panel("Affected Sources", affectedSourcesTable(payload.affected_sources || []))}
     ${panel("Path Groups", impactPathGroupsTable(payload.path_groups || []))}

@@ -216,6 +216,10 @@ Agents can request `profile=all` for raw graph traversal or
 `profile=structural` for containment and declaration paths.
 Impact responses should include ordered path steps with edge evidence so users
 can see the proof chain for each affected entity.
+Impact and entity overview responses should also include source coverage
+warnings derived from unresolved references. This keeps blast-radius answers
+honest when missing source scope, parser gaps, or ambiguous targets may hide
+additional relationships.
 
 ## CLI MVP
 
