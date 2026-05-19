@@ -44,6 +44,10 @@ When the directory is initialized as a git repository, also run:
 pixi run pre-commit
 ```
 
+For final release verification, run the manual `docker-smoke` workflow in
+GitHub Actions. It validates the Docker quick start on a clean Ubuntu runner
+without slowing every push or pull request.
+
 ## Not In Scope Yet
 
 - PyPI publishing.

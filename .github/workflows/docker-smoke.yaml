@@ -1,0 +1,27 @@
+name: docker-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          pixi-version: v0.53.0
+      - name: Install locked Pixi environment
+        run: pixi install --locked
+      - name: Run Docker smoke test
+        env:
+          REPO_GRAPH_SMOKE_WAIT_ATTEMPTS: "120"
+        run: pixi run docker-smoke
