@@ -20,6 +20,7 @@ pixi run lint
 pixi run format-check
 pixi run test
 pixi run build-example-strict
+pixi run docker-smoke
 ```
 
 Install pre-commit hooks after cloning:
@@ -27,6 +28,13 @@ Install pre-commit hooks after cloning:
 ```bash
 pixi run setup
 ```
+
+`pixi run docker-smoke` starts an isolated Docker Compose project, waits for
+the local API to become healthy, serves the UI shell, builds and loads the
+synthetic example graph into Neo4j, verifies `/stats` and `/scope`, and then
+tears the project down. It uses alternate host ports by default so it does not
+conflict with the normal quick start: API `18080`, Neo4j HTTP `17475`, and
+Neo4j Bolt `17688`.
 
 ## Public-Safety Rules
 

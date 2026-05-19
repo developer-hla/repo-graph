@@ -35,6 +35,7 @@ Run:
 
 ```bash
 pixi run audit
+pixi run docker-smoke
 ```
 
 When the directory is initialized as a git repository, also run:

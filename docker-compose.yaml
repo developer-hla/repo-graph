@@ -10,7 +10,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GH_TOKEN: ${GH_TOKEN:-}
     ports:
-      - "8000:8000"
+      - "${REPO_GRAPH_API_PORT:-8000}:8000"
     volumes:
       - ./config:/app/config:ro
       - ./examples:/app/examples:ro
