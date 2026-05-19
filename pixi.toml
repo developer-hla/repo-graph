@@ -16,14 +16,15 @@ serve = "python -m repo_graph.cli serve --host 0.0.0.0 --port 8000 --config conf
 docker-build = "docker compose build"
 docker-up = "docker compose up --build"
 docker-down = "docker compose down"
+docker-context-check = "python scripts/check-docker-context.py"
 docker-smoke = "bash scripts/docker-smoke.sh"
 test = "python -m unittest discover -s tests -p 'test_*.py'"
-check = "python -m compileall -q src tests"
-lint = "ruff check src tests"
-format-check = "ruff format --check src tests"
+check = "python -m compileall -q src tests scripts"
+lint = "ruff check src tests scripts"
+format-check = "ruff format --check src tests scripts"
 pre-commit = "pre-commit run --all-files"
 setup = "pre-commit install"
-audit = { depends-on = ["check", "lint", "format-check", "test", "build-example-strict"] }
+audit = { depends-on = ["check", "lint", "format-check", "test", "build-example-strict", "docker-context-check"] }
 
 [dependencies]
 pre-commit = ">=4,<5"

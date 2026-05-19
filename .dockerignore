@@ -4,10 +4,15 @@
 .ruff_cache/
 __pycache__/
 *.py[cod]
+.env
+.env.*
 .DS_Store
+graph.json
 .coverage
 .pytest_cache/
 build/
 dist/
 htmlcov/
 *.egg-info/
+config/*.local.yaml
+config/private*.yaml

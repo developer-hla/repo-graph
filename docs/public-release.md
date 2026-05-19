@@ -38,6 +38,11 @@ pixi run audit
 pixi run docker-smoke
 ```
 
+`pixi run audit` includes the Docker context check, which verifies that local
+env files, generated graphs, cloned source caches, and private source configs
+are ignored before the Dockerfile's `COPY . .` step can include them in an
+image.
+
 When the directory is initialized as a git repository, also run:
 
 ```bash

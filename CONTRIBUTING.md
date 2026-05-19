@@ -20,6 +20,7 @@ pixi run lint
 pixi run format-check
 pixi run test
 pixi run build-example-strict
+pixi run docker-context-check
 pixi run docker-smoke
 ```
 
