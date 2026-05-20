@@ -40,7 +40,7 @@ repo-graph inspect [-h] --config CONFIG
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
 
 ## `repo-graph sync`
 
@@ -52,7 +52,7 @@ repo-graph sync [-h] --config CONFIG
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
 
 ## `repo-graph build`
 
@@ -65,12 +65,12 @@ repo-graph build [-h] --config CONFIG [--output OUTPUT] [--sync] [--strict] [--c
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
-| `--output` | no |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
+| `--output` | no |  | Graph JSON output path. |
 | `--sync` | no | `false` | Sync Git sources before scanning. |
 | `--strict` | no | `false` | Fail if any configured source cannot be scanned. |
 | `--cached` | no | `false` | Reuse unchanged source graph artifacts. |
-| `--max-file-bytes` | no | `1000000` |  |
+| `--max-file-bytes` | no | `1000000` | Maximum file size to scan. |
 
 ## `repo-graph refresh`
 
@@ -83,12 +83,12 @@ repo-graph refresh [-h] --config CONFIG [--output OUTPUT] [--sync] [--strict] [-
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
-| `--output` | no |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
+| `--output` | no |  | Graph JSON output path. |
 | `--sync` | no | `false` | Sync Git sources before scanning. |
 | `--strict` | no | `false` | Fail if any configured source cannot be scanned. |
 | `--load` | no | `false` | Load the refreshed graph into Neo4j. |
-| `--max-file-bytes` | no | `1000000` |  |
+| `--max-file-bytes` | no | `1000000` | Maximum file size to scan. |
 
 ## `repo-graph serve`
 
@@ -100,9 +100,9 @@ repo-graph serve [-h] [--config CONFIG] [--host HOST] [--port PORT]
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | no |  |  |
-| `--host` | no | `127.0.0.1` |  |
-| `--port` | no | `8000` |  |
+| `--config` | no |  | Path to the Repo Graph source config. |
+| `--host` | no | `127.0.0.1` | Host interface to bind. |
+| `--port` | no | `8000` | Port to bind. |
 
 ## `repo-graph load`
 
@@ -114,7 +114,7 @@ repo-graph load [-h] --graph GRAPH [--append] [--replace-source REPLACE_SOURCE]
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--graph` | yes |  |  |
+| `--graph` | yes |  | Graph JSON file to load. |
 | `--append` | no | `false` | Keep existing Repo Graph data in Neo4j. |
 | `--replace-source` | no |  | Replace one source's Neo4j data from a globally resolved graph. Repeat for multiple sources. |
 
@@ -136,8 +136,8 @@ repo-graph agent-instructions [-h] [--api-url API_URL] [--config CONFIG]
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--api-url` | no | `http://localhost:8000` |  |
-| `--config` | no |  |  |
+| `--api-url` | no | `http://localhost:8000` | Base URL agents should use. |
+| `--config` | no |  | Expected Repo Graph source config path. |
 
 ## `repo-graph report`
 
@@ -162,11 +162,11 @@ repo-graph report unresolved [-h] --graph GRAPH [--source SOURCE] [--edge-type E
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--graph` | yes |  |  |
-| `--source` | no |  |  |
-| `--edge-type` | no |  |  |
-| `--limit` | no | `50` |  |
-| `--examples` | no | `3` |  |
+| `--graph` | yes |  | Graph JSON file to report on. |
+| `--source` | no |  | Only include unresolved edges from this source. |
+| `--edge-type` | no |  | Only include unresolved edges of this type. |
+| `--limit` | no | `50` | Maximum unresolved groups to return. |
+| `--examples` | no | `3` | Examples to include per unresolved group. |
 
 ## `repo-graph snapshot`
 
@@ -191,9 +191,9 @@ repo-graph snapshot status [-h] --config CONFIG [--sync] [--max-file-bytes MAX_F
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
 | `--sync` | no | `false` | Sync Git sources before snapshotting. |
-| `--max-file-bytes` | no | `1000000` |  |
+| `--max-file-bytes` | no | `1000000` | Maximum file size to include in snapshot hashing. |
 
 ## `repo-graph snapshot write`
 
@@ -205,9 +205,9 @@ repo-graph snapshot write [-h] --config CONFIG [--sync] [--max-file-bytes MAX_FI
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
 | `--sync` | no | `false` | Sync Git sources before snapshotting. |
-| `--max-file-bytes` | no | `1000000` |  |
+| `--max-file-bytes` | no | `1000000` | Maximum file size to include in snapshot hashing. |
 
 ## `repo-graph source-graphs`
 
@@ -231,6 +231,6 @@ repo-graph source-graphs write [-h] --config CONFIG [--sync] [--max-file-bytes M
 
 | Option | Required | Default | Help |
 | --- | --- | --- | --- |
-| `--config` | yes |  |  |
+| `--config` | yes |  | Path to the Repo Graph source config. |
 | `--sync` | no | `false` | Sync Git sources before scanning. |
-| `--max-file-bytes` | no | `1000000` |  |
+| `--max-file-bytes` | no | `1000000` | Maximum file size to scan. |

@@ -257,28 +257,28 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser("inspect", help="Validate and summarize a source config.")
-    inspect_parser.add_argument("--config", type=Path, required=True)
+    inspect_parser.add_argument("--config", type=Path, required=True, help="Path to the Repo Graph source config.")
     inspect_parser.set_defaults(func=cmd_inspect)
 
     sync_parser = subparsers.add_parser("sync", help="Clone or update Git sources into the local cache.")
-    sync_parser.add_argument("--config", type=Path, required=True)
+    sync_parser.add_argument("--config", type=Path, required=True, help="Path to the Repo Graph source config.")
     sync_parser.set_defaults(func=cmd_sync)
 
     build_parser = subparsers.add_parser("build", help="Build a portable graph JSON file.")
-    build_parser.add_argument("--config", type=Path, required=True)
-    build_parser.add_argument("--output", type=Path)
+    build_parser.add_argument("--config", type=Path, required=True, help="Path to the Repo Graph source config.")
+    build_parser.add_argument("--output", type=Path, help="Graph JSON output path.")
     build_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
     build_parser.add_argument("--strict", action="store_true", help="Fail if any configured source cannot be scanned.")
     build_parser.add_argument("--cached", action="store_true", help="Reuse unchanged source graph artifacts.")
-    build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES, help="Maximum file size to scan.")
     build_parser.set_defaults(func=cmd_build)
 
     refresh_parser = subparsers.add_parser(
         "refresh",
         help="Build from source artifacts and optionally load changed sources into Neo4j.",
     )
-    refresh_parser.add_argument("--config", type=Path, required=True)
-    refresh_parser.add_argument("--output", type=Path)
+    refresh_parser.add_argument("--config", type=Path, required=True, help="Path to the Repo Graph source config.")
+    refresh_parser.add_argument("--output", type=Path, help="Graph JSON output path.")
     refresh_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
     refresh_parser.add_argument(
         "--strict",
@@ -286,17 +286,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail if any configured source cannot be scanned.",
     )
     refresh_parser.add_argument("--load", action="store_true", help="Load the refreshed graph into Neo4j.")
-    refresh_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    refresh_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES, help="Maximum file size to scan.")
     refresh_parser.set_defaults(func=cmd_refresh)
 
     serve_parser = subparsers.add_parser("serve", help="Run the local Repo Graph HTTP API.")
-    serve_parser.add_argument("--config", type=Path)
-    serve_parser.add_argument("--host", default="127.0.0.1")
-    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument("--config", type=Path, help="Path to the Repo Graph source config.")
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind.")
+    serve_parser.add_argument("--port", type=int, default=8000, help="Port to bind.")
     serve_parser.set_defaults(func=cmd_serve)
 
     load_parser = subparsers.add_parser("load", help="Load a graph JSON export into Neo4j.")
-    load_parser.add_argument("--graph", type=Path, required=True)
+    load_parser.add_argument("--graph", type=Path, required=True, help="Graph JSON file to load.")
     load_parser.add_argument("--append", action="store_true", help="Keep existing Repo Graph data in Neo4j.")
     load_parser.add_argument(
         "--replace-source",
@@ -309,31 +309,51 @@ def build_parser() -> argparse.ArgumentParser:
     stats_parser.set_defaults(func=cmd_stats)
 
     agent_parser = subparsers.add_parser("agent-instructions", help="Print a Markdown Repo Graph agent snippet.")
-    agent_parser.add_argument("--api-url", default=DEFAULT_API_URL)
-    agent_parser.add_argument("--config", type=Path)
+    agent_parser.add_argument("--api-url", default=DEFAULT_API_URL, help="Base URL agents should use.")
+    agent_parser.add_argument("--config", type=Path, help="Expected Repo Graph source config path.")
     agent_parser.set_defaults(func=cmd_agent_instructions)
 
     report_parser = subparsers.add_parser("report", help="Generate reports from a graph JSON export.")
     report_subparsers = report_parser.add_subparsers(dest="report", required=True)
     unresolved_parser = report_subparsers.add_parser("unresolved", help="Group unresolved graph edges.")
-    unresolved_parser.add_argument("--graph", type=Path, required=True)
-    unresolved_parser.add_argument("--source")
-    unresolved_parser.add_argument("--edge-type", dest="edge_type")
-    unresolved_parser.add_argument("--limit", type=int, default=50)
-    unresolved_parser.add_argument("--examples", type=int, default=3)
+    unresolved_parser.add_argument("--graph", type=Path, required=True, help="Graph JSON file to report on.")
+    unresolved_parser.add_argument("--source", help="Only include unresolved edges from this source.")
+    unresolved_parser.add_argument("--edge-type", dest="edge_type", help="Only include unresolved edges of this type.")
+    unresolved_parser.add_argument("--limit", type=int, default=50, help="Maximum unresolved groups to return.")
+    unresolved_parser.add_argument("--examples", type=int, default=3, help="Examples to include per unresolved group.")
     unresolved_parser.set_defaults(func=cmd_report_unresolved)
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Inspect or write source snapshots.")
     snapshot_subparsers = snapshot_parser.add_subparsers(dest="snapshot", required=True)
     snapshot_status_parser = snapshot_subparsers.add_parser("status", help="Compare current sources to snapshots.")
-    snapshot_status_parser.add_argument("--config", type=Path, required=True)
+    snapshot_status_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="Path to the Repo Graph source config.",
+    )
     snapshot_status_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
-    snapshot_status_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    snapshot_status_parser.add_argument(
+        "--max-file-bytes",
+        type=int,
+        default=MAX_FILE_BYTES,
+        help="Maximum file size to include in snapshot hashing.",
+    )
     snapshot_status_parser.set_defaults(func=cmd_snapshot_status)
     snapshot_write_parser = snapshot_subparsers.add_parser("write", help="Write current source snapshots.")
-    snapshot_write_parser.add_argument("--config", type=Path, required=True)
+    snapshot_write_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="Path to the Repo Graph source config.",
+    )
     snapshot_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
-    snapshot_write_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    snapshot_write_parser.add_argument(
+        "--max-file-bytes",
+        type=int,
+        default=MAX_FILE_BYTES,
+        help="Maximum file size to include in snapshot hashing.",
+    )
     snapshot_write_parser.set_defaults(func=cmd_snapshot_write)
 
     source_graphs_parser = subparsers.add_parser("source-graphs", help="Build source-level graph artifacts.")
@@ -342,9 +362,19 @@ def build_parser() -> argparse.ArgumentParser:
         "write",
         help="Write one graph artifact per source.",
     )
-    source_graphs_write_parser.add_argument("--config", type=Path, required=True)
+    source_graphs_write_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="Path to the Repo Graph source config.",
+    )
     source_graphs_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
-    source_graphs_write_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    source_graphs_write_parser.add_argument(
+        "--max-file-bytes",
+        type=int,
+        default=MAX_FILE_BYTES,
+        help="Maximum file size to scan.",
+    )
     source_graphs_write_parser.set_defaults(func=cmd_source_graphs_write)
 
     return parser
