@@ -9,11 +9,17 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.api import RuntimeSettings, manifest_payload
+from repo_graph.cli import build_parser
 from repo_graph.config import load_config
 from repo_graph.scanner import build_graph
 
 GENERATED_DIR = Path("docs/generated")
 LOCAL_EXAMPLE_CONFIG = Path("config/local-example.yaml")
+
+
+class GeneratedHelpFormatter(argparse.HelpFormatter):
+    def __init__(self, prog: str) -> None:
+        super().__init__(prog, width=120)
 
 
 def main() -> int:
@@ -35,6 +41,7 @@ def main() -> int:
 def generated_documents() -> dict[Path, str]:
     return {
         GENERATED_DIR / "api-endpoints.md": api_endpoints_doc(),
+        GENERATED_DIR / "cli-reference.md": cli_reference_doc(),
         GENERATED_DIR / "graph-types.md": graph_types_doc(),
         GENERATED_DIR / "pixi-tasks.md": pixi_tasks_doc(),
     }
@@ -150,6 +157,142 @@ def graph_types_doc() -> str:
     lines.extend(count_rows(confidence_counts, "confidence value"))
 
     return "\n".join(lines) + "\n"
+
+
+def cli_reference_doc() -> str:
+    parser = build_parser()
+    normalize_cli_progs(parser, "repo-graph")
+    commands = list(command_docs(parser))
+
+    lines = [
+        generated_header("CLI Reference"),
+        "This file is generated from `repo_graph.cli.build_parser`.",
+        "",
+        "## Root Usage",
+        "",
+        "```text",
+        format_usage(parser),
+        "```",
+        "",
+        "## Command Tree",
+        "",
+        "| Command | Help |",
+        "| --- | --- |",
+    ]
+    for command_path, _, help_text in commands:
+        lines.append(f"| `{command_path}` | {escape_markdown_cell(help_text)} |")
+
+    for command_path, command_parser, help_text in commands:
+        lines.extend(command_section(command_path, command_parser, help_text))
+
+    return "\n".join(lines) + "\n"
+
+
+def normalize_cli_progs(parser: argparse.ArgumentParser, prog: str) -> None:
+    parser.prog = prog
+    parser.formatter_class = GeneratedHelpFormatter
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, child in action.choices.items():
+                normalize_cli_progs(child, f"{prog} {name}")
+
+
+def command_docs(
+    parser: argparse.ArgumentParser,
+) -> list[tuple[str, argparse.ArgumentParser, str]]:
+    docs: list[tuple[str, argparse.ArgumentParser, str]] = []
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            help_by_name = {choice.dest: choice.help or "" for choice in action._choices_actions}
+            for name, child in action.choices.items():
+                docs.append((child.prog, child, help_by_name.get(name, "")))
+                docs.extend(command_docs(child))
+    return docs
+
+
+def command_section(command_path: str, parser: argparse.ArgumentParser, help_text: str) -> list[str]:
+    lines = [
+        "",
+        f"## `{command_path}`",
+        "",
+    ]
+    if help_text:
+        lines.extend([help_text, ""])
+    lines.extend(
+        [
+            "```text",
+            format_usage(parser),
+            "```",
+        ]
+    )
+
+    options = [action for action in parser._actions if include_cli_option(action)]
+    if options:
+        lines.extend(
+            [
+                "",
+                "| Option | Required | Default | Help |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+        for option in options:
+            lines.append(
+                "| "
+                f"{format_cli_option_names(option)} | "
+                f"{format_required(option)} | "
+                f"{format_default(option)} | "
+                f"{format_cli_help(option)} |"
+            )
+
+    subcommands = subcommand_rows(parser)
+    if subcommands:
+        lines.extend(
+            [
+                "",
+                "| Subcommand | Help |",
+                "| --- | --- |",
+            ]
+        )
+        for name, help_text in subcommands:
+            lines.append(f"| `{name}` | {escape_markdown_cell(help_text)} |")
+
+    return lines
+
+
+def include_cli_option(action: argparse.Action) -> bool:
+    return bool(action.option_strings) and not isinstance(action, argparse._HelpAction)
+
+
+def subcommand_rows(parser: argparse.ArgumentParser) -> list[tuple[str, str]]:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return [(choice.dest, choice.help or "") for choice in action._choices_actions]
+    return []
+
+
+def format_usage(parser: argparse.ArgumentParser) -> str:
+    return parser.format_usage().replace("usage: ", "", 1).strip()
+
+
+def format_cli_option_names(action: argparse.Action) -> str:
+    return ", ".join(f"`{name}`" for name in action.option_strings)
+
+
+def format_required(action: argparse.Action) -> str:
+    return "yes" if getattr(action, "required", False) else "no"
+
+
+def format_default(action: argparse.Action) -> str:
+    default = getattr(action, "default", None)
+    if default is None or default == argparse.SUPPRESS:
+        return ""
+    if isinstance(default, bool):
+        return f"`{str(default).lower()}`"
+    return f"`{escape_markdown_cell(str(default))}`"
+
+
+def format_cli_help(action: argparse.Action) -> str:
+    return escape_markdown_cell(action.help or "")
 
 
 def pixi_tasks_doc() -> str:

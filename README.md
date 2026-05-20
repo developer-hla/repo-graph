@@ -102,6 +102,9 @@ pixi run repo-graph build --config config/local-example.yaml --strict
 pixi run repo-graph report unresolved --graph .repo-graph/output/graph.json
 ```
 
+For the generated CLI command reference, see
+[docs/generated/cli-reference.md](docs/generated/cli-reference.md).
+
 Run the local API without Docker:
 
 ```bash

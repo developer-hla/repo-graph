@@ -41,7 +41,7 @@ Neo4j Bolt `17688`.
 
 Generated reference docs live under `docs/generated/`. Update them with
 `pixi run generate-docs`; `pixi run audit` fails when those files drift from
-the API manifest, synthetic graph types, or Pixi task definitions.
+the API manifest, CLI parser, synthetic graph types, or Pixi task definitions.
 
 ## Public-Safety Rules
 
