@@ -17,7 +17,10 @@ Useful individual tasks:
 ```bash
 pixi run check
 pixi run lint
+pixi run lint-fix
+pixi run format
 pixi run format-check
+pixi run ui-check
 pixi run test
 pixi run build-example-strict
 pixi run docker-context-check

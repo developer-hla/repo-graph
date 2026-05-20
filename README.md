@@ -317,8 +317,7 @@ Run the full local check before opening a PR:
 pixi run audit
 ```
 
-GitHub Actions runs the same audit plus a UI JavaScript syntax check on pushes
-and pull requests.
+GitHub Actions runs `pixi run audit` on pushes and pull requests.
 
 ## Public And Private Boundary
 
