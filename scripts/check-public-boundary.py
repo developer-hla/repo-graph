@@ -48,6 +48,8 @@ EXCLUDED_FILE_PATTERNS = (
     "*.pyc",
     "*.pyo",
     "*.egg-info/*",
+    "config/*.local.yaml",
+    "config/private*.yaml",
     "pixi.lock",
 )
 

@@ -40,6 +40,27 @@ RepoGraph is organized as a pipeline:
 Keep those boundaries intact. Do not put Git sync logic in scanners, parser
 logic in the CLI, or graph-resolution policy in storage code.
 
+## Architecture Principles
+
+- Agent-first learnability: agents and developers should be able to learn the
+  tool from examples, generated references, runtime manifests, and structured
+  feedback without reverse-engineering internals.
+- One obvious extension path: common changes such as adding a parser, source
+  type, graph fact, report, or API surface should follow one documented
+  workflow with expected tests and generated docs.
+- Standard-library depth: shared graph vocabulary, parser helpers, runtime
+  operations, diagnostics, and storage/query behavior should live in coherent
+  project APIs rather than scattered literals or one-off scripts.
+- Deterministic tooling: diagnostics, graph facts, refresh plans, coverage
+  reports, and repair hints should be structured and stable enough for agents
+  to inspect and act on.
+- Direct developer experience: checking, running, formatting, inspecting, and
+  repairing RepoGraph should be fast, copyable, and scriptable through Pixi
+  tasks, CLI commands, and documented local workflows.
+- Regularity over cleverness: prefer explicit, repeatable patterns over local
+  shortcuts when the code defines public behavior, extension behavior, or agent
+  contracts.
+
 ## Graph Rules
 
 - Every entity and edge must include source provenance.
