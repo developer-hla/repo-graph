@@ -120,7 +120,9 @@ pixi run audit
 The example config scans only synthetic repositories under `examples/`. It
 includes API, shared package, inventory, Python, modern .NET, legacy VB, and
 database projects so package, HTTP, project reference, Kubernetes service,
-service config, and SQL relationships can resolve locally.
+service config, and SQL relationships can resolve locally. For generated
+coverage from those examples, see
+[docs/generated/parser-coverage.md](docs/generated/parser-coverage.md).
 
 ## Scanning Your Own Repositories
 

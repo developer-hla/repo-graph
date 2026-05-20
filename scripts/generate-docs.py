@@ -56,6 +56,7 @@ def generated_documents() -> dict[Path, str]:
         GENERATED_DIR / "cli-reference.md": cli_reference_doc(),
         GENERATED_DIR / "config-reference.md": config_reference_doc(),
         GENERATED_DIR / "graph-types.md": graph_types_doc(),
+        GENERATED_DIR / "parser-coverage.md": parser_coverage_doc(),
         GENERATED_DIR / "pixi-tasks.md": pixi_tasks_doc(),
     }
 
@@ -252,6 +253,58 @@ def graph_types_doc() -> str:
     lines.extend(count_rows(confidence_counts, "confidence value"))
 
     return "\n".join(lines) + "\n"
+
+
+def parser_coverage_doc() -> str:
+    graph = build_graph(load_config(LOCAL_EXAMPLE_CONFIG), strict=True)
+    graph_data = graph.to_dict()
+    edges_by_parser: dict[str, list[dict[str, Any]]] = {}
+    for edge in graph_data["edges"]:
+        edges_by_parser.setdefault(edge["parser"], []).append(edge)
+
+    lines = [
+        generated_header("Parser Coverage"),
+        "This file is generated from a strict scan of `config/local-example.yaml`.",
+        "It documents parser coverage exercised by synthetic examples, not every supported language feature.",
+        "",
+        f"- Parser count: `{len(edges_by_parser)}`",
+        f"- Edge count: `{graph_data['summary']['edge_count']}`",
+        f"- Unresolved edge count: `{graph_data['summary']['unresolved_edge_count']}`",
+        "",
+        "## Coverage By Parser",
+        "",
+        "| Parser | Edge Count | Unresolved | Edge Types | From Types | To Types | Sources |",
+        "| --- | ---: | ---: | --- | --- | --- | --- |",
+    ]
+    for parser in sorted(edges_by_parser):
+        edges = edges_by_parser[parser]
+        lines.append(
+            "| "
+            f"`{parser}` | "
+            f"{len(edges)} | "
+            f"{sum(1 for edge in edges if not edge['resolved'])} | "
+            f"{format_inline_values(unique_edge_values(edges, 'edge_type'))} | "
+            f"{format_inline_values(unique_edge_values(edges, 'from_type'))} | "
+            f"{format_inline_values(unique_edge_values(edges, 'to_type'))} | "
+            f"{format_inline_values(unique_edge_values(edges, 'source_name'))} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Notes",
+            "",
+            "- Add or update synthetic examples when parser behavior changes.",
+            "- Parser rows only appear when the example graph exercises that parser.",
+            "- Unresolved edges are expected when an example intentionally references a third-party package or "
+            "out-of-scope target.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def unique_edge_values(edges: list[dict[str, Any]], key: str) -> list[str]:
+    return sorted({str(edge.get(key, "")) for edge in edges if edge.get(key)})
 
 
 def cli_reference_doc() -> str:
