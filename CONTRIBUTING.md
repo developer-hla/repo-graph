@@ -21,6 +21,7 @@ pixi run format-check
 pixi run test
 pixi run build-example-strict
 pixi run docker-context-check
+pixi run public-boundary-check
 pixi run docker-smoke
 ```
 
@@ -45,8 +46,14 @@ Neo4j Bolt `17688`.
 - Keep real source lists in local config files outside this repository.
 - Keep generated output under `.repo-graph/`.
 
-Before opening a pull request, run a local scan for private terms that may have
-entered docs, examples, config, or source files.
+Before opening a pull request, run `pixi run public-boundary-check` to scan
+for risky public/private boundary terms. To add local company-specific terms
+without committing them, put one term per line in an ignored file and run:
+
+```bash
+REPO_GRAPH_PUBLIC_BOUNDARY_TERMS=.repo-graph/public-boundary-terms.txt \
+  pixi run public-boundary-check
+```
 
 ## Code Standards
 

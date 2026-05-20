@@ -21,13 +21,9 @@ Use this checklist before making Repo Graph public.
 - No generated private graphs.
 - Examples use only synthetic repositories, schemas, and APIs.
 
-Suggested local check:
-
-```bash
-rg -n "PRIVATE_TERM|ORG_NAME|INTERNAL_DB" . -g '!pixi.lock' -g '!.pixi/**' -g '!.repo-graph/**'
-```
-
-Replace the example terms with the private names relevant to your environment.
+For company-specific private terms, create an ignored local file such as
+`.repo-graph/public-boundary-terms.txt` with one term per line, then set
+`REPO_GRAPH_PUBLIC_BOUNDARY_TERMS` when running the public-boundary check.
 
 ## Verification
 
@@ -42,6 +38,10 @@ pixi run docker-smoke
 env files, generated graphs, cloned source caches, and private source configs
 are ignored before the Dockerfile's `COPY . .` step can include them in an
 image.
+
+`pixi run audit` also includes the public-boundary check. It scans public
+files for private markers, common credential shapes, absolute local paths, and
+unexpected token-handling strings.
 
 When the directory is initialized as a git repository, also run:
 
