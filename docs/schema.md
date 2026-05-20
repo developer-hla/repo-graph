@@ -4,8 +4,10 @@ The MVP export is a single JSON document. It is intentionally simple so it can
 be loaded into different stores.
 
 For generated type counts from the synthetic example graph, see
-[generated/graph-types.md](generated/graph-types.md). This document defines
-the intended shape and meaning of the graph.
+[generated/graph-types.md](generated/graph-types.md). For generated parser
+coverage from the same examples, see
+[generated/parser-coverage.md](generated/parser-coverage.md). This document
+defines the intended shape and meaning of the graph.
 
 ## Top-Level Fields
 
@@ -51,7 +53,7 @@ the intended shape and meaning of the graph.
   "file_path": "relative/path when known",
   "line_number": 12,
   "confidence": "high | medium | low",
-  "parser": "filesystem | package_json | pyproject | python_import | python_route | python_http | dotnet_symbol | dotnet_controller_route | dotnet_minimal_route | dotnet_http | kubernetes_service | kubernetes_deployment | kubernetes_ingress | kubernetes_ingress_route | kubernetes_container | kubernetes_env | javascript | sql | sql_reference",
+  "parser": "stable parser id such as filesystem, package_json, or python_import",
   "properties": {}
 }
 ```
