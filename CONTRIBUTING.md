@@ -69,6 +69,10 @@ REPO_GRAPH_PUBLIC_BOUNDARY_TERMS=.repo-graph/public-boundary-terms.txt \
 `AGENTS.md` is the canonical source for architecture, style, parser, graph, and
 review rules. Follow it for both human-written and agent-written changes.
 
+Parser changes should follow [docs/extending-parsers.md](docs/extending-parsers.md)
+so extractor behavior, examples, tests, and generated coverage docs stay in
+sync.
+
 The short version:
 
 - Keep side effects at the boundaries.

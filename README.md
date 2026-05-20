@@ -297,6 +297,7 @@ docker-compose.yaml     Local API plus Neo4j runtime
 docs/spec.md            MVP planning spec
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
+docs/extending-parsers.md Parser extension workflow
 docs/generated/         Generated reference docs
 docs/public-release.md  Public release checklist
 examples/               Offline demo sources

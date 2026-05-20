@@ -91,6 +91,7 @@ logic in the CLI, or graph-resolution policy in storage code.
 - Prefer structured parsing when practical. Regex-based parsing is acceptable
   for MVP scanners, but keep patterns bounded and tested.
 - Do not add language-specific parser behavior without synthetic tests.
+- Follow `docs/extending-parsers.md` when adding or changing parser behavior.
 
 ## Code Style
 
