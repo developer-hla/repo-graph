@@ -44,7 +44,8 @@ files for private markers, common credential shapes, absolute local paths, and
 unexpected token-handling strings.
 
 `pixi run audit` also checks generated reference docs under `docs/generated/`
-so endpoint, CLI, graph type, and task references do not drift from code.
+so endpoint, CLI, config, graph type, and task references do not drift from
+code.
 
 When the directory is initialized as a git repository, also run:
 

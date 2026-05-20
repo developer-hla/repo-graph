@@ -9,6 +9,10 @@ from typing import Any
 
 import yaml
 
+DEFAULT_CACHE_DIR = ".repo-graph/cache/repos"
+DEFAULT_OUTPUT_DIR = ".repo-graph/output"
+GITHUB_ORG_VISIBILITIES = {"all", "public", "private", "forks", "sources", "member"}
+
 DEFAULT_FILE_EXTENSIONS = {
     ".cs",
     ".csproj",
@@ -114,12 +118,12 @@ def load_config(path: Path) -> RepoGraphConfig:
     if not isinstance(name, str) or not name.strip():
         raise ValueError("Config must define a non-empty 'name'.")
 
-    raw_cache_dir = raw.get("cache_dir", ".repo-graph/cache/repos")
+    raw_cache_dir = raw.get("cache_dir", DEFAULT_CACHE_DIR)
     if not isinstance(raw_cache_dir, str) or not raw_cache_dir.strip():
         raise ValueError("Config 'cache_dir' must be a path string.")
     cache_dir = resolve_config_path(config_dir, raw_cache_dir)
 
-    raw_output_dir = raw.get("output_dir", ".repo-graph/output")
+    raw_output_dir = raw.get("output_dir", DEFAULT_OUTPUT_DIR)
     if not isinstance(raw_output_dir, str) or not raw_output_dir.strip():
         raise ValueError("Config 'output_dir' must be a path string.")
     output_dir = resolve_config_path(config_dir, raw_output_dir)
@@ -212,7 +216,7 @@ def parse_github_org_source(raw_source: dict[str, Any], name: str, ref: str) -> 
     if not isinstance(visibility, str) or not visibility.strip():
         raise ValueError(f"GitHub org source '{name}' has invalid 'visibility'.")
     visibility = visibility.strip()
-    if visibility not in {"all", "public", "private", "forks", "sources", "member"}:
+    if visibility not in GITHUB_ORG_VISIBILITIES:
         raise ValueError(f"GitHub org source '{name}' has unsupported 'visibility'.")
 
     include = object_mapping(raw_source.get("include"), f"GitHub org source '{name}' include")

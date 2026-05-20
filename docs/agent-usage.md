@@ -35,6 +35,9 @@ surface.
 
 ## Config And Source Status
 
+For generated config field details, see
+[generated/config-reference.md](generated/config-reference.md).
+
 Inspect the active config without building the graph:
 
 ```bash

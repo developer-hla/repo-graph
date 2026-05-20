@@ -5,12 +5,24 @@ from __future__ import annotations
 import argparse
 import tomllib
 from collections import Counter
+from dataclasses import MISSING, Field, fields
 from pathlib import Path
 from typing import Any
 
 from repo_graph.api import RuntimeSettings, manifest_payload
 from repo_graph.cli import build_parser
-from repo_graph.config import load_config
+from repo_graph.config import (
+    DEFAULT_CACHE_DIR,
+    DEFAULT_EXCLUDED_DIRECTORIES,
+    DEFAULT_FILE_EXTENSIONS,
+    DEFAULT_OUTPUT_DIR,
+    GITHUB_ORG_VISIBILITIES,
+    DependencyFilter,
+    ExcludeRules,
+    IncludeRules,
+    Source,
+    load_config,
+)
 from repo_graph.scanner import build_graph
 
 GENERATED_DIR = Path("docs/generated")
@@ -42,6 +54,7 @@ def generated_documents() -> dict[Path, str]:
     return {
         GENERATED_DIR / "api-endpoints.md": api_endpoints_doc(),
         GENERATED_DIR / "cli-reference.md": cli_reference_doc(),
+        GENERATED_DIR / "config-reference.md": config_reference_doc(),
         GENERATED_DIR / "graph-types.md": graph_types_doc(),
         GENERATED_DIR / "pixi-tasks.md": pixi_tasks_doc(),
     }
@@ -186,6 +199,119 @@ def cli_reference_doc() -> str:
         lines.extend(command_section(command_path, command_parser, help_text))
 
     return "\n".join(lines) + "\n"
+
+
+def config_reference_doc() -> str:
+    lines = [
+        generated_header("Config Reference"),
+        "This file is generated from `repo_graph.config` defaults and dataclass fields.",
+        "",
+        "## Top-Level Fields",
+        "",
+        "| Field | Required | Default | Description |",
+        "| --- | --- | --- | --- |",
+        "| `name` | yes |  | Non-empty graph scope name. |",
+        f"| `cache_dir` | no | `{DEFAULT_CACHE_DIR}` | Directory for cloned Git sources. "
+        "Relative paths resolve from the config file directory. |",
+        f"| `output_dir` | no | `{DEFAULT_OUTPUT_DIR}` | Directory for generated graph output. "
+        "Relative paths resolve from the config file directory. |",
+        "| `sources` | no | `[]` | Source definitions to scan. |",
+        "| `include` | no | built-in defaults | Include rules for scannable files. |",
+        "| `exclude` | no | built-in defaults | Exclude rules for directories and files. |",
+        "| `dependency_filter` | no | built-in defaults | Package/import filtering applied after graph resolution. |",
+        "",
+        "## Source Types",
+        "",
+        "| Type | Required Fields | Optional Fields | Description |",
+        "| --- | --- | --- | --- |",
+        "| `local_path` | `type`, `name`, `path` | `ref` | Scan a repository already present on disk. "
+        "Relative `path` values resolve from the config file directory. |",
+        "| `git` | `type`, `name`, `url` | `ref` | Clone or update one explicit Git repository into `cache_dir`. |",
+        "| `github_org` | `type`, `name`, `org` | `ref`, `visibility`, `include`, `exclude`, `limit` | "
+        "Expand repositories from a GitHub organization through the GitHub REST API. |",
+        "",
+        "## Source Dataclass Fields",
+        "",
+        "YAML source `type` values are loaded into the `source_type` field.",
+        "",
+        *dataclass_field_table(Source),
+        "",
+        "## GitHub Organization Source",
+        "",
+        f"- Supported `visibility` values: {format_inline_values(sorted(GITHUB_ORG_VISIBILITIES))}",
+        "- `include.archived` defaults to `false`.",
+        "- `include.forks` defaults to `false`.",
+        "- `include.name_patterns` and `exclude.name_patterns` are regular expression lists matched against "
+        "repository names.",
+        "- `limit` must be a positive integer when set.",
+        "",
+        "## Include Rules",
+        "",
+        *dataclass_field_table(IncludeRules),
+        "",
+        "Default file extensions:",
+        "",
+        *bullet_values(sorted(DEFAULT_FILE_EXTENSIONS)),
+        "",
+        "## Exclude Rules",
+        "",
+        *dataclass_field_table(ExcludeRules),
+        "",
+        "Default excluded directories:",
+        "",
+        *bullet_values(sorted(DEFAULT_EXCLUDED_DIRECTORIES)),
+        "",
+        "## Dependency Filter",
+        "",
+        *dataclass_field_table(DependencyFilter),
+        "",
+        "- `package_include_patterns` and `package_exclude_patterns` must be valid regular expressions.",
+        "- Resolved package/import edges are retained because they point to sources in the graph.",
+        "- Unresolved package references are retained only when they match include patterns, unless no include "
+        "patterns are configured.",
+        "- `include_relative_imports` controls unresolved relative import edges.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def dataclass_field_table(model: type[Any]) -> list[str]:
+    lines = [
+        "| Field | Type | Default |",
+        "| --- | --- | --- |",
+    ]
+    for field in fields(model):
+        lines.append(f"| `{field.name}` | `{format_field_type(field)}` | {format_field_default(field)} |")
+    return lines
+
+
+def format_field_type(field: Field[Any]) -> str:
+    return str(field.type).replace("typing.", "")
+
+
+def format_field_default(field: Field[Any]) -> str:
+    if field.default is not MISSING:
+        if isinstance(field.default, bool):
+            return f"`{str(field.default).lower()}`"
+        return f"`{escape_markdown_cell(str(field.default))}`"
+    if field.default_factory is not MISSING:
+        value = field.default_factory()
+        if isinstance(value, set | tuple | list):
+            values = sorted(str(item) for item in value)
+            if not values:
+                return "`empty`"
+            return format_inline_values(values)
+        if isinstance(value, bool):
+            return f"`{str(value).lower()}`"
+        return f"`{escape_markdown_cell(str(value))}`"
+    return ""
+
+
+def format_inline_values(values: list[str]) -> str:
+    return ", ".join(f"`{escape_markdown_cell(value)}`" for value in values)
+
+
+def bullet_values(values: list[str]) -> list[str]:
+    return [f"- `{escape_markdown_cell(value)}`" for value in values]
 
 
 def normalize_cli_progs(parser: argparse.ArgumentParser, prog: str) -> None:

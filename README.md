@@ -129,6 +129,9 @@ Create a local config outside this repository or use an ignored file such as
 URLs, or a GitHub organization query that expands to matching repositories
 through the GitHub REST API.
 
+For field-level config details, see
+[docs/generated/config-reference.md](docs/generated/config-reference.md).
+
 ```yaml
 name: example-domain
 cache_dir: .repo-graph/cache/repos
