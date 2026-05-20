@@ -19,6 +19,7 @@ from repo_graph.snapshots import snapshot_status, write_snapshots
 from repo_graph.source_graphs import write_source_graphs
 from repo_graph.sources import resolve_sources, sync_sources
 from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
+from repo_graph.validation import positive_int
 
 DEFAULT_API_URL = "http://localhost:8000"
 
@@ -252,6 +253,17 @@ def resolve_output_path(config: RepoGraphConfig, output: Path | None) -> Path:
     return (Path.cwd() / output).resolve()
 
 
+def max_file_bytes_argument(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("max-file-bytes must be an integer.") from exc
+    try:
+        return positive_int(parsed, "max-file-bytes")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build and query repository interaction graphs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -270,7 +282,12 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
     build_parser.add_argument("--strict", action="store_true", help="Fail if any configured source cannot be scanned.")
     build_parser.add_argument("--cached", action="store_true", help="Reuse unchanged source graph artifacts.")
-    build_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES, help="Maximum file size to scan.")
+    build_parser.add_argument(
+        "--max-file-bytes",
+        type=max_file_bytes_argument,
+        default=MAX_FILE_BYTES,
+        help="Maximum file size to scan.",
+    )
     build_parser.set_defaults(func=cmd_build)
 
     refresh_parser = subparsers.add_parser(
@@ -286,7 +303,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail if any configured source cannot be scanned.",
     )
     refresh_parser.add_argument("--load", action="store_true", help="Load the refreshed graph into Neo4j.")
-    refresh_parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES, help="Maximum file size to scan.")
+    refresh_parser.add_argument(
+        "--max-file-bytes",
+        type=max_file_bytes_argument,
+        default=MAX_FILE_BYTES,
+        help="Maximum file size to scan.",
+    )
     refresh_parser.set_defaults(func=cmd_refresh)
 
     serve_parser = subparsers.add_parser("serve", help="Run the local Repo Graph HTTP API.")
@@ -335,7 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot_status_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
     snapshot_status_parser.add_argument(
         "--max-file-bytes",
-        type=int,
+        type=max_file_bytes_argument,
         default=MAX_FILE_BYTES,
         help="Maximum file size to include in snapshot hashing.",
     )
@@ -350,7 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before snapshotting.")
     snapshot_write_parser.add_argument(
         "--max-file-bytes",
-        type=int,
+        type=max_file_bytes_argument,
         default=MAX_FILE_BYTES,
         help="Maximum file size to include in snapshot hashing.",
     )
@@ -371,7 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
     source_graphs_write_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
     source_graphs_write_parser.add_argument(
         "--max-file-bytes",
-        type=int,
+        type=max_file_bytes_argument,
         default=MAX_FILE_BYTES,
         help="Maximum file size to scan.",
     )

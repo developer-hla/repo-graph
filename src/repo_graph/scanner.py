@@ -19,6 +19,7 @@ import yaml
 from repo_graph.config import RepoGraphConfig
 from repo_graph.graph import Edge, Entity, Graph
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
+from repo_graph.validation import positive_int
 
 MAX_FILE_BYTES = 1_000_000
 DOTNET_PROJECT_SUFFIXES = {".csproj", ".fsproj", ".vbproj"}
@@ -1691,6 +1692,7 @@ def apply_scan_result(graph: Graph, result: ScanResult) -> None:
 
 
 def iter_scannable_files(config: RepoGraphConfig, root: Path, max_file_bytes: int) -> Iterable[Path]:
+    max_file_bytes = positive_int(max_file_bytes, "max_file_bytes")
     for dirpath, dirnames, filenames in os.walk(root):
         current = Path(dirpath)
         dirnames[:] = [

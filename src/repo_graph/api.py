@@ -35,6 +35,7 @@ from repo_graph.storage.neo4j import (
     search_entities,
     search_relationships,
 )
+from repo_graph.validation import positive_int
 
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
 DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
@@ -290,9 +291,7 @@ def resolve_graph_path(
 
 
 def validate_max_file_bytes(value: int) -> int:
-    if value < 1:
-        raise ValueError("max_file_bytes must be at least 1.")
-    return value
+    return positive_int(value, "max_file_bytes")
 
 
 def load_runtime_config(settings: RuntimeSettings, config_path: str | None = None) -> RepoGraphConfig:

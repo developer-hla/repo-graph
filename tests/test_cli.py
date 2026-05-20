@@ -4,13 +4,22 @@ import io
 import json
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from repo_graph.cli import agent_instructions_markdown, build_parser
 
 
 class CliTests(unittest.TestCase):
+    def assert_rejects_invalid_max_file_bytes(self, args: list[str]) -> None:
+        parser = build_parser()
+        errors = io.StringIO()
+        with redirect_stderr(errors), self.assertRaises(SystemExit) as raised:
+            parser.parse_args(args)
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("max-file-bytes must be at least 1", errors.getvalue())
+
     def test_agent_instructions_markdown_points_to_manifest(self) -> None:
         markdown = agent_instructions_markdown("http://repo-graph:8000", Path("repo-graph.yaml"))
 
@@ -102,6 +111,19 @@ sources:
         self.assertEqual(result, 0)
         self.assertEqual(payload["changed_count"], 1)
         self.assertEqual(payload["items"][0]["status"], "new")
+
+    def test_commands_reject_non_positive_max_file_bytes(self) -> None:
+        commands = [
+            ["build", "--config", "sources.yaml", "--max-file-bytes", "0"],
+            ["refresh", "--config", "sources.yaml", "--max-file-bytes", "0"],
+            ["snapshot", "status", "--config", "sources.yaml", "--max-file-bytes", "0"],
+            ["snapshot", "write", "--config", "sources.yaml", "--max-file-bytes", "0"],
+            ["source-graphs", "write", "--config", "sources.yaml", "--max-file-bytes", "0"],
+        ]
+
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_rejects_invalid_max_file_bytes(command)
 
     def test_source_graphs_write_command_writes_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
