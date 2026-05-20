@@ -6,61 +6,18 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from repo_graph.vocabulary import (
+    CLASSIFICATION_ACTIONS,
+    CLASSIFICATION_ORDER,
+    LOCAL_EDGE_PREFIXES,
+    MISSING_SOURCE_EDGE_TYPES,
+    MISSING_SOURCE_TARGET_TYPES,
+    PARSER_GAP_EDGE_TYPES,
+    PARSER_GAP_TARGET_TYPES,
+)
+
 DEFAULT_GROUP_LIMIT = 50
 DEFAULT_EXAMPLE_LIMIT = 3
-MISSING_SOURCE_EDGE_TYPES = {
-    "CALLS_SERVICE",
-    "CALLS_SQL",
-    "CONFIGURES_SERVICE",
-    "DEPENDS_ON_PACKAGE",
-    "DEPENDS_ON_PROJECT",
-    "READS_SQL_OBJECT",
-    "ROUTES_TO_SERVICE",
-}
-PARSER_GAP_EDGE_TYPES = {
-    "CALLS_HTTP",
-    "DECLARES_SYMBOL",
-    "IMPORTS",
-}
-LOCAL_EDGE_PREFIXES = (
-    "CONTAINS_",
-    "DECLARES_",
-    "EXPOSES_",
-    "RUNS_",
-    "SELECTS_",
-)
-MISSING_SOURCE_TARGET_TYPES = {
-    "package",
-    "project",
-    "repository",
-    "service",
-    "sql_function",
-    "sql_object",
-    "sql_table",
-    "sql_view",
-    "stored_procedure",
-}
-PARSER_GAP_TARGET_TYPES = {
-    "api_route",
-    "class",
-    "function",
-    "interface",
-    "module",
-}
-CLASSIFICATION_ORDER = {
-    "likely_missing_source": 0,
-    "likely_parser_gap": 1,
-    "ambiguous_target": 2,
-    "needs_review": 3,
-}
-CLASSIFICATION_ACTIONS = {
-    "likely_missing_source": "Add or sync the repository, package, service, or database project that owns this target.",
-    "likely_parser_gap": "Improve extractor coverage or add a parser slice for this declaration or reference shape.",
-    "ambiguous_target": "Review the candidates and add enough context for Repo Graph to resolve the target safely.",
-    "needs_review": (
-        "Inspect the evidence and decide whether this is missing scope, a parser gap, or expected dynamic behavior."
-    ),
-}
 
 
 def unresolved_report_from_graph(

@@ -6,8 +6,10 @@ be loaded into different stores.
 For generated type counts from the synthetic example graph, see
 [generated/graph-types.md](generated/graph-types.md). For generated parser
 coverage from the same examples, see
-[generated/parser-coverage.md](generated/parser-coverage.md). This document
-defines the intended shape and meaning of the graph.
+[generated/parser-coverage.md](generated/parser-coverage.md). For canonical
+vocabulary values and policy metadata, see
+[generated/vocabulary.md](generated/vocabulary.md). This document defines the
+intended shape and meaning of the graph.
 
 ## Top-Level Fields
 

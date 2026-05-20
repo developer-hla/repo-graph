@@ -36,6 +36,12 @@ from repo_graph.storage.neo4j import (
     search_relationships,
 )
 from repo_graph.validation import positive_int
+from repo_graph.vocabulary import (
+    CLASSIFICATION_COVERAGE_WARNING_RULES,
+    EDGE_TYPE_COVERAGE_WARNING_RULES,
+    IMPACT_EDGE_TYPES,
+    IMPACT_PROFILES,
+)
 
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
 DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
@@ -44,45 +50,6 @@ UNRESOLVED_REPORT_EDGE_LIMIT = 1000
 SOURCE_SNIPPET_MAX_CONTEXT = 50
 SOURCE_SNIPPET_MAX_BYTES = 1_000_000
 UI_DIR = Path(__file__).with_name("ui")
-IMPACT_EDGE_TYPES = frozenset(
-    {
-        "CALLS_HTTP",
-        "CALLS_SERVICE",
-        "CALLS_SQL",
-        "CONFIGURES_SERVICE",
-        "DEPENDS_ON_PACKAGE",
-        "DEPENDS_ON_PROJECT",
-        "IMPORTS",
-        "READS_SQL_OBJECT",
-        "ROUTES_TO_SERVICE",
-        "SELECTS_DEPLOYMENT",
-    }
-)
-STRUCTURAL_EDGE_TYPES = frozenset(
-    {
-        "CONTAINS_FILE",
-        "CONTAINS_PROJECT",
-        "DECLARES_BUILD_CONFIG",
-        "DECLARES_CONFIG",
-        "DECLARES_CONFIG_FILE",
-        "DECLARES_DEPLOYMENT",
-        "DECLARES_INGRESS",
-        "DECLARES_PACKAGE",
-        "DECLARES_ROUTE",
-        "DECLARES_SERVICE",
-        "DECLARES_SOLUTION",
-        "DECLARES_SYMBOL",
-        "DECLARES_WORKSPACE",
-        "DEFINES",
-        "EXPOSES_ROUTE",
-        "RUNS_CONTAINER",
-    }
-)
-IMPACT_PROFILES = {
-    "all": None,
-    "impact": IMPACT_EDGE_TYPES,
-    "structural": STRUCTURAL_EDGE_TYPES,
-}
 
 
 @dataclass(frozen=True)
@@ -980,17 +947,10 @@ def coverage_edge_type_warnings(groups: list[Any]) -> list[dict[str, Any]]:
             continue
         edge_counts[edge_type] = edge_counts.get(edge_type, 0) + int(group.get("count") or 0)
 
-    warning_defs = [
-        ("CALLS_SQL", "unresolved_sql_calls", "This source has unresolved SQL calls.", "warning"),
-        ("READS_SQL_OBJECT", "unresolved_sql_reads", "This source has unresolved SQL object reads.", "warning"),
-        ("CALLS_SERVICE", "unresolved_service_calls", "This source has unresolved service calls.", "warning"),
-        ("CALLS_HTTP", "unresolved_http_calls", "This source has unresolved HTTP calls.", "warning"),
-        ("IMPORTS", "unresolved_imports", "This source has unresolved imports.", "info"),
-    ]
     return [
-        coverage_warning(code, message, count, severity, edge_type=edge_type)
-        for edge_type, code, message, severity in warning_defs
-        if (count := edge_counts.get(edge_type, 0)) > 0
+        coverage_warning(rule.code, rule.message, count, rule.severity, edge_type=rule.target)
+        for rule in EDGE_TYPE_COVERAGE_WARNING_RULES
+        if (count := edge_counts.get(rule.target, 0)) > 0
     ]
 
 
@@ -1001,30 +961,10 @@ def coverage_classification_warnings(report: Mapping[str, Any]) -> list[dict[str
     classification_counts = summary.get("classification_edge_counts", {})
     if not isinstance(classification_counts, Mapping):
         return []
-    warning_defs = [
-        (
-            "likely_parser_gap",
-            "parser_gap",
-            "Parser gaps may hide local symbol, route, or import relationships.",
-            "warning",
-        ),
-        (
-            "ambiguous_target",
-            "ambiguous_targets",
-            "Ambiguous targets exist and were not linked.",
-            "warning",
-        ),
-        (
-            "likely_missing_source",
-            "missing_source",
-            "Missing source coverage may hide additional blast radius.",
-            "warning",
-        ),
-    ]
     return [
-        coverage_warning(code, message, count, severity, classification=classification)
-        for classification, code, message, severity in warning_defs
-        if (count := int(classification_counts.get(classification) or 0)) > 0
+        coverage_warning(rule.code, rule.message, count, rule.severity, classification=rule.target)
+        for rule in CLASSIFICATION_COVERAGE_WARNING_RULES
+        if (count := int(classification_counts.get(rule.target) or 0)) > 0
     ]
 
 

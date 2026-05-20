@@ -28,6 +28,18 @@ from repo_graph.config import (
     load_config,
 )
 from repo_graph.scanner import build_graph
+from repo_graph.vocabulary import (
+    CLASSIFICATION_COVERAGE_WARNING_RULES,
+    EDGE_TARGET_TYPES,
+    EDGE_TYPE_COVERAGE_WARNING_RULES,
+    EDGE_TYPES,
+    ENTITY_TYPES,
+    IMPACT_PROFILE_DESCRIPTIONS,
+    IMPACT_PROFILES,
+    PARSER_IDS,
+    UNRESOLVED_CLASSIFICATIONS,
+    CoverageWarningRule,
+)
 
 GENERATED_DIR = Path("docs/generated")
 LOCAL_EXAMPLE_CONFIG = Path("config/local-example.yaml")
@@ -68,6 +80,7 @@ def generated_documents() -> dict[Path, str]:
         GENERATED_DIR / "parser-coverage.md": parser_coverage_doc(),
         GENERATED_DIR / "pixi-tasks.md": pixi_tasks_doc(),
         GENERATED_DIR / "runtime-docker.md": runtime_docker_doc(),
+        GENERATED_DIR / "vocabulary.md": vocabulary_doc(),
     }
 
 
@@ -315,6 +328,89 @@ def parser_coverage_doc() -> str:
 
 def unique_edge_values(edges: list[dict[str, Any]], key: str) -> list[str]:
     return sorted({str(edge.get(key, "")) for edge in edges if edge.get(key)})
+
+
+def vocabulary_doc() -> str:
+    lines = [
+        generated_header("Vocabulary"),
+        "This file is generated from `repo_graph.vocabulary`.",
+        "",
+        "## Entity Types",
+        "",
+        *bullet_values(list(ENTITY_TYPES)),
+        "",
+        "## Edge Target Types",
+        "",
+        "These values are valid `to_type` values on edges. Most are entity types; "
+        "`sql_object` is a resolver target that can match SQL tables, views, functions, or stored procedures.",
+        "",
+        *bullet_values(list(EDGE_TARGET_TYPES)),
+        "",
+        "## Edge Types",
+        "",
+        *bullet_values(list(EDGE_TYPES)),
+        "",
+        "## Parser IDs",
+        "",
+        *bullet_values(list(PARSER_IDS)),
+        "",
+        "## Impact Profiles",
+        "",
+        "| Profile | Edge Types | Description |",
+        "| --- | --- | --- |",
+    ]
+    for profile in sorted(IMPACT_PROFILES):
+        edge_types = IMPACT_PROFILES[profile]
+        lines.append(
+            "| "
+            f"`{profile}` | "
+            f"{format_inline_values(sorted(edge_types)) if edge_types else '`all`'} | "
+            f"{escape_markdown_cell(IMPACT_PROFILE_DESCRIPTIONS[profile])} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Unresolved Classifications",
+            "",
+            "| Classification | Rank | Recommended Action |",
+            "| --- | ---: | --- |",
+        ]
+    )
+    for classification in UNRESOLVED_CLASSIFICATIONS:
+        lines.append(
+            "| "
+            f"`{classification.name}` | "
+            f"{classification.rank} | "
+            f"{escape_markdown_cell(classification.recommended_action)} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Coverage Warning Rules",
+            "",
+            "| Target Kind | Target | Code | Severity | Message |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for rule in EDGE_TYPE_COVERAGE_WARNING_RULES:
+        lines.append(coverage_warning_rule_row("edge_type", rule))
+    for rule in CLASSIFICATION_COVERAGE_WARNING_RULES:
+        lines.append(coverage_warning_rule_row("classification", rule))
+
+    return "\n".join(lines) + "\n"
+
+
+def coverage_warning_rule_row(target_kind: str, rule: CoverageWarningRule) -> str:
+    return (
+        "| "
+        f"`{target_kind}` | "
+        f"`{rule.target}` | "
+        f"`{rule.code}` | "
+        f"`{rule.severity}` | "
+        f"{escape_markdown_cell(rule.message)} |"
+    )
 
 
 def cli_reference_doc() -> str:

@@ -298,7 +298,7 @@ docs/spec.md            MVP planning spec
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
 docs/extending-parsers.md Parser extension workflow
-docs/generated/         Generated reference docs
+docs/generated/         Generated API, config, runtime, and vocabulary docs
 docs/public-release.md  Public release checklist
 examples/               Offline demo sources
 scripts/                Local verification and docs generation scripts
