@@ -13,6 +13,10 @@ The manifest lists available endpoints, graph store configuration, and planned
 capabilities. Agents should prefer the documented read endpoints below instead
 of trying to execute raw Cypher.
 
+For the generated endpoint inventory, see
+[generated/api-endpoints.md](generated/api-endpoints.md). This guide stays
+curated so agents know which endpoints to call for common workflows.
+
 ## Project AGENTS.md Snippet
 
 Generate a short Markdown snippet for a repository that should point agents at

@@ -283,8 +283,10 @@ docker-compose.yaml     Local API plus Neo4j runtime
 docs/spec.md            MVP planning spec
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
+docs/generated/         Generated reference docs
 docs/public-release.md  Public release checklist
 examples/               Offline demo sources
+scripts/                Local verification and docs generation scripts
 src/repo_graph/         Tool implementation
 tests/                  Unit tests
 ```

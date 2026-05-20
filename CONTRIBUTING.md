@@ -21,6 +21,7 @@ pixi run format-check
 pixi run test
 pixi run build-example-strict
 pixi run docker-context-check
+pixi run generated-docs-check
 pixi run public-boundary-check
 pixi run docker-smoke
 ```
@@ -37,6 +38,10 @@ synthetic example graph into Neo4j, verifies `/stats` and `/scope`, and then
 tears the project down. It uses alternate host ports by default so it does not
 conflict with the normal quick start: API `18080`, Neo4j HTTP `17475`, and
 Neo4j Bolt `17688`.
+
+Generated reference docs live under `docs/generated/`. Update them with
+`pixi run generate-docs`; `pixi run audit` fails when those files drift from
+the API manifest, synthetic graph types, or Pixi task definitions.
 
 ## Public-Safety Rules
 

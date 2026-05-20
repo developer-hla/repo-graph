@@ -3,6 +3,10 @@
 The MVP export is a single JSON document. It is intentionally simple so it can
 be loaded into different stores.
 
+For generated type counts from the synthetic example graph, see
+[generated/graph-types.md](generated/graph-types.md). This document defines
+the intended shape and meaning of the graph.
+
 ## Top-Level Fields
 
 - `metadata`: tool name, schema version, scope name, and generation time.
