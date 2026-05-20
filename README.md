@@ -199,6 +199,9 @@ REPO_GRAPH_CONFIG=/app/config/private-my-sources.yaml
 The runtime exposes health, config, source status, sync, build, refresh, load,
 job, scope, stats, graph query, unresolved report, and UI endpoints.
 
+For the generated API endpoint reference, see
+[docs/generated/api-endpoints.md](docs/generated/api-endpoints.md).
+
 Useful setup endpoints:
 
 ```bash

@@ -9,7 +9,7 @@ from dataclasses import MISSING, Field, fields
 from pathlib import Path
 from typing import Any
 
-from repo_graph.api import RuntimeSettings, manifest_payload
+from repo_graph.api import RuntimeSettings, create_app, manifest_payload
 from repo_graph.cli import build_parser
 from repo_graph.config import (
     DEFAULT_CACHE_DIR,
@@ -80,10 +80,11 @@ def api_endpoints_doc() -> str:
     manifest = manifest_payload(RuntimeSettings())
     endpoints = manifest["endpoints"]
     guidance = manifest["agent_guidance"]
+    openapi = create_app(RuntimeSettings()).openapi()
 
     lines = [
         generated_header("API Endpoints"),
-        "This file is generated from `repo_graph.api.manifest_payload`.",
+        "This file is generated from `repo_graph.api.manifest_payload` and the FastAPI OpenAPI schema.",
         "",
         f"- Service: `{manifest['service']}`",
         f"- Runtime schema version: `{manifest['schema_version']}`",
@@ -98,6 +99,7 @@ def api_endpoints_doc() -> str:
         status = "available" if endpoint["available"] else "planned"
         lines.append(f"| `{endpoint['method']}` | `{endpoint['path']}` | {status} |")
 
+    lines.extend(openapi_route_details(openapi))
     lines.extend(
         [
             "",
@@ -111,6 +113,86 @@ def api_endpoints_doc() -> str:
         lines.append(f"| `{key}` | {format_markdown_value(value)} |")
 
     return "\n".join(lines) + "\n"
+
+
+def openapi_route_details(openapi: dict[str, Any]) -> list[str]:
+    lines = [
+        "",
+        "## FastAPI Route Details",
+        "",
+        "Routes marked `planned` in the manifest are omitted until they exist in the FastAPI app.",
+        "",
+        "| Method | Path | Path Parameters | Query Parameters | Request Body |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for path in sorted(openapi["paths"]):
+        operations = openapi["paths"][path]
+        for method in sorted(operations):
+            operation = operations[method]
+            parameters = operation.get("parameters", [])
+            lines.append(
+                "| "
+                f"`{method.upper()}` | "
+                f"`{path}` | "
+                f"{format_openapi_parameters(parameters, 'path')} | "
+                f"{format_openapi_parameters(parameters, 'query')} | "
+                f"{format_openapi_request_body(operation)} |"
+            )
+    return lines
+
+
+def format_openapi_parameters(parameters: list[dict[str, Any]], location: str) -> str:
+    values: list[str] = []
+    for parameter in parameters:
+        if parameter.get("in") != location:
+            continue
+        schema = parameter.get("schema", {})
+        values.append(
+            "`"
+            + escape_markdown_cell(parameter["name"])
+            + "` "
+            + format_openapi_schema(schema)
+            + format_openapi_required(parameter)
+        )
+    return "<br>".join(values) if values else ""
+
+
+def format_openapi_required(parameter: dict[str, Any]) -> str:
+    return " required" if parameter.get("required") else ""
+
+
+def format_openapi_request_body(operation: dict[str, Any]) -> str:
+    request_body = operation.get("requestBody")
+    if not request_body:
+        return ""
+    content = request_body.get("content", {})
+    schema = content.get("application/json", {}).get("schema", {})
+    body = format_openapi_schema(schema)
+    if request_body.get("required"):
+        return f"{body} required"
+    return body
+
+
+def format_openapi_schema(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        return f"`{schema['$ref'].rsplit('/', 1)[-1]}`"
+    if "anyOf" in schema:
+        return " or ".join(format_openapi_schema(item) for item in schema["anyOf"])
+
+    schema_type = schema.get("type", "value")
+    parts = [f"`{schema_type}`"]
+    if "default" in schema:
+        parts.append(f"default `{escape_markdown_cell(str(schema['default']))}`")
+    if "minimum" in schema or "maximum" in schema:
+        bounds: list[str] = []
+        if "minimum" in schema:
+            bounds.append(f"min `{schema['minimum']}`")
+        if "maximum" in schema:
+            bounds.append(f"max `{schema['maximum']}`")
+        parts.append(", ".join(bounds))
+    if "minLength" in schema:
+        parts.append(f"min length `{schema['minLength']}`")
+    return " ".join(parts)
 
 
 def graph_types_doc() -> str:
