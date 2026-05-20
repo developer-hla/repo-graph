@@ -92,6 +92,9 @@ UI state is encoded in hash routes, so links can be refreshed or shared:
 /ui#relationships?fromSource=api-service&type=CALLS_SQL&resolved=false
 ```
 
+For generated Docker service, port, and environment details, see
+[docs/generated/runtime-docker.md](docs/generated/runtime-docker.md).
+
 ## Local Pixi Quick Start
 
 Install Pixi, then run the scanner against the built-in examples:

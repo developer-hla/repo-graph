@@ -114,12 +114,22 @@ ALLOWLIST = (
     AllowlistEntry("token_handling_identifier", "docs/agent-usage.md", re.compile(r"\bGITHUB_TOKEN\b")),
     AllowlistEntry(
         "token_handling_identifier",
+        "docs/generated/runtime-docker.md",
+        re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN)\b"),
+    ),
+    AllowlistEntry(
+        "token_handling_identifier",
         "docker-compose.yaml",
         re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN)\b"),
     ),
     AllowlistEntry(
         "token_handling_identifier",
         "scripts/docker-smoke.sh",
+        re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN)\b"),
+    ),
+    AllowlistEntry(
+        "token_handling_identifier",
+        "scripts/generate-docs.py",
         re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN)\b"),
     ),
     AllowlistEntry("token_handling_identifier", "scripts/check-public-boundary.py", re.compile(r".*")),

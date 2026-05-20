@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import re
+import runpy
 import tomllib
 from collections import Counter
 from dataclasses import MISSING, Field, fields
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from repo_graph.api import RuntimeSettings, create_app, manifest_payload
 from repo_graph.cli import build_parser
@@ -27,6 +31,11 @@ from repo_graph.scanner import build_graph
 
 GENERATED_DIR = Path("docs/generated")
 LOCAL_EXAMPLE_CONFIG = Path("config/local-example.yaml")
+DOCKER_COMPOSE = Path("docker-compose.yaml")
+DOCKERFILE = Path("Dockerfile")
+ENV_EXAMPLE = Path(".env.example")
+DOCKER_CONTEXT_CHECK = Path("scripts/check-docker-context.py")
+COMPOSE_VARIABLE_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)(?::-(.*?))?\}")
 
 
 class GeneratedHelpFormatter(argparse.HelpFormatter):
@@ -58,6 +67,7 @@ def generated_documents() -> dict[Path, str]:
         GENERATED_DIR / "graph-types.md": graph_types_doc(),
         GENERATED_DIR / "parser-coverage.md": parser_coverage_doc(),
         GENERATED_DIR / "pixi-tasks.md": pixi_tasks_doc(),
+        GENERATED_DIR / "runtime-docker.md": runtime_docker_doc(),
     }
 
 
@@ -573,6 +583,175 @@ def pixi_tasks_doc() -> str:
         lines.append(f"| `{name}` | {format_task(tasks[name])} |")
 
     return "\n".join(lines) + "\n"
+
+
+def runtime_docker_doc() -> str:
+    compose = yaml.safe_load(DOCKER_COMPOSE.read_text(encoding="utf-8"))
+    services = compose["services"]
+    dockerfile_lines = DOCKERFILE.read_text(encoding="utf-8").splitlines()
+
+    lines = [
+        generated_header("Runtime And Docker"),
+        "This file is generated from `docker-compose.yaml`, `Dockerfile`, `.env.example`, and runtime defaults.",
+        "",
+        "## Dockerfile",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Base Image | {format_dockerfile_instruction(dockerfile_lines, 'FROM')} |",
+        f"| Workdir | {format_dockerfile_instruction(dockerfile_lines, 'WORKDIR')} |",
+        f"| Exposed Ports | {format_dockerfile_values(dockerfile_lines, 'EXPOSE')} |",
+        f"| Default Command | {format_dockerfile_instruction(dockerfile_lines, 'CMD')} |",
+        "",
+        "## Compose Services",
+        "",
+        "| Service | Image Or Build | Command | Ports | Volumes |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for name in sorted(services):
+        service = services[name]
+        lines.append(
+            "| "
+            f"`{name}` | "
+            f"{format_compose_image_or_build(service)} | "
+            f"{format_markdown_value(service.get('command')) if service.get('command') else ''} | "
+            f"{format_compose_list(service.get('ports', []))} | "
+            f"{format_compose_list(service.get('volumes', []))} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Environment Variables",
+            "",
+            "| Name | Compose Value | Example Value | Runtime Default | Notes |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    compose_values = compose_runtime_values(compose)
+    for name in runtime_env_names(compose):
+        lines.append(
+            "| "
+            f"`{name}` | "
+            f"{format_env_doc_value(compose_values.get(name))} | "
+            f"{format_env_doc_value(example_env_values().get(name))} | "
+            f"{format_env_doc_value(runtime_default_values().get(name))} | "
+            f"{runtime_env_note(name)} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Docker Context Privacy",
+            "",
+            "The Docker context check requires these `.dockerignore` patterns:",
+            "",
+            *bullet_values(docker_context_patterns()),
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def format_dockerfile_instruction(lines: list[str], instruction: str) -> str:
+    for line in lines:
+        if line.startswith(f"{instruction} "):
+            return f"`{escape_markdown_cell(line.removeprefix(f'{instruction} '))}`"
+    return ""
+
+
+def format_dockerfile_values(lines: list[str], instruction: str) -> str:
+    values = [line.removeprefix(f"{instruction} ") for line in lines if line.startswith(f"{instruction} ")]
+    return format_inline_values(values)
+
+
+def format_compose_image_or_build(service: dict[str, Any]) -> str:
+    if "image" in service:
+        return f"image {format_markdown_value(service['image'])}"
+    if "build" in service:
+        return f"build {format_markdown_value(service['build'])}"
+    return ""
+
+
+def format_compose_list(values: list[Any]) -> str:
+    return "<br>".join(f"`{escape_markdown_cell(str(value))}`" for value in values)
+
+
+def runtime_env_names(compose: dict[str, Any]) -> list[str]:
+    names = (
+        set(compose_env_values(compose))
+        | set(compose_variable_defaults())
+        | set(example_env_values())
+        | set(runtime_default_values())
+    )
+    return sorted(names)
+
+
+def compose_env_values(compose: dict[str, Any]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for service in compose["services"].values():
+        environment = service.get("environment", {})
+        if isinstance(environment, dict):
+            values.update({str(key): str(value) for key, value in environment.items()})
+    return values
+
+
+def compose_runtime_values(compose: dict[str, Any]) -> dict[str, str]:
+    return compose_variable_defaults() | compose_env_values(compose)
+
+
+def example_env_values() -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        name, value = stripped.split("=", 1)
+        values[name] = value
+    return values
+
+
+def compose_variable_defaults() -> dict[str, str]:
+    defaults: dict[str, str] = {}
+    for name, default in COMPOSE_VARIABLE_PATTERN.findall(DOCKER_COMPOSE.read_text(encoding="utf-8")):
+        defaults[name] = default
+    return defaults
+
+
+def runtime_default_values() -> dict[str, str | None]:
+    settings = RuntimeSettings()
+    return {
+        "REPO_GRAPH_CONFIG": str(settings.config_path) if settings.config_path else None,
+        "REPO_GRAPH_NEO4J_URI": settings.neo4j_uri,
+        "REPO_GRAPH_NEO4J_USER": settings.neo4j_user,
+        "REPO_GRAPH_NEO4J_PASSWORD": settings.neo4j_password,
+        "REPO_GRAPH_NEO4J_DATABASE": settings.neo4j_database,
+    }
+
+
+def runtime_env_note(name: str) -> str:
+    notes = {
+        "GITHUB_TOKEN": "Optional token for GitHub org discovery and HTTPS clone/fetch.",
+        "GH_TOKEN": "Fallback GitHub token name accepted by Git tooling.",
+        "REPO_GRAPH_API_PORT": "Host port mapped to container port `8000`.",
+        "REPO_GRAPH_CONFIG": "Config path inside the container.",
+        "REPO_GRAPH_NEO4J_BOLT_PORT": "Host port mapped to Neo4j Bolt.",
+        "REPO_GRAPH_NEO4J_DATABASE": "Optional Neo4j database name.",
+        "REPO_GRAPH_NEO4J_HTTP_PORT": "Host port mapped to Neo4j Browser.",
+        "REPO_GRAPH_NEO4J_PASSWORD": "Neo4j password used by the local Compose stack.",
+        "REPO_GRAPH_NEO4J_URI": "Bolt URI used by the API container.",
+        "REPO_GRAPH_NEO4J_USER": "Neo4j user used by the API container.",
+    }
+    return notes.get(name, "")
+
+
+def format_env_doc_value(value: str | None) -> str:
+    if value == "":
+        return "`empty`"
+    return format_markdown_value(value)
+
+
+def docker_context_patterns() -> list[str]:
+    return list(runpy.run_path(str(DOCKER_CONTEXT_CHECK))["REQUIRED_PATTERNS"])
 
 
 def generated_header(title: str) -> str:
