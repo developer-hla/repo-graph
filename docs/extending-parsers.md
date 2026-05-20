@@ -25,18 +25,23 @@ complete until code, examples, tests, and generated references all agree.
    facts should include `file_path`, `line_number` when available, parser name,
    and confidence.
 
-6. Register the extractor in `default_extractors`.
+6. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
+   emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
+   such as `fetch`, `axios`, `requests`, `httpx`, or `HttpClient` in edge
+   properties. Do not add one edge type or parser ID per client library.
+
+7. Register the extractor in `default_extractors`.
    The registry order should stay deterministic.
 
-7. Add focused tests in `tests/test_scanner.py`.
+8. Add focused tests in `tests/test_scanner.py`.
    Tests should cover at least one positive extraction and any important
    unresolved or ambiguous reference behavior.
 
-8. Regenerate docs with `pixi run generate-docs`.
+9. Regenerate docs with `pixi run generate-docs`.
    Confirm `docs/generated/parser-coverage.md` includes the new parser when
    the examples exercise it.
 
-9. Run `pixi run audit`.
+10. Run `pixi run audit`.
 
 ## Parser Rules
 
@@ -45,6 +50,9 @@ complete until code, examples, tests, and generated references all agree.
 - Preserve unresolved edges when a target cannot be resolved safely.
 - Do not require users to predefine relationships that RepoGraph can discover
   from source evidence.
+- Optimize parser output for app-boundary dependencies. Parser names and
+  library names are evidence; edge types should remain useful for impact
+  analysis and agent summaries.
 - Keep extractor failures local by returning `ScanResult.errors` instead of
   stopping the whole graph build.
 

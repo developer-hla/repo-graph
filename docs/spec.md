@@ -90,6 +90,18 @@ Every edge should include:
 - confidence level
 - parser name
 
+Edge types should be semantic. For dependency and interaction edges, the graph
+should say that a UI calls an API, an API calls another service, a service uses
+a SQL object, or a project depends on another project or package. The parser
+should not make users think in terms of a specific syntax shape or HTTP client
+library.
+
+Interaction evidence belongs on the edge. When known, HTTP and service-call
+edges should carry protocol, method, route or target path, raw target,
+normalized target, config key, client library, parser, file path, and line
+number. Agents should summarize these as app-boundary dependencies and use the
+evidence for proof and drill-down.
+
 Unresolved edges are expected. They mean a reference was found but the scanner
 could not map it to a known entity in the current graph scope.
 

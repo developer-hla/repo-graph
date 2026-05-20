@@ -60,12 +60,24 @@ logic in the CLI, or graph-resolution policy in storage code.
 - Regularity over cleverness: prefer explicit, repeatable patterns over local
   shortcuts when the code defines public behavior, extension behavior, or agent
   contracts.
+- App-boundary semantics first: graph facts should describe meaningful
+  relationships between applications, services, projects, data objects, and
+  deployment resources. Parser names, HTTP client libraries, and syntax details
+  are evidence, not the primary graph language.
 
 ## Graph Rules
 
 - Every entity and edge must include source provenance.
 - Every file-derived entity or edge should include relative file path and line
   number when available.
+- Edge types should describe semantic relationships such as runtime service
+  calls, SQL usage, package dependencies, project references, deployment
+  topology, declarations, and ownership. Do not create graph vocabulary around
+  low-level implementation details such as a specific HTTP client library.
+- Interaction edges should preserve evidence on the edge, including protocol,
+  method, route or target path, raw target, normalized target, config key,
+  client library, parser, file path, and line number when those values are
+  known.
 - Ambiguous references must remain unresolved. Never silently link a reference
   to an arbitrary entity when more than one candidate matches.
 - Unresolved edges are valid output. They mean the target was not found in the
@@ -90,6 +102,10 @@ logic in the CLI, or graph-resolution policy in storage code.
   stopping the whole scan, unless strict mode is enabled.
 - Prefer structured parsing when practical. Regex-based parsing is acceptable
   for MVP scanners, but keep patterns bounded and tested.
+- Prefer semantic parser IDs such as `javascript_http`, `python_http`, and
+  `dotnet_http`. Store library-specific evidence such as `fetch`, `axios`,
+  `requests`, `httpx`, or `HttpClient` in edge properties instead of creating
+  one parser ID or edge type per library.
 - Do not add language-specific parser behavior without synthetic tests.
 - Follow `docs/extending-parsers.md` when adding or changing parser behavior.
 

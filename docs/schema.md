@@ -60,6 +60,18 @@ intended shape and meaning of the graph.
 }
 ```
 
+Edges are semantic graph facts with evidence. For example, an HTTP call from a
+UI to an API should be represented as a generic dependency such as
+`CALLS_SERVICE` or `CALLS_HTTP`. The parser and edge properties explain how the
+fact was discovered, including details such as HTTP client, protocol, method,
+route, raw target, normalized target, config key, file path, and line number
+when known.
+
+Do not model every library or syntax form as a separate edge type. `fetch`,
+`axios`, `requests`, `httpx`, `HttpClient`, and legacy HTTP clients are
+evidence for an app-boundary dependency; they are not the dependency language
+agents should expose to users.
+
 ## Core Entity Types
 
 - `repository`: one configured source.

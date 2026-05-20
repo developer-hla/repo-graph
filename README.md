@@ -33,6 +33,19 @@ a local HTTP API plus a navigable UI.
 - Provides a local UI for search, impact analysis, unresolved triage, evidence
   snippets, and refresh jobs.
 
+## Graph Model
+
+Repo Graph treats application boundaries as the main language of the graph. A
+UI that calls an API over HTTP, an API that calls another service, and a
+service that reads a SQL object are dependency facts. The edge records the
+interaction details that support that fact.
+
+Parser and library details stay as evidence. For example, `fetch`, `axios`,
+`requests`, `httpx`, and `HttpClient` should all produce semantic HTTP
+dependency edges such as `CALLS_SERVICE` or `CALLS_HTTP`; the specific client,
+raw URL, normalized route, config key, file path, and line number belong on the
+edge as evidence.
+
 ## Example Questions
 
 Repo Graph is useful for questions like:

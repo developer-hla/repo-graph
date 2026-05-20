@@ -13,6 +13,12 @@ The manifest lists available endpoints, graph store configuration, and planned
 capabilities. Agents should prefer the documented read endpoints below instead
 of trying to execute raw Cypher.
 
+Agents should explain graph results in terms of application-boundary
+dependencies. For example, say that one UI or service depends on another API
+over HTTP, then cite edge evidence such as method, route, raw target, parser,
+file path, and line number. Do not make the HTTP client library the main user
+facing relationship.
+
 For the generated endpoint inventory, see
 [generated/api-endpoints.md](generated/api-endpoints.md). This guide stays
 curated so agents know which endpoints to call for common workflows.
