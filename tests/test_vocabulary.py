@@ -14,6 +14,11 @@ from repo_graph.vocabulary import (
     EDGE_TYPES,
     ENTITY_TYPES,
     IMPACT_PROFILES,
+    INTERACTION_DEPENDENCY_SCOPES,
+    INTERACTION_EDGE_TYPES,
+    INTERACTION_EVIDENCE_KEYS,
+    INTERACTION_KINDS,
+    INTERACTION_TARGET_BOUNDARIES,
     PARSER_IDS,
     UNRESOLVED_CLASSIFICATIONS,
 )
@@ -40,6 +45,20 @@ class VocabularyTests(unittest.TestCase):
         for edge_types in IMPACT_PROFILES.values():
             if edge_types is not None:
                 self.assertEqual(set(edge_types) - set(EDGE_TYPES), set())
+
+    def test_interaction_edge_contract_is_regular(self) -> None:
+        graph = build_graph(load_config(Path("config/local-example.yaml")), strict=True).to_dict()
+
+        self.assertEqual(INTERACTION_EDGE_TYPES - set(EDGE_TYPES), set())
+        interaction_edges = [edge for edge in graph["edges"] if edge["edge_type"] in INTERACTION_EDGE_TYPES]
+        self.assertGreater(len(interaction_edges), 0)
+        for edge in interaction_edges:
+            properties = edge["properties"]
+            for key in INTERACTION_EVIDENCE_KEYS:
+                self.assertIn(key, properties, edge)
+            self.assertIn(properties["target_boundary"], INTERACTION_TARGET_BOUNDARIES)
+            self.assertIn(properties["dependency_scope"], INTERACTION_DEPENDENCY_SCOPES)
+            self.assertIn(properties["interaction_kind"], INTERACTION_KINDS)
 
     def test_unresolved_classification_maps_match_definitions(self) -> None:
         names = [classification.name for classification in UNRESOLVED_CLASSIFICATIONS]

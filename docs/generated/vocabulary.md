@@ -85,6 +85,44 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `RUNS_CONTAINER`
 - `SELECTS_DEPLOYMENT`
 
+## Interaction Evidence
+
+These edge types represent application-to-application or application-to-database interactions. They should include the regular evidence keys below in edge `properties`.
+
+### Edge Types
+
+- `CALLS_HTTP`
+- `CALLS_SERVICE`
+- `CALLS_SQL`
+- `CONFIGURES_SERVICE`
+- `READS_SQL_OBJECT`
+- `ROUTES_TO_SERVICE`
+
+### Required Evidence Keys
+
+- `target_boundary`
+- `dependency_scope`
+- `interaction_kind`
+
+### Target Boundaries
+
+- `application`
+- `database`
+
+### Dependency Scopes
+
+- `configuration`
+- `deployment`
+- `runtime`
+
+### Interaction Kinds
+
+- `http_call`
+- `ingress_route`
+- `service_call`
+- `service_configuration`
+- `sql_reference`
+
 ## Parser IDs
 
 - `dotnet_build_config`

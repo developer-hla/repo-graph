@@ -154,6 +154,14 @@ sources:
         ]
         self.assertTrue(any(edge["properties"].get("client") == "fetch" for edge in inventory_service_edges))
         self.assertTrue(any(edge["properties"].get("client") == "axios" for edge in inventory_service_edges))
+        self.assertTrue(
+            all(
+                edge["properties"].get("target_boundary") == "application"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "http_call"
+                for edge in inventory_service_edges
+            )
+        )
         self.assertTrue(all(edge["parser"] != "axios_http" for edge in graph_data["edges"]))
 
     def test_dependency_filter_keeps_internal_like_unresolved_package_references(self) -> None:
@@ -475,6 +483,7 @@ class Worker:
 async def read_thing(thing_id: str) -> dict[str, str]:
     Worker().fetch_inventory(thing_id)
     query = text("EXEC dbo.get_thing_by_id")
+    rows = text("SELECT * FROM dbo.things")
     return format_thing(str(query))
 """,
                 encoding="utf-8",
@@ -484,7 +493,10 @@ async def read_thing(thing_id: str) -> dict[str, str]:
                 encoding="utf-8",
             )
             (database_project / "schema.sql").write_text(
-                "CREATE PROCEDURE dbo.get_thing_by_id AS SELECT 1",
+                """
+CREATE PROCEDURE dbo.get_thing_by_id AS SELECT 1
+CREATE TABLE dbo.things (id int)
+""",
                 encoding="utf-8",
             )
             config_path = root / "sources.yaml"
@@ -550,12 +562,40 @@ sources:
                 and edge["parser"] == "python_http"
                 and edge["properties"].get("client") == "requests"
                 and edge["properties"].get("protocol") == "http"
+                and edge["properties"].get("target_boundary") == "application"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "http_call"
                 for edge in graph_data["edges"]
             )
         )
         self.assertTrue(
             any(
                 edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.get_thing_by_id" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["to_name"] == "dbo.get_thing_by_id"
+                and edge["properties"].get("target_boundary") == "database"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "sql_reference"
+                and edge["properties"].get("protocol") == "sql"
+                and edge["properties"].get("sql_operation") == "EXECUTE"
+                and edge["properties"].get("database_object_type") == "stored_procedure"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "READS_SQL_OBJECT"
+                and edge["to_name"] == "dbo.things"
+                and edge["resolved"]
+                and edge["properties"].get("target_boundary") == "database"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("sql_operation") == "FROM"
+                and edge["properties"].get("database_object_type") == "sql_object"
                 for edge in graph_data["edges"]
             )
         )
@@ -694,6 +734,9 @@ sources:
                 and edge["parser"] == "dotnet_http"
                 and edge["properties"].get("client") == "HttpClient"
                 and edge["properties"].get("protocol") == "http"
+                and edge["properties"].get("target_boundary") == "application"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "http_call"
                 for edge in graph_data["edges"]
             )
         )
@@ -850,7 +893,12 @@ sources:
         )
         self.assertTrue(
             any(
-                edge["edge_type"] == "ROUTES_TO_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                edge["edge_type"] == "ROUTES_TO_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["resolved"]
+                and edge["properties"].get("target_boundary") == "application"
+                and edge["properties"].get("dependency_scope") == "deployment"
+                and edge["properties"].get("interaction_kind") == "ingress_route"
                 for edge in graph_data["edges"]
             )
         )
@@ -859,6 +907,9 @@ sources:
                 edge["edge_type"] == "CONFIGURES_SERVICE"
                 and edge["to_name"] == "inventory-service"
                 and edge["resolved"]
+                and edge["properties"].get("target_boundary") == "application"
+                and edge["properties"].get("dependency_scope") == "configuration"
+                and edge["properties"].get("interaction_kind") == "service_configuration"
                 for edge in graph_data["edges"]
             )
         )
@@ -1048,6 +1099,19 @@ sources:
         )
         self.assertTrue(
             any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["to_name"] == "dbo.GetOrder"
+                and edge["parser"] == "vb_sql_command"
+                and edge["properties"].get("target_boundary") == "database"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "sql_reference"
+                and edge["properties"].get("protocol") == "sql"
+                and edge["properties"].get("sql_operation") == "EXECUTE"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
                 edge["edge_type"] == "CALLS_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
                 for edge in graph_data["edges"]
             )
@@ -1059,6 +1123,9 @@ sources:
                 and edge["parser"] == "vb_http"
                 and edge["properties"].get("client") == "WebRequest"
                 and edge["properties"].get("protocol") == "http"
+                and edge["properties"].get("target_boundary") == "application"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "http_call"
                 for edge in graph_data["edges"]
             )
         )

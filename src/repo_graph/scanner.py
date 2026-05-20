@@ -111,7 +111,7 @@ SQL_OBJECT_KIND_RE = re.compile(
     re.IGNORECASE,
 )
 SQL_EXEC_RE = re.compile(r"\bEXEC(?:UTE)?\s+([\[\]\w.]+)", re.IGNORECASE)
-SQL_TABLE_REF_RE = re.compile(r"\b(?:FROM|JOIN|UPDATE|INTO)\s+([\[\]\w.]+)", re.IGNORECASE)
+SQL_TABLE_REF_RE = re.compile(r"\b(?P<operation>FROM|JOIN|UPDATE|INTO)\s+(?P<target>[\[\]\w.]+)", re.IGNORECASE)
 
 
 @dataclass
@@ -1481,7 +1481,7 @@ def http_edges_for_target(
     target = http_target(raw_target, method)
     if client:
         target["client"] = client
-    if target["service_name"]:
+    if target.get("service_name"):
         return [
             unresolved_edge(
                 context.file_entity,
@@ -1517,16 +1517,33 @@ def http_target(raw_target: str, method: str) -> dict[str, Any]:
     parsed = urlparse(raw_target)
     host = parsed.netloc or None
     service_name = service_name_from_env(env_match.group(1)) if env_match else None
+    return interaction_properties(
+        "application",
+        "runtime",
+        "http_call",
+        protocol=parsed.scheme if parsed.scheme in {"http", "https"} else "http",
+        raw_target=raw_target,
+        normalized_target=f"{method} {normalized_path}",
+        route_name=f"{method} {normalized_path}",
+        http_method=method,
+        target_host=host,
+        target_path=normalized_path,
+        target_env_var=env_match.group(1) if env_match else None,
+        service_name=service_name,
+    )
+
+
+def interaction_properties(
+    target_boundary: str,
+    dependency_scope: str,
+    interaction_kind: str,
+    **evidence: Any,
+) -> dict[str, Any]:
     return {
-        "protocol": parsed.scheme if parsed.scheme in {"http", "https"} else "http",
-        "raw_target": raw_target,
-        "normalized_target": f"{method} {normalized_path}",
-        "route_name": f"{method} {normalized_path}",
-        "http_method": method,
-        "target_host": host,
-        "target_path": normalized_path,
-        "target_env_var": env_match.group(1) if env_match else None,
-        "service_name": service_name,
+        "target_boundary": target_boundary,
+        "dependency_scope": dependency_scope,
+        "interaction_kind": interaction_kind,
+        **{key: value for key, value in evidence.items() if value is not None},
     }
 
 
@@ -1616,10 +1633,7 @@ def sql_call_edges(context: FileScanContext, line: str, line_number: int) -> lis
             "sql_reference",
             to_type="stored_procedure",
             line_number=line_number,
-            properties={
-                "raw_target": match.group(1),
-                "normalized_target": normalize_sql_name(match.group(1)),
-            },
+            properties=sql_interaction_properties(match.group(1), "EXECUTE", "stored_procedure"),
         )
         for match in SQL_EXEC_RE.finditer(line)
     ]
@@ -1629,20 +1643,30 @@ def sql_object_reference_edges(context: FileScanContext, line: str, line_number:
     return [
         unresolved_edge(
             context.file_entity,
-            normalize_sql_name(match.group(1)),
+            normalize_sql_name(match.group("target")),
             "READS_SQL_OBJECT",
             context.source.name,
             context.rel_path,
             "sql_reference",
             to_type="sql_object",
             line_number=line_number,
-            properties={
-                "raw_target": match.group(1),
-                "normalized_target": normalize_sql_name(match.group(1)),
-            },
+            properties=sql_interaction_properties(match.group("target"), match.group("operation"), "sql_object"),
         )
         for match in SQL_TABLE_REF_RE.finditer(line)
     ]
+
+
+def sql_interaction_properties(raw_target: str, operation: str, database_object_type: str) -> dict[str, Any]:
+    return interaction_properties(
+        "database",
+        "runtime",
+        "sql_reference",
+        protocol="sql",
+        raw_target=raw_target,
+        normalized_target=normalize_sql_name(raw_target),
+        sql_operation=operation.upper(),
+        database_object_type=database_object_type,
+    )
 
 
 def resolved_edge(
@@ -2470,6 +2494,8 @@ def kubernetes_env_service_edge(config_value: Entity, context: FileScanContext) 
     if not service_name or not isinstance(raw_target, str):
         return None
     target = http_target(raw_target, "GET")
+    target["dependency_scope"] = "configuration"
+    target["interaction_kind"] = "service_configuration"
     target["config_key"] = key
     target["service_name"] = service_name
     return unresolved_edge(
@@ -2568,7 +2594,15 @@ def kubernetes_ingress_rule_result(context: FileScanContext, ingress: Entity, ru
                     "kubernetes_ingress_route",
                     to_type="service",
                     line_number=1,
-                    properties={"raw_target": service_name, "normalized_target": service_name},
+                    properties=interaction_properties(
+                        "application",
+                        "deployment",
+                        "ingress_route",
+                        protocol="http",
+                        raw_target=service_name,
+                        normalized_target=service_name,
+                        service_name=service_name,
+                    ),
                 )
             )
     return result
@@ -2973,6 +3007,8 @@ def config_service_edge(config_value: Entity, context: FileScanContext, parser: 
     contract = config_value.properties.get("contract")
     service_name = service_name_from_identifier(key or contract or service_name_from_url(raw_target))
     target = http_target(raw_target, "GET")
+    target["dependency_scope"] = "configuration"
+    target["interaction_kind"] = "service_configuration"
     target["service_name"] = service_name
     return unresolved_edge(
         config_value,
@@ -3145,11 +3181,15 @@ def vb_service_call_edges(context: FileScanContext, line: str, line_number: int)
                 "vb_config_service",
                 to_type="service",
                 line_number=line_number,
-                properties={
-                    "raw_target": key,
-                    "config_key": key,
-                    "service_name": service_name,
-                },
+                properties=interaction_properties(
+                    "application",
+                    "runtime",
+                    "service_call",
+                    raw_target=key,
+                    normalized_target=service_name,
+                    config_key=key,
+                    service_name=service_name,
+                ),
             )
         )
     return edges
@@ -3209,10 +3249,7 @@ def vb_sql_command_edges(context: FileScanContext, line: str, line_number: int) 
                 "vb_sql_command",
                 to_type="stored_procedure",
                 line_number=line_number,
-                properties={
-                    "raw_target": target,
-                    "normalized_target": normalized,
-                },
+                properties=sql_interaction_properties(target, "EXECUTE", "stored_procedure"),
             )
         )
     return edges

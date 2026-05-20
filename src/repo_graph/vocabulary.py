@@ -58,6 +58,37 @@ EDGE_TYPES = (
     "RUNS_CONTAINER",
     "SELECTS_DEPLOYMENT",
 )
+INTERACTION_EDGE_TYPES = frozenset(
+    {
+        "CALLS_HTTP",
+        "CALLS_SERVICE",
+        "CALLS_SQL",
+        "CONFIGURES_SERVICE",
+        "READS_SQL_OBJECT",
+        "ROUTES_TO_SERVICE",
+    }
+)
+INTERACTION_EVIDENCE_KEYS = (
+    "target_boundary",
+    "dependency_scope",
+    "interaction_kind",
+)
+INTERACTION_TARGET_BOUNDARIES = (
+    "application",
+    "database",
+)
+INTERACTION_DEPENDENCY_SCOPES = (
+    "configuration",
+    "deployment",
+    "runtime",
+)
+INTERACTION_KINDS = (
+    "http_call",
+    "ingress_route",
+    "service_call",
+    "service_configuration",
+    "sql_reference",
+)
 
 PARSER_IDS = (
     "dotnet_build_config",

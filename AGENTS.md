@@ -78,6 +78,10 @@ logic in the CLI, or graph-resolution policy in storage code.
   method, route or target path, raw target, normalized target, config key,
   client library, parser, file path, and line number when those values are
   known.
+- Edge types listed in `repo_graph.vocabulary.INTERACTION_EDGE_TYPES` must
+  include `target_boundary`, `dependency_scope`, and `interaction_kind` in
+  edge `properties`. Do not add those fields to structural, declaration, or
+  ownership edges unless the edge is actually modeling an interaction.
 - Ambiguous references must remain unresolved. Never silently link a reference
   to an arbitrary entity when more than one candidate matches.
 - Unresolved edges are valid output. They mean the target was not found in the

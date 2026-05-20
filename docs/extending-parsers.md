@@ -29,6 +29,9 @@ complete until code, examples, tests, and generated references all agree.
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
    such as `fetch`, `axios`, `requests`, `httpx`, or `HttpClient` in edge
    properties. Do not add one edge type or parser ID per client library.
+   For interaction edge types listed in `repo_graph.vocabulary.INTERACTION_EDGE_TYPES`,
+   use the scanner `interaction_properties` helper or an equivalent wrapper so
+   `target_boundary`, `dependency_scope`, and `interaction_kind` are present.
 
 7. Register the extractor in `default_extractors`.
    The registry order should stay deterministic.
@@ -53,6 +56,11 @@ complete until code, examples, tests, and generated references all agree.
 - Optimize parser output for app-boundary dependencies. Parser names and
   library names are evidence; edge types should remain useful for impact
   analysis and agent summaries.
+- Use interaction evidence for app-to-app and app-to-database relationships:
+  `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
+  `CALLS_SQL`, and `READS_SQL_OBJECT`. Do not use interaction evidence for
+  containment, declaration, or ownership edges such as `CONTAINS_FILE`,
+  `DECLARES_SYMBOL`, or `DEFINES`.
 - Keep extractor failures local by returning `ScanResult.errors` instead of
   stopping the whole graph build.
 

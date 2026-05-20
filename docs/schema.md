@@ -67,6 +67,19 @@ fact was discovered, including details such as HTTP client, protocol, method,
 route, raw target, normalized target, config key, file path, and line number
 when known.
 
+Application-to-application and application-to-database interaction edges should
+use regular evidence fields. The canonical list lives in
+`repo_graph.vocabulary.INTERACTION_EDGE_TYPES` and currently includes
+`CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
+`CALLS_SQL`, and `READS_SQL_OBJECT`.
+
+- `target_boundary`: `application` or `database`
+- `dependency_scope`: `runtime`, `configuration`, or `deployment`
+- `interaction_kind`: a stable evidence category such as `http_call`,
+  `service_call`, `service_configuration`, `ingress_route`, or `sql_reference`
+- protocol-specific evidence such as `client`, `protocol`, `http_method`,
+  `target_path`, `sql_operation`, or `database_object_type`
+
 Do not model every library or syntax form as a separate edge type. `fetch`,
 `axios`, `requests`, `httpx`, `HttpClient`, and legacy HTTP clients are
 evidence for an app-boundary dependency; they are not the dependency language
