@@ -1453,9 +1453,20 @@ def http_call_edges(context: FileScanContext, line: str, line_number: int) -> li
     edges: list[Edge] = []
     for match in FETCH_RE.finditer(line):
         method = fetch_method(match.group("args"))
-        edges.extend(http_edges_for_target(context, method, match.group(2), line_number, "javascript_http"))
+        edges.extend(
+            http_edges_for_target(context, method, match.group(2), line_number, "javascript_http", client="fetch")
+        )
     for match in AXIOS_RE.finditer(line):
-        edges.extend(http_edges_for_target(context, match.group(1).upper(), match.group(3), line_number, "axios_http"))
+        edges.extend(
+            http_edges_for_target(
+                context,
+                match.group(1).upper(),
+                match.group(3),
+                line_number,
+                "javascript_http",
+                client="axios",
+            )
+        )
     return edges
 
 
@@ -1465,8 +1476,11 @@ def http_edges_for_target(
     raw_target: str,
     line_number: int,
     parser: str,
+    client: str | None = None,
 ) -> list[Edge]:
     target = http_target(raw_target, method)
+    if client:
+        target["client"] = client
     if target["service_name"]:
         return [
             unresolved_edge(
@@ -1504,6 +1518,7 @@ def http_target(raw_target: str, method: str) -> dict[str, Any]:
     host = parsed.netloc or None
     service_name = service_name_from_env(env_match.group(1)) if env_match else None
     return {
+        "protocol": parsed.scheme if parsed.scheme in {"http", "https"} else "http",
         "raw_target": raw_target,
         "normalized_target": f"{method} {normalized_path}",
         "route_name": f"{method} {normalized_path}",
@@ -2030,11 +2045,11 @@ def python_http_call_edges(context: FileScanContext, call: ast.Call) -> list[Edg
         return []
     if callee in HTTP_METHODS:
         raw_target = python_string_arg(call, 0) or python_keyword_string(call, "url")
-        return python_http_edges_for_target(context, callee.upper(), raw_target, call.lineno)
+        return python_http_edges_for_target(context, callee.upper(), raw_target, call.lineno, root_name)
     if callee == "request":
         method = python_string_arg(call, 0) or python_keyword_string(call, "method") or "GET"
         raw_target = python_string_arg(call, 1) or python_keyword_string(call, "url")
-        return python_http_edges_for_target(context, method.upper(), raw_target, call.lineno)
+        return python_http_edges_for_target(context, method.upper(), raw_target, call.lineno, root_name)
     return []
 
 
@@ -2043,6 +2058,7 @@ def python_http_edges_for_target(
     method: str,
     raw_target: str | None,
     line_number: int,
+    client: str,
 ) -> list[Edge]:
     if not raw_target:
         return []
@@ -2050,6 +2066,7 @@ def python_http_edges_for_target(
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         target = http_target(raw_target, method)
         target["service_name"] = service_name_from_url(raw_target)
+        target["client"] = client
         return [
             unresolved_edge(
                 context.file_entity,
@@ -2063,7 +2080,7 @@ def python_http_edges_for_target(
                 properties=target,
             )
         ]
-    return http_edges_for_target(context, method, raw_target, line_number, "python_http")
+    return http_edges_for_target(context, method, raw_target, line_number, "python_http", client=client)
 
 
 def python_sql_call_edges(context: FileScanContext, call: ast.Call) -> list[Edge]:
@@ -2805,6 +2822,7 @@ def csharp_http_call_edges(context: FileScanContext, line: str, line_number: int
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             target = http_target(raw_target, method)
             target["service_name"] = service_name_from_url(raw_target)
+            target["client"] = "HttpClient"
             edges.append(
                 unresolved_edge(
                     context.file_entity,
@@ -2819,7 +2837,9 @@ def csharp_http_call_edges(context: FileScanContext, line: str, line_number: int
                 )
             )
         else:
-            edges.extend(http_edges_for_target(context, method, raw_target, line_number, "dotnet_http"))
+            edges.extend(
+                http_edges_for_target(context, method, raw_target, line_number, "dotnet_http", client="HttpClient")
+            )
     return edges
 
 
@@ -3103,7 +3123,15 @@ def legacy_dotnet_service_path(rel_path: str, framework: str) -> str:
 def vb_service_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
     edges: list[Edge] = []
     for match in VB_HTTP_LITERAL_RE.finditer(line):
-        edges.extend(legacy_http_edges_for_target(context, match.group(1), line_number, "vb_http"))
+        edges.extend(
+            legacy_http_edges_for_target(
+                context,
+                match.group(1),
+                line_number,
+                "vb_http",
+                client=legacy_http_client(match.group(0)),
+            )
+        )
     for match in VB_CONFIG_SETTING_RE.finditer(line):
         key = match.group(1)
         service_name = service_name_from_identifier(key)
@@ -3132,11 +3160,13 @@ def legacy_http_edges_for_target(
     raw_target: str,
     line_number: int,
     parser: str,
+    client: str,
 ) -> list[Edge]:
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         target = http_target(raw_target, "GET")
         target["service_name"] = service_name_from_url(raw_target)
+        target["client"] = client
         return [
             unresolved_edge(
                 context.file_entity,
@@ -3150,7 +3180,15 @@ def legacy_http_edges_for_target(
                 properties=target,
             )
         ]
-    return http_edges_for_target(context, "GET", raw_target, line_number, parser)
+    return http_edges_for_target(context, "GET", raw_target, line_number, parser, client=client)
+
+
+def legacy_http_client(evidence: str) -> str:
+    if "WebRequest" in evidence:
+        return "WebRequest"
+    if "WebClient" in evidence:
+        return "WebClient"
+    return "legacy_http_client"
 
 
 def vb_sql_command_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:

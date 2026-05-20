@@ -79,6 +79,7 @@ const server = fastify();
 export async function loadThing(id: string) {
   await fetch(`/things/${id}`);
   await fetch(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
+  await axios.post(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
 }
 server.get('/things/:id', handler);
 """,
@@ -144,6 +145,16 @@ sources:
                 for edge in graph_data["edges"]
             )
         )
+        inventory_service_edges = [
+            edge
+            for edge in graph_data["edges"]
+            if edge["edge_type"] == "CALLS_SERVICE"
+            and edge["to_name"] == "inventory-service"
+            and edge["parser"] == "javascript_http"
+        ]
+        self.assertTrue(any(edge["properties"].get("client") == "fetch" for edge in inventory_service_edges))
+        self.assertTrue(any(edge["properties"].get("client") == "axios" for edge in inventory_service_edges))
+        self.assertTrue(all(edge["parser"] != "axios_http" for edge in graph_data["edges"]))
 
     def test_dependency_filter_keeps_internal_like_unresolved_package_references(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -534,6 +545,16 @@ sources:
         )
         self.assertTrue(
             any(
+                edge["edge_type"] == "CALLS_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["parser"] == "python_http"
+                and edge["properties"].get("client") == "requests"
+                and edge["properties"].get("protocol") == "http"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
                 edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.get_thing_by_id" and edge["resolved"]
                 for edge in graph_data["edges"]
             )
@@ -663,6 +684,16 @@ sources:
         self.assertTrue(
             any(
                 edge["edge_type"] == "CALLS_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["parser"] == "dotnet_http"
+                and edge["properties"].get("client") == "HttpClient"
+                and edge["properties"].get("protocol") == "http"
                 for edge in graph_data["edges"]
             )
         )
@@ -1018,6 +1049,16 @@ sources:
         self.assertTrue(
             any(
                 edge["edge_type"] == "CALLS_SERVICE" and edge["to_name"] == "inventory-service" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SERVICE"
+                and edge["to_name"] == "inventory-service"
+                and edge["parser"] == "vb_http"
+                and edge["properties"].get("client") == "WebRequest"
+                and edge["properties"].get("protocol") == "http"
                 for edge in graph_data["edges"]
             )
         )
