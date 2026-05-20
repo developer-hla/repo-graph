@@ -504,6 +504,29 @@ state that the known impact paths may be incomplete and inspect
 `/reports/unresolved` for the same source before making a high-confidence
 refactor claim.
 
+## Interaction Report
+
+Use the grouped interaction report when the user wants the application or
+database dependency map rather than individual file-level edges:
+
+```bash
+curl "http://localhost:8000/reports/interactions"
+```
+
+Filter by source, target source, or edge type:
+
+```bash
+curl "http://localhost:8000/reports/interactions?source=api-service"
+curl "http://localhost:8000/reports/interactions?target_source=database-project"
+curl "http://localhost:8000/reports/interactions?type=READS_SQL_OBJECT"
+```
+
+Report groups include `from_source`, `target_source`, `target_boundary`,
+`dependency_scope`, `interaction_kind`, counts, and bounded evidence examples.
+Use this report to summarize chains such as a UI calling an API, an API calling
+another service, an application querying SQL, or a stored procedure/view reading
+a table.
+
 ## List Unresolved Edges
 
 Unresolved edges show references that were found but not safely linked to an

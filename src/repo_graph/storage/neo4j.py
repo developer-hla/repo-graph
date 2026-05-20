@@ -595,6 +595,28 @@ def search_relationships(
             return [relationship_evidence_payload(record) for record in records]
 
 
+def search_relationships_by_edge_types(
+    settings: Neo4jSettings,
+    edge_types: Iterable[str],
+    from_source: str | None = None,
+    to_source: str | None = None,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
+    params = {
+        "edge_types": sorted({edge_type for edge_type in edge_types if edge_type}),
+        "from_source": optional_filter(from_source),
+        "to_source": optional_filter(to_source),
+        "limit": normalize_limit(limit, maximum=1000),
+    }
+    if not params["edge_types"]:
+        return []
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            records = session.run(relationship_search_by_edge_types_query(), **params)
+            return [relationship_evidence_payload(record) for record in records]
+
+
 def relationship_search_query() -> str:
     return """
         MATCH (source:RepoGraphEntity)-[edge]->(target)
@@ -605,6 +627,30 @@ def relationship_search_query() -> str:
           AND ($from_type IS NULL OR coalesce(edge.from_type, source.entity_type, "") = $from_type)
           AND ($to_type IS NULL OR coalesce(edge.to_type, target.entity_type, target.target_type, "") = $to_type)
           AND ($resolved IS NULL OR coalesce(edge.resolved, false) = $resolved)
+        WITH source, edge, target
+        LIMIT $limit
+        RETURN
+          source,
+          edge,
+          target,
+          labels(target) AS target_labels
+        ORDER BY
+          coalesce(edge.source_name, source.source_name, ""),
+          coalesce(target.source_name, ""),
+          edge.edge_type,
+          edge.file_path,
+          edge.line_number,
+          edge.to_name
+    """
+
+
+def relationship_search_by_edge_types_query() -> str:
+    return """
+        MATCH (source:RepoGraphEntity)-[edge]->(target)
+        WHERE edge.edge_id IS NOT NULL
+          AND edge.edge_type IN $edge_types
+          AND ($from_source IS NULL OR coalesce(edge.source_name, source.source_name, "") = $from_source)
+          AND ($to_source IS NULL OR coalesce(target.source_name, "") = $to_source)
         WITH source, edge, target
         LIMIT $limit
         RETURN

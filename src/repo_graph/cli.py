@@ -13,7 +13,7 @@ from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.refresh import refresh_graph
-from repo_graph.reports import unresolved_report_from_graph
+from repo_graph.reports import interactions_report_from_graph, unresolved_report_from_graph
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.snapshots import snapshot_status, write_snapshots
 from repo_graph.source_graphs import write_source_graphs
@@ -147,6 +147,20 @@ def cmd_report_unresolved(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report_interactions(args: argparse.Namespace) -> int:
+    graph_data = load_graph_json(args.graph)
+    report = interactions_report_from_graph(
+        graph_data,
+        source_name=args.source,
+        target_source=args.target_source,
+        edge_type=args.edge_type,
+        group_limit=args.limit,
+        examples_per_group=args.examples,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_snapshot_status(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     print(
@@ -229,6 +243,7 @@ def agent_instructions_markdown(api_url: str, config_path: Path | None = None) -
             f"- Loaded graph scope: `{api_url}/scope`",
             f"- Loaded sources: `{api_url}/sources`",
             f"- Entity search: `{api_url}/entities/search`",
+            f"- Interaction report: `{api_url}/reports/interactions`",
             f"- Unresolved edges: `{api_url}/edges/unresolved`",
             f"- Unresolved report: `{api_url}/reports/unresolved`",
             f"- Repo Graph version used to generate these instructions: `{__version__}`",
@@ -344,6 +359,17 @@ def build_parser() -> argparse.ArgumentParser:
     unresolved_parser.add_argument("--limit", type=int, default=50, help="Maximum unresolved groups to return.")
     unresolved_parser.add_argument("--examples", type=int, default=3, help="Examples to include per unresolved group.")
     unresolved_parser.set_defaults(func=cmd_report_unresolved)
+    interactions_parser = report_subparsers.add_parser(
+        "interactions",
+        help="Group application and database interaction edges.",
+    )
+    interactions_parser.add_argument("--graph", type=Path, required=True, help="Graph JSON file to report on.")
+    interactions_parser.add_argument("--source", help="Only include interactions from this source.")
+    interactions_parser.add_argument("--target-source", help="Only include interactions targeting this source.")
+    interactions_parser.add_argument("--edge-type", dest="edge_type", help="Only include interactions of this type.")
+    interactions_parser.add_argument("--limit", type=int, default=50, help="Maximum interaction groups to return.")
+    interactions_parser.add_argument("--examples", type=int, default=3, help="Examples to include per group.")
+    interactions_parser.set_defaults(func=cmd_report_interactions)
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Inspect or write source snapshots.")
     snapshot_subparsers = snapshot_parser.add_subparsers(dest="snapshot", required=True)

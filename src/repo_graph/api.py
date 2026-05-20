@@ -18,7 +18,7 @@ from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.jobs import JobRegistry
 from repo_graph.refresh import refresh_graph
-from repo_graph.reports import unresolved_report_from_items
+from repo_graph.reports import interactions_report_from_items, unresolved_report_from_items
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.snapshots import snapshot_status
 from repo_graph.sources import config_summary, inspect_sources, source_path, sync_sources_with_status
@@ -34,6 +34,7 @@ from repo_graph.storage.neo4j import (
     read_source_overview,
     search_entities,
     search_relationships,
+    search_relationships_by_edge_types,
 )
 from repo_graph.validation import positive_int
 from repo_graph.vocabulary import (
@@ -41,12 +42,14 @@ from repo_graph.vocabulary import (
     EDGE_TYPE_COVERAGE_WARNING_RULES,
     IMPACT_EDGE_TYPES,
     IMPACT_PROFILES,
+    INTERACTION_EDGE_TYPES,
 )
 
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
 DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
 DEFAULT_NEO4J_PASSWORD = "repo-graph-password"
 UNRESOLVED_REPORT_EDGE_LIMIT = 1000
+INTERACTION_REPORT_EDGE_LIMIT = 1000
 SOURCE_SNIPPET_MAX_CONTEXT = 50
 SOURCE_SNIPPET_MAX_BYTES = 1_000_000
 UI_DIR = Path(__file__).with_name("ui")
@@ -196,6 +199,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/entities/{entity_id}/neighbors", "available": True},
             {"method": "GET", "path": "/entities/{entity_id}/impact", "available": True},
             {"method": "GET", "path": "/edges/unresolved", "available": True},
+            {"method": "GET", "path": "/reports/interactions", "available": True},
             {"method": "GET", "path": "/reports/unresolved", "available": True},
         ],
         "agent_guidance": {
@@ -219,6 +223,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "impact_status": "available",
             "impact_default_profile": "impact",
             "impact_profiles": sorted(IMPACT_PROFILES),
+            "interaction_report_status": "available",
             "unresolved_report_status": "available",
             "ui_status": "available",
         },
@@ -1230,6 +1235,35 @@ def unresolved_report_response(
     return report
 
 
+def interactions_report_response(
+    settings: RuntimeSettings,
+    source_name: str | None,
+    target_source: str | None,
+    edge_type: str | None,
+    limit: int,
+    examples: int,
+) -> dict[str, Any]:
+    edge_types = [edge_type] if edge_type else sorted(INTERACTION_EDGE_TYPES)
+    items = search_relationships_by_edge_types(
+        settings.neo4j_settings(),
+        edge_types,
+        from_source=source_name,
+        to_source=target_source,
+        limit=INTERACTION_REPORT_EDGE_LIMIT,
+    )
+    report = interactions_report_from_items(
+        items,
+        source_name=source_name,
+        target_source=target_source,
+        edge_type=edge_type,
+        group_limit=limit,
+        examples_per_group=examples,
+    )
+    report["edge_sample_limit"] = INTERACTION_REPORT_EDGE_LIMIT
+    report["edge_sample_truncated"] = len(items) >= INTERACTION_REPORT_EDGE_LIMIT
+    return report
+
+
 def ui_index_path() -> Path:
     return UI_DIR / "index.html"
 
@@ -1550,6 +1584,19 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             return unresolved_report_response(runtime_settings, source, edge_type, limit, examples)
         except Exception as exc:
             raise neo4j_http_exception("unresolved report lookup", exc) from exc
+
+    @app.get("/reports/interactions")
+    def get_interactions_report_endpoint(
+        source: str | None = None,
+        target_source: str | None = None,
+        edge_type: str | None = Query(default=None, alias="type"),
+        limit: int = Query(default=50, ge=1, le=200),
+        examples: int = Query(default=3, ge=1, le=10),
+    ) -> dict[str, Any]:
+        try:
+            return interactions_report_response(runtime_settings, source, target_source, edge_type, limit, examples)
+        except Exception as exc:
+            raise neo4j_http_exception("interactions report lookup", exc) from exc
 
     return app
 

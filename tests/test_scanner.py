@@ -30,6 +30,8 @@ const sql = 'EXEC dbo.get_things';
                 """
 CREATE PROCEDURE dbo.get_things AS
 SELECT * FROM dbo.things
+GO
+SELECT * FROM dbo.audit_log
 CREATE TABLE dbo.things (id int)
 """,
                 encoding="utf-8",
@@ -58,6 +60,28 @@ sources:
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertIn("DEFINES", graph_data["edge_counts"])
         self.assertGreater(graph_data["summary"]["resolved_edge_count"], 0)
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "READS_SQL_OBJECT"
+                and edge["from_type"] == "stored_procedure"
+                and edge["from_name"] == "dbo.get_things"
+                and edge["to_name"] == "dbo.things"
+                and edge["resolved"]
+                and edge["properties"].get("target_boundary") == "database"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "sql_reference"
+                and edge["properties"].get("sql_operation") == "FROM"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertFalse(
+            any(
+                edge["edge_type"] == "READS_SQL_OBJECT"
+                and edge["from_type"] == "stored_procedure"
+                and edge["to_name"] == "dbo.audit_log"
+                for edge in graph_data["edges"]
+            )
+        )
 
     def test_build_graph_resolves_cross_source_code_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -596,6 +620,13 @@ sources:
                 and edge["properties"].get("dependency_scope") == "runtime"
                 and edge["properties"].get("sql_operation") == "FROM"
                 and edge["properties"].get("database_object_type") == "sql_object"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertFalse(
+            any(
+                edge["edge_type"] == "READS_SQL_OBJECT"
+                and edge["to_name"] in {"fastap", "fastapi", "sqlalchem", "sqlalchemy"}
                 for edge in graph_data["edges"]
             )
         )

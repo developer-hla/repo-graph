@@ -28,6 +28,7 @@ from repo_graph.api import (
     explore_response,
     health_payload,
     impact_response,
+    interactions_report_response,
     job_response,
     jobs_response,
     load_response,
@@ -122,6 +123,7 @@ class ApiTests(unittest.TestCase):
             payload["endpoints"],
         )
         self.assertIn({"method": "GET", "path": "/edges/unresolved", "available": True}, payload["endpoints"])
+        self.assertIn({"method": "GET", "path": "/reports/interactions", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/reports/unresolved", "available": True}, payload["endpoints"])
         self.assertNotIn("password", str(payload).lower())
 
@@ -163,6 +165,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/entities/{entity_id}/neighbors", route_paths)
         self.assertIn("/entities/{entity_id}/impact", route_paths)
         self.assertIn("/edges/unresolved", route_paths)
+        self.assertIn("/reports/interactions", route_paths)
         self.assertIn("/reports/unresolved", route_paths)
 
     def test_ui_shell_and_static_assets_are_served(self) -> None:
@@ -1031,6 +1034,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["edge_sample_limit"], 1000)
         self.assertFalse(payload["edge_sample_truncated"])
         unresolved.assert_called_once()
+
+    def test_interactions_report_response_groups_interaction_items(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        item = {
+            "to_source": "inventory-service",
+            "edge": {
+                "edge_id": "edge-1",
+                "edge_type": "CALLS_SERVICE",
+                "to_type": "service",
+                "to_name": "inventory-service",
+                "source_name": "api-service",
+                "resolved": True,
+                "properties": {
+                    "target_boundary": "application",
+                    "dependency_scope": "runtime",
+                    "interaction_kind": "http_call",
+                    "protocol": "http",
+                    "raw_target": "http://inventory-service/orders",
+                    "normalized_target": "GET /orders",
+                },
+            },
+        }
+        with patch("repo_graph.api.search_relationships_by_edge_types", return_value=[item]) as search:
+            payload = interactions_report_response(settings, "api-service", "inventory-service", None, 10, 2)
+
+        self.assertEqual(payload["summary"]["interaction_edge_count"], 1)
+        self.assertEqual(payload["items"][0]["from_source"], "api-service")
+        self.assertEqual(payload["items"][0]["target_source"], "inventory-service")
+        self.assertEqual(payload["edge_sample_limit"], 1000)
+        self.assertFalse(payload["edge_sample_truncated"])
+        search.assert_called_once()
 
 
 if __name__ == "__main__":

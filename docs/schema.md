@@ -73,6 +73,10 @@ use regular evidence fields. The canonical list lives in
 `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
 `CALLS_SQL`, and `READS_SQL_OBJECT`.
 
+Database-to-database dependencies use the same interaction contract. For
+example, a stored procedure or view that reads a table should emit
+`READS_SQL_OBJECT` from the SQL object entity to the referenced SQL object.
+
 - `target_boundary`: `application` or `database`
 - `dependency_scope`: `runtime`, `configuration`, or `deployment`
 - `interaction_kind`: a stable evidence category such as `http_call`,

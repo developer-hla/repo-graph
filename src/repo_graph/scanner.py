@@ -111,7 +111,11 @@ SQL_OBJECT_KIND_RE = re.compile(
     re.IGNORECASE,
 )
 SQL_EXEC_RE = re.compile(r"\bEXEC(?:UTE)?\s+([\[\]\w.]+)", re.IGNORECASE)
-SQL_TABLE_REF_RE = re.compile(r"\b(?P<operation>FROM|JOIN|UPDATE|INTO)\s+(?P<target>[\[\]\w.]+)", re.IGNORECASE)
+SQL_TABLE_REF_RE = re.compile(
+    r"\b(?P<operation>FROM|JOIN|UPDATE|INTO)\s+(?P<target>[\[\]\w.]+)(?![\w.]|\s+import\b)",
+    re.IGNORECASE,
+)
+SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE)
 
 
 @dataclass
@@ -1289,9 +1293,17 @@ class SqlExtractor:
 
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
+        current_sql_entity: Entity | None = None
         for line_number, line in enumerate(content.splitlines(), start=1):
-            result.extend(sql_definition_entities_and_edges(context, line, line_number))
-        result.extend(scan_sql_references(context, content))
+            if SQL_BATCH_SEPARATOR_RE.match(line):
+                current_sql_entity = None
+                continue
+            definition_result = sql_definition_entities_and_edges(context, line, line_number)
+            result.extend(definition_result)
+            if definition_result.entities:
+                current_sql_entity = definition_result.entities[-1]
+            result.edges.extend(sql_call_edges(context, line, line_number, from_entity=current_sql_entity))
+            result.edges.extend(sql_object_reference_edges(context, line, line_number, from_entity=current_sql_entity))
         return result
 
 
@@ -1580,11 +1592,11 @@ def service_name_from_env(env_var: str) -> str:
     return name.replace("_", "-")
 
 
-def scan_sql_references(context: FileScanContext, content: str) -> ScanResult:
+def scan_sql_references(context: FileScanContext, content: str, from_entity: Entity | None = None) -> ScanResult:
     result = ScanResult()
     for line_number, line in enumerate(content.splitlines(), start=1):
-        result.edges.extend(sql_call_edges(context, line, line_number))
-        result.edges.extend(sql_object_reference_edges(context, line, line_number))
+        result.edges.extend(sql_call_edges(context, line, line_number, from_entity=from_entity))
+        result.edges.extend(sql_object_reference_edges(context, line, line_number, from_entity=from_entity))
     return result
 
 
@@ -1622,10 +1634,16 @@ def sql_definition_entities_and_edges(context: FileScanContext, line: str, line_
     return result
 
 
-def sql_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+def sql_call_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
+    source_entity = from_entity or context.file_entity
     return [
         unresolved_edge(
-            context.file_entity,
+            source_entity,
             normalize_sql_name(match.group(1)),
             "CALLS_SQL",
             context.source.name,
@@ -1639,10 +1657,16 @@ def sql_call_edges(context: FileScanContext, line: str, line_number: int) -> lis
     ]
 
 
-def sql_object_reference_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+def sql_object_reference_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
+    source_entity = from_entity or context.file_entity
     return [
         unresolved_edge(
-            context.file_entity,
+            source_entity,
             normalize_sql_name(match.group("target")),
             "READS_SQL_OBJECT",
             context.source.name,

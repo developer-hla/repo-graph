@@ -150,6 +150,7 @@ relationships derived from graph edge types.
 - `GET /relationships/search`
 - `GET /entities/neighbors`
 - `GET /entities/{entity_id}/overview`
+- `GET /reports/interactions`
 - `GET /manifest`
 
 The manifest tells agents how to use the running graph and what scope was

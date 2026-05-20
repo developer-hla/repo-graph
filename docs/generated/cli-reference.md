@@ -24,6 +24,7 @@ repo-graph [-h]
 | `repo-graph agent-instructions` | Print a Markdown Repo Graph agent snippet. |
 | `repo-graph report` | Generate reports from a graph JSON export. |
 | `repo-graph report unresolved` | Group unresolved graph edges. |
+| `repo-graph report interactions` | Group application and database interaction edges. |
 | `repo-graph snapshot` | Inspect or write source snapshots. |
 | `repo-graph snapshot status` | Compare current sources to snapshots. |
 | `repo-graph snapshot write` | Write current source snapshots. |
@@ -144,12 +145,13 @@ repo-graph agent-instructions [-h] [--api-url API_URL] [--config CONFIG]
 Generate reports from a graph JSON export.
 
 ```text
-repo-graph report [-h] {unresolved} ...
+repo-graph report [-h] {unresolved,interactions} ...
 ```
 
 | Subcommand | Help |
 | --- | --- |
 | `unresolved` | Group unresolved graph edges. |
+| `interactions` | Group application and database interaction edges. |
 
 ## `repo-graph report unresolved`
 
@@ -167,6 +169,24 @@ repo-graph report unresolved [-h] --graph GRAPH [--source SOURCE] [--edge-type E
 | `--edge-type` | no |  | Only include unresolved edges of this type. |
 | `--limit` | no | `50` | Maximum unresolved groups to return. |
 | `--examples` | no | `3` | Examples to include per unresolved group. |
+
+## `repo-graph report interactions`
+
+Group application and database interaction edges.
+
+```text
+repo-graph report interactions [-h] --graph GRAPH [--source SOURCE] [--target-source TARGET_SOURCE]
+                                      [--edge-type EDGE_TYPE] [--limit LIMIT] [--examples EXAMPLES]
+```
+
+| Option | Required | Default | Help |
+| --- | --- | --- | --- |
+| `--graph` | yes |  | Graph JSON file to report on. |
+| `--source` | no |  | Only include interactions from this source. |
+| `--target-source` | no |  | Only include interactions targeting this source. |
+| `--edge-type` | no |  | Only include interactions of this type. |
+| `--limit` | no | `50` | Maximum interaction groups to return. |
+| `--examples` | no | `3` | Examples to include per group. |
 
 ## `repo-graph snapshot`
 

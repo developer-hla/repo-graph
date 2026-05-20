@@ -82,6 +82,57 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["scope_name"], "test-scope")
         self.assertEqual(payload["items"][0]["classification"], "likely_missing_source")
 
+    def test_interactions_report_command_prints_grouped_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            graph_path = Path(tmpdir) / "graph.json"
+            graph_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {"scope_name": "test-scope"},
+                        "entities": [
+                            {
+                                "entity_id": "entity-1",
+                                "entity_type": "service",
+                                "name": "inventory-service",
+                                "source_name": "inventory-service",
+                            }
+                        ],
+                        "edges": [
+                            {
+                                "edge_id": "edge-1",
+                                "edge_type": "CALLS_SERVICE",
+                                "to_type": "service",
+                                "to_name": "inventory-service",
+                                "to_entity_id": "entity-1",
+                                "source_name": "api-service",
+                                "resolved": True,
+                                "properties": {
+                                    "target_boundary": "application",
+                                    "dependency_scope": "runtime",
+                                    "interaction_kind": "http_call",
+                                    "protocol": "http",
+                                    "raw_target": "http://inventory-service/orders",
+                                    "normalized_target": "GET /orders",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["report", "interactions", "--graph", str(graph_path)])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual(payload["scope_name"], "test-scope")
+        self.assertEqual(payload["items"][0]["from_source"], "api-service")
+        self.assertEqual(payload["items"][0]["target_source"], "inventory-service")
+
     def test_snapshot_status_command_reports_changed_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
