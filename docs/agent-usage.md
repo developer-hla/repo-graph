@@ -553,6 +553,11 @@ Report classifications include `code_only_reference`,
 `database_only_object`. Treat them as drift triage, not proof that an object is
 unused.
 
+The same report is available in the local UI at `/ui#database`. Use hash query
+parameters such as `/ui#database?source=api-service` or
+`/ui#database?databaseSource=current-db` when linking a user to a filtered
+view.
+
 ## List Unresolved Edges
 
 Unresolved edges show references that were found but not safely linked to an

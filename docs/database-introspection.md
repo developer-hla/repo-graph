@@ -61,7 +61,7 @@ Fields:
 | --- | --- | --- |
 | `type` | yes | Must be `database`. |
 | `name` | yes | Public-safe graph source name. |
-| `engine` | yes | Start with `sqlserver`. Future engines must keep the same graph vocabulary where possible. |
+| `engine` | yes | Start with `sqlserver`. Future engines such as `postgres` must keep the same graph vocabulary where possible. |
 | `connection_env` | yes | Environment variable containing the connection string. The value must not be written to graph output. |
 | `schemas` | no | Optional allow-list. If omitted, use engine-safe defaults such as user schemas only. |
 | `include_object_types` | no | Optional object-type allow-list. |
@@ -98,6 +98,28 @@ starting points:
 
 The connector should emit graph facts from metadata rows. It should not parse or
 run user table data queries.
+
+## PostgreSQL Direction
+
+PostgreSQL should be added as a separate adapter, not as special cases inside
+the SQL Server adapter. It should use PostgreSQL catalog sources such as
+`pg_catalog`, `information_schema`, and `pg_depend`, then emit the same entity
+and relationship vocabulary used by every database engine.
+
+Useful starting points:
+
+| Metadata | Candidate source |
+| --- | --- |
+| Tables and columns | `pg_class`, `pg_namespace`, `pg_attribute`, `information_schema.columns` |
+| Views and materialized views | `pg_class`, `pg_views`, `pg_matviews` |
+| Functions and procedures | `pg_proc`, `pg_namespace` |
+| Foreign keys | `pg_constraint` |
+| Triggers | `pg_trigger` |
+| Object dependencies | `pg_depend`, `pg_rewrite` |
+
+The adapter should preserve PostgreSQL-specific details in properties, but
+agents and users should still see generic database entities such as tables,
+views, functions, procedures, triggers, and dependency edges.
 
 ## Graph Facts
 
@@ -177,4 +199,6 @@ not a live database query.
 2. Tests using synthetic metadata rows. Done.
 3. Emit `schema_state=current_database` entities and relationships. Done.
 4. Add reconciliation report APIs. Done.
-5. Add UI/report links after the API output is stable.
+5. Add UI/report links after the API output is stable. Done.
+6. Add engine-specific live connectors, starting with SQL Server and then
+   PostgreSQL, behind the same `database` source contract.

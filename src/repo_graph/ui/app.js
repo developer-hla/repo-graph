@@ -25,6 +25,11 @@ const routes = {
     meta: "Find missing sources, parser gaps, and ambiguous targets",
     render: renderUnresolved,
   },
+  database: {
+    title: "Database",
+    meta: "Compare code and SQL evidence with current database metadata",
+    render: renderDatabaseReconciliation,
+  },
   jobs: {
     title: "Jobs",
     meta: "Sync, build, and refresh operations",
@@ -86,6 +91,12 @@ const state = {
   unresolved: {
     source: "",
     type: "",
+    limit: 50,
+    examples: 3,
+  },
+  database: {
+    source: "",
+    databaseSource: "",
     limit: 50,
     examples: 3,
   },
@@ -177,6 +188,14 @@ function hydrateRouteState(routeName, params) {
     state.unresolved = {
       source: stringParam(params, "source"),
       type: stringParam(params, "type"),
+      limit: numberParam(params, "limit", 50),
+      examples: numberParam(params, "examples", 3),
+    };
+  }
+  if (routeName === "database") {
+    state.database = {
+      source: stringParam(params, "source"),
+      databaseSource: stringParam(params, "databaseSource"),
       limit: numberParam(params, "limit", 50),
       examples: numberParam(params, "examples", 3),
     };
@@ -502,6 +521,44 @@ async function renderUnresolved() {
   await runUnresolvedReport();
 }
 
+async function renderDatabaseReconciliation() {
+  view.innerHTML = `
+    ${panel(
+      "Database Drift",
+      `<form class="stack" data-form="database">
+        <div class="quick-actions">
+          <button class="button secondary" type="button" data-search-type="sql_table">SQL Tables</button>
+          <button class="button secondary" type="button" data-search-type="sql_view">SQL Views</button>
+          <button class="button secondary" type="button" data-search-type="stored_procedure">Stored Procedures</button>
+          <button class="button secondary" type="submit">Refresh</button>
+        </div>
+        ${advancedControls(
+          `<div class="toolbar">
+            <label class="field">
+              <span>Code Source</span>
+              <input name="source" value="${escapeAttr(state.database.source)}" />
+            </label>
+            <label class="field">
+              <span>Database Source</span>
+              <input name="databaseSource" value="${escapeAttr(state.database.databaseSource)}" />
+            </label>
+            <label class="field small">
+              <span>Limit</span>
+              <input name="limit" type="number" min="1" max="200" value="${state.database.limit}" />
+            </label>
+            <label class="field small">
+              <span>Examples</span>
+              <input name="examples" type="number" min="1" max="10" value="${state.database.examples}" />
+            </label>
+          </div>`
+        )}
+      </form>`
+    )}
+    <div id="database-results">${loadingMarkup()}</div>
+  `;
+  await runDatabaseReconciliation();
+}
+
 async function renderImpact() {
   view.innerHTML = `
     ${panel(
@@ -625,6 +682,17 @@ async function runUnresolvedReport() {
   const target = document.querySelector("#unresolved-results");
   const result = await fetchMaybe(`/reports/unresolved?${params}`);
   target.innerHTML = result.ok ? unresolvedReportMarkup(result.data) : errorMarkup(result.error);
+}
+
+async function runDatabaseReconciliation() {
+  const params = new URLSearchParams();
+  if (state.database.source) params.set("source", state.database.source);
+  if (state.database.databaseSource) params.set("database_source", state.database.databaseSource);
+  params.set("limit", String(state.database.limit));
+  params.set("examples", String(state.database.examples));
+  const target = document.querySelector("#database-results");
+  const result = await fetchMaybe(`/reports/database-reconciliation?${params}`);
+  target.innerHTML = result.ok ? databaseReconciliationMarkup(result.data) : errorMarkup(result.error);
 }
 
 async function runImpact() {
@@ -779,6 +847,28 @@ function handleDocumentClick(event) {
     navigateToRoute("unresolved");
     return;
   }
+  const databaseCodeSourceButton = event.target.closest("[data-database-code-source]");
+  if (databaseCodeSourceButton) {
+    state.database = {
+      source: databaseCodeSourceButton.dataset.databaseCodeSource || "",
+      databaseSource: state.database.databaseSource,
+      limit: 50,
+      examples: 3,
+    };
+    navigateToRoute("database");
+    return;
+  }
+  const databaseSourceButton = event.target.closest("[data-database-source]");
+  if (databaseSourceButton) {
+    state.database = {
+      source: state.database.source,
+      databaseSource: databaseSourceButton.dataset.databaseSource || "",
+      limit: 50,
+      examples: 3,
+    };
+    navigateToRoute("database");
+    return;
+  }
   const sourceButton = event.target.closest("[data-source-name]");
   if (sourceButton) {
     state.source.name = sourceButton.dataset.sourceName;
@@ -874,6 +964,7 @@ function hashForRoute(routeName, params = {}) {
 function routeParams(routeName) {
   if (routeName === "search") return compactParams(state.search);
   if (routeName === "unresolved") return compactParams(state.unresolved);
+  if (routeName === "database") return compactParams(state.database);
   if (routeName === "impact") return compactParams(state.impact);
   if (routeName === "entity") return compactParams({ id: state.entity.id, limit: state.entity.limit });
   if (routeName === "source") return compactParams({ name: state.source.name, limit: state.source.limit });
@@ -959,6 +1050,15 @@ function handleDocumentSubmit(event) {
       examples: numberField(data, "examples", 3),
     };
     navigateToRoute("unresolved");
+  }
+  if (form.dataset.form === "database") {
+    state.database = {
+      source: stringField(data, "source"),
+      databaseSource: stringField(data, "databaseSource"),
+      limit: numberField(data, "limit", 50),
+      examples: numberField(data, "examples", 3),
+    };
+    navigateToRoute("database");
   }
   if (form.dataset.form === "impact") {
     state.impact = {
@@ -1094,7 +1194,7 @@ function exploreStarters() {
       ${actionButton("SQL Tables", "Find table declarations", "data-search-type", "sql_table")}
       ${actionButton("Service Calls", "Review unresolved service calls", "data-unresolved-type", "CALLS_SERVICE")}
       ${actionButton("SQL Calls", "Review unresolved SQL calls", "data-unresolved-type", "CALLS_SQL")}
-      ${actionButton("Missing Coverage", "Open unresolved groups", "data-route-link", "unresolved")}
+      ${actionButton("Database Drift", "Compare SQL evidence with current metadata", "data-route-link", "database")}
     </div>
   `;
 }
@@ -1105,9 +1205,9 @@ function workflowStarters() {
       ${actionButton("Find Something", "Search routes, data objects, packages, and symbols", "data-route-link", "search")}
       ${actionButton("Review Impact", "Trace callers and dependencies from a known entity", "data-route-link", "impact")}
       ${actionButton("Needs Attention", "Group unresolved references by likely cause", "data-route-link", "unresolved")}
+      ${actionButton("Database Drift", "Compare code, SQL files, and current database metadata", "data-route-link", "database")}
       ${actionButton("Refresh Graph", "Sync sources and update loaded graph data", "data-route-link", "jobs")}
       ${actionButton("Source Map", "Open source-level ownership and dependency summaries", "data-route-link", "explore")}
-      ${actionButton("API Routes", "Start with declared HTTP routes", "data-search-type", "api_route")}
     </div>
   `;
 }
@@ -2215,6 +2315,204 @@ function unresolvedRecommendedAction(classification) {
       needs_review: "Inspect the evidence and decide whether this is missing scope, a parser gap, or expected dynamic behavior.",
     }[classification] || "Inspect the evidence and decide the next action."
   );
+}
+
+function databaseReconciliationMarkup(report) {
+  const summary = report.summary || {};
+  const items = report.items || [];
+  return `
+    <div class="grid three">
+      ${metric("Current DB Objects", numberValue(summary.current_database_entity_count), "metadata entities", true)}
+      ${metric("Code SQL Refs", numberValue(summary.code_sql_reference_count), "application references", true)}
+      ${metric("Drift Groups", numberValue(summary.group_count), "items needing review", true)}
+      ${metric("Returned", numberValue(summary.returned_group_count), "visible groups", true)}
+      ${metric("DB Metadata Edges", numberValue(summary.database_metadata_edge_count), "catalog relationships", true)}
+      ${metric("Evidence", summary.database_evidence_present ? "current" : "missing", "database metadata", summary.database_evidence_present)}
+    </div>
+    ${databaseEvidenceNotice(summary)}
+    ${databaseSampleNotice(report)}
+    ${panel("Drift Summary", databaseClassificationGroupsTable(report.classification_groups || []))}
+    <div class="grid two">
+      ${panel("Source Hotspots", databaseSourceHotspotsTable(report.source_hotspots || []))}
+      ${panel("Target Hotspots", databaseTargetHotspotsTable(report.target_hotspots || []))}
+    </div>
+    ${panel("Drift Items", databaseReconciliationItemsTable(items))}
+  `;
+}
+
+function databaseEvidenceNotice(summary) {
+  if (summary.database_evidence_present) return "";
+  return emptyMarkup("No current database metadata found. Code-only and schema-drift checks need a database metadata source.");
+}
+
+function databaseSampleNotice(report) {
+  const notices = [];
+  if (report.entity_sample_truncated) notices.push(`Entity sample reached ${report.entity_sample_limit}`);
+  if (report.edge_sample_truncated) notices.push(`Relationship sample reached ${report.edge_sample_limit}`);
+  if (!notices.length) return "";
+  return `<div class="message">${inlineList(notices)}</div>`;
+}
+
+function databaseClassificationGroupsTable(items) {
+  if (!items.length) return emptyMarkup("No database drift groups.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${status(databaseClassificationLabel(item.classification), databaseClassificationTone(item.classification))}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${numberValue(item.group_count)}</td>
+          <td>${inlineList(item.source_names || [])}</td>
+          <td>${inlineList(item.database_sources || [])}</td>
+          <td>${escapeHtml(item.recommended_action || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["Class", "Edges/Objects", "Groups", "Code Sources", "DB Sources", "Recommended Action"], rows);
+}
+
+function databaseSourceHotspotsTable(items) {
+  if (!items.length) return emptyMarkup("No source hotspots.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${inlineList((item.classifications || []).map(databaseClassificationLabel))}</td>
+          <td>${inlineList(item.target_names || [])}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-search-source="${escapeAttr(item.source_name || "")}">Search</button>
+            <button class="button secondary" type="button" data-database-code-source="${escapeAttr(item.source_name || "")}">Code Source</button>
+            <button class="button secondary" type="button" data-database-source="${escapeAttr(item.source_name || "")}">DB Source</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Source", "Count", "Classes", "Targets", ""], rows);
+}
+
+function databaseTargetHotspotsTable(items) {
+  if (!items.length) return emptyMarkup("No target hotspots.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td class="mono">${escapeHtml(item.target_name || "")}</td>
+          <td>${escapeHtml(item.target_type || "")}</td>
+          <td>${numberValue(item.count)}</td>
+          <td>${inlineList((item.classifications || []).map(databaseClassificationLabel))}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-search-query="${escapeAttr(item.target_name || "")}">Search</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+  return table(["Target", "Type", "Count", "Classes", ""], rows);
+}
+
+function databaseReconciliationItemsTable(items) {
+  if (!items.length) return emptyMarkup("No database drift items.");
+  const rows = items
+    .map((item) => {
+      const sourceNames = item.source_names || [];
+      const databaseSources = item.database_sources || [];
+      const evidenceTypes = item.evidence_types || [];
+      const edgeType = evidenceTypes.find((value) => value !== "current_database") || "";
+      return `
+        <tr>
+          <td>${status(databaseClassificationLabel(item.classification), databaseClassificationTone(item.classification))}</td>
+          <td>
+            <div class="mono">${escapeHtml(item.target_name || "")}</div>
+            <div class="muted">${escapeHtml(item.target_type || "")}</div>
+          </td>
+          <td>${numberValue(item.count)}</td>
+          <td>${inlineList(sourceNames)}</td>
+          <td>${inlineList(databaseSources)}</td>
+          <td>
+            ${inlineList(evidenceTypes)}
+            ${inlineList(item.current_database_types || [])}
+          </td>
+          <td>${escapeHtml(item.recommended_action || "")}</td>
+          <td>${databaseExamplesDetails(item.examples || [])}</td>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-search-query="${escapeAttr(item.target_name || "")}">Search</button>
+            ${relationshipFilterButton("Evidence", {
+              fromSource: sourceNames[0] || databaseSources[0] || "",
+              type: edgeType,
+              toType: item.target_type,
+              limit: 100,
+            })}
+          </td>
+        </tr>`;
+    })
+    .join("");
+  return table(["Class", "Target", "Count", "Code Sources", "DB Sources", "Evidence", "Action", "Examples", ""], rows);
+}
+
+function databaseExamplesDetails(examples) {
+  if (!examples.length) return "";
+  return `
+    <details>
+      <summary>${numberValue(examples.length)} examples</summary>
+      ${databaseExamplesTable(examples)}
+    </details>
+  `;
+}
+
+function databaseExamplesTable(examples) {
+  const rows = examples
+    .map((example) => {
+      const sourceName = example.source_name || "";
+      const target =
+        example.raw_target || example.normalized_target || example.full_name || example.name || example.to_name || "";
+      return `
+        <tr>
+          <td>${escapeHtml(example.kind || "")}</td>
+          <td>${escapeHtml(sourceName)}</td>
+          <td class="mono">${escapeHtml(example.file_path || "")}</td>
+          <td>${escapeHtml(example.line_number || "")}</td>
+          <td>${escapeHtml(example.parser || example.metadata_source || "")}</td>
+          <td class="mono">${escapeHtml(target)}</td>
+          <td class="row-actions">
+            ${snippetButton(sourceName, example.file_path, example.line_number)}
+            ${example.entity_id ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(example.entity_id)}">Entity</button>` : ""}
+            ${example.edge_type
+              ? relationshipFilterButton("Edges", {
+                  fromSource: sourceName,
+                  type: example.edge_type,
+                  limit: 100,
+                })
+              : ""}
+          </td>
+        </tr>`;
+    })
+    .join("");
+  return table(["Kind", "Source", "File", "Line", "Parser", "Target", ""], rows);
+}
+
+function databaseClassificationLabel(classification) {
+  return (
+    {
+      code_only_reference: "Code Only",
+      unresolved_database_reference: "Unresolved DB Ref",
+      schema_drift: "Schema Drift",
+      migration_only_object: "Migration Only",
+      database_only_object: "DB Only",
+    }[classification] || classification
+  );
+}
+
+function databaseClassificationTone(classification) {
+  if (classification === "code_only_reference" || classification === "schema_drift") return "bad";
+  if (
+    classification === "unresolved_database_reference" ||
+    classification === "migration_only_object" ||
+    classification === "database_only_object"
+  ) {
+    return "warn";
+  }
+  return "";
 }
 
 function keyValueTable(rows) {

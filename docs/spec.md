@@ -228,14 +228,15 @@ and clear result limits.
 
 The first UI should be a navigable local control plane over these endpoints.
 It should start with workflow pages for graph overview, entity search, impact
-analysis, unresolved-reference review, and refresh jobs. Source, entity,
-relationship, and snippet evidence views should remain available as contextual
-drilldowns rather than primary navigation items. Advanced filters should stay
-available, but the default surface should emphasize the question a user is
-trying to answer rather than every query parameter.
+analysis, unresolved-reference review, database drift review, and refresh jobs.
+Source, entity, relationship, and snippet evidence views should remain
+available as contextual drilldowns rather than primary navigation items.
+Advanced filters should stay available, but the default surface should
+emphasize the question a user is trying to answer rather than every query
+parameter.
 UI routes should be shareable through hash query parameters so developers and
 agents can link directly to a search, entity overview, impact query,
-unresolved triage filter, or relationship evidence view.
+unresolved triage filter, database drift filter, or relationship evidence view.
 
 Impact queries should default to dependency and usage edges so refactor
 blast-radius results are not dominated by containment or declaration paths.
@@ -360,7 +361,10 @@ RepoGraph supports an optional `database` source type contract and a pure SQL
 Server metadata adapter. The live connector is still planned. For SQL Server,
 the connector should inspect catalog metadata such as `sys.tables`, `sys.views`,
 `sys.procedures`, `sys.foreign_keys`, `sys.sql_expression_dependencies`,
-`sys.triggers`, and `sys.sql_modules`. It must not read table data.
+`sys.triggers`, and `sys.sql_modules`. PostgreSQL and other database engines
+should use engine-specific catalogs while emitting the same normalized graph
+vocabulary. For PostgreSQL, likely sources are `pg_catalog`,
+`information_schema`, and `pg_depend`. Connectors must not read table data.
 
 Generated facts from source files should include provenance such as
 `schema_state=current_schema`, `schema_state=historical`, or
