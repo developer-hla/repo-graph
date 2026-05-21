@@ -9,8 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.config import RepoGraphConfig
+from repo_graph.database import graph_from_database_source
 from repo_graph.graph import Edge, Entity, Graph
-from repo_graph.scanner import MAX_FILE_BYTES, apply_dependency_filter, source_to_dict
+from repo_graph.scanner import (
+    MAX_FILE_BYTES,
+    apply_dependency_filter,
+    config_without_unsupported_sources,
+    database_source_dicts,
+    database_source_request,
+    source_to_dict,
+)
 from repo_graph.snapshots import (
     compare_source_snapshot,
     snapshot_root,
@@ -32,12 +40,19 @@ def build_cached_graph(
     max_file_bytes: int = MAX_FILE_BYTES,
     strict: bool = False,
 ) -> CachedBuildResult:
-    sources = sync_sources(config) if sync_first else resolve_sources(config)
+    scannable_config = config_without_unsupported_sources(config)
+    sources = sync_sources(scannable_config) if sync_first else resolve_sources(scannable_config)
     snapshot_root(config).mkdir(parents=True, exist_ok=True)
     source_results = [source_cache_item(config, source, max_file_bytes) for source in sources]
     items = [item for item, _graph_data in source_results]
     graph_payloads = [graph_data for _item, graph_data in source_results]
-    graph = merge_source_graphs(config.name, [source_to_dict(source) for source in sources], graph_payloads)
+    graph = merge_source_graphs(
+        config.name,
+        [source_to_dict(source) for source in sources] + database_source_dicts(config),
+        graph_payloads,
+    )
+    database_items = scan_cached_database_sources(config, graph)
+    items.extend(database_items)
     graph.resolve_edges()
     apply_dependency_filter(graph, config)
     if strict and graph.errors:
@@ -53,6 +68,31 @@ def build_cached_graph(
             "items": items,
         },
     )
+
+
+def scan_cached_database_sources(config: RepoGraphConfig, graph: Graph) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for source in config.sources:
+        if source.source_type == "database":
+            facts = graph_from_database_source(database_source_request(source))
+            graph.errors.extend(facts.errors)
+            for entity in facts.entities:
+                graph.add_entity(entity)
+            for edge in facts.edges:
+                graph.add_edge(edge)
+            items.append(
+                {
+                    "source_name": source.name,
+                    "status": "rebuilt",
+                    "changed": True,
+                    "reasons": ["database_metadata_refreshed"],
+                    "files_scanned": 0,
+                    "entity_count": len(facts.entities),
+                    "edge_count": len(facts.edges),
+                    "error_count": len(facts.errors),
+                }
+            )
+    return items
 
 
 def source_cache_item(

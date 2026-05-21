@@ -360,14 +360,13 @@ objects that no longer exist, so they should not be treated as authoritative
 current database state by default.
 
 RepoGraph supports an optional `database` source type contract, an engine
-metadata adapter registry, and pure SQL Server and PostgreSQL metadata
-adapters. The live connectors are still planned. For SQL Server, the connector
-should inspect catalog metadata such as `sys.tables`, `sys.views`,
-`sys.procedures`, `sys.foreign_keys`, `sys.sql_expression_dependencies`,
-`sys.triggers`, and `sys.sql_modules`. PostgreSQL and other database engines
-should use engine-specific catalogs while emitting the same normalized graph
-vocabulary. For PostgreSQL, likely sources are `pg_catalog`,
-`information_schema`, and `pg_depend`. Connectors must not read table data.
+metadata adapter registry, a live SQL Server metadata connector, and pure SQL
+Server and PostgreSQL metadata adapters. The SQL Server connector reads catalog
+metadata through optional `pyodbc` and a SQL Server ODBC driver. PostgreSQL and
+other database engines should use engine-specific catalogs while emitting the
+same normalized graph vocabulary. For PostgreSQL, likely sources are
+`pg_catalog`, `information_schema`, and `pg_depend`. Connectors must not read
+table data.
 
 Generated facts from source files should include provenance such as
 `schema_state=current_schema`, `schema_state=historical`, or

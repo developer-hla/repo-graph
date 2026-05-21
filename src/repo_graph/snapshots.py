@@ -11,7 +11,13 @@ from typing import Any
 
 from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig
-from repo_graph.scanner import MAX_FILE_BYTES, default_extractors, iter_scannable_files, safe_relative_path
+from repo_graph.scanner import (
+    MAX_FILE_BYTES,
+    config_without_unsupported_sources,
+    default_extractors,
+    iter_scannable_files,
+    safe_relative_path,
+)
 from repo_graph.schema import GRAPH_SCHEMA_VERSION, SOURCE_SNAPSHOT_SCHEMA_VERSION
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 
@@ -47,8 +53,10 @@ def snapshot_status(
     sync_first: bool = False,
     max_file_bytes: int = MAX_FILE_BYTES,
 ) -> dict[str, Any]:
-    sources = sync_sources(config) if sync_first else resolve_sources(config)
+    scannable_config = config_without_unsupported_sources(config)
+    sources = sync_sources(scannable_config) if sync_first else resolve_sources(scannable_config)
     items = [compare_source_snapshot(config, source, max_file_bytes=max_file_bytes).to_dict() for source in sources]
+    items.extend(database_snapshot_items(config))
     return {
         "config": {
             "name": config.name,
@@ -69,7 +77,8 @@ def write_snapshots(
     sync_first: bool = False,
     max_file_bytes: int = MAX_FILE_BYTES,
 ) -> dict[str, Any]:
-    sources = sync_sources(config) if sync_first else resolve_sources(config)
+    scannable_config = config_without_unsupported_sources(config)
+    sources = sync_sources(scannable_config) if sync_first else resolve_sources(scannable_config)
     root = snapshot_root(config)
     root.mkdir(parents=True, exist_ok=True)
     items: list[dict[str, Any]] = []
@@ -84,6 +93,35 @@ def write_snapshots(
         "count": len(items),
         "items": items,
     }
+
+
+def database_snapshot_items(config: RepoGraphConfig) -> list[dict[str, Any]]:
+    return [
+        {
+            "source_name": source.name,
+            "changed": True,
+            "status": "changed",
+            "reasons": ["database_metadata_external"],
+            "added_files": [],
+            "modified_files": [],
+            "removed_files": [],
+            "current": {
+                "source": {
+                    "name": source.name,
+                    "type": source.source_type,
+                    "engine": source.engine,
+                    "ref": source.ref,
+                    "schemas": list(source.schemas),
+                    "include_object_types": list(source.include_object_types),
+                    "query_timeout_seconds": source.query_timeout_seconds,
+                    "max_metadata_rows": source.max_metadata_rows,
+                }
+            },
+            "previous": None,
+        }
+        for source in config.sources
+        if source.source_type == "database"
+    ]
 
 
 def compare_source_snapshot(

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from repo_graph.database import (
     CURRENT_DATABASE_SCHEMA_STATE,
     POSTGRES_METADATA_PARSER,
     SQLSERVER_METADATA_PARSER,
-    DatabaseConnectorUnavailable,
     DatabaseSourceRequest,
     PostgresDependencyRow,
     PostgresForeignKeyRow,
@@ -22,6 +23,7 @@ from repo_graph.database import (
     graph_from_database_source,
     graph_from_postgres_metadata,
     graph_from_sqlserver_metadata,
+    graph_from_sqlserver_source,
     supported_database_engines,
 )
 from repo_graph.graph import Edge, Graph
@@ -48,18 +50,93 @@ class SqlServerMetadataGraphTests(unittest.TestCase):
             connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
         )
 
-        with self.assertRaises(DatabaseConnectorUnavailable) as error:
-            graph_from_database_source(request)
+        facts = graph_from_database_source(request)
 
-        self.assertIn("current-db", str(error.exception))
-        self.assertIn("postgres", str(error.exception))
-        self.assertIn("no live connector enabled yet", str(error.exception))
-        self.assertNotIn("REPO_GRAPH_EXAMPLE_POSTGRES_URL", str(error.exception))
+        self.assertEqual(facts.entities, [])
+        self.assertEqual(facts.edges, [])
+        self.assertIn("current-db", facts.errors[0])
+        self.assertIn("postgres", facts.errors[0])
+        self.assertIn("no live connector enabled yet", facts.errors[0])
+        self.assertNotIn("REPO_GRAPH_EXAMPLE_POSTGRES_URL", facts.errors[0])
         self.assertEqual(
             database_connector_unavailable_message("current-db", "postgres"),
             "Database source 'current-db' uses engine 'postgres', which has a metadata adapter "
             "but no live connector enabled yet.",
         )
+
+    def test_sqlserver_live_connector_reads_catalog_metadata(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-db",
+            engine="sqlserver",
+            connection_env="REPO_GRAPH_EXAMPLE_SQLSERVER_URL",
+            schemas=("dbo",),
+            query_timeout_seconds=7,
+            max_metadata_rows=20,
+        )
+        connection = FakeSqlServerConnection()
+
+        with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_SQLSERVER_URL": "Driver=example"}):
+            facts = graph_from_sqlserver_source(request, connect=lambda connection_string, timeout: connection)
+
+        entities_by_name = {entity.name: entity for entity in facts.entities}
+        edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
+
+        self.assertEqual(facts.errors, [])
+        self.assertTrue(connection.closed)
+        self.assertEqual(connection.cursor_instance.timeout, 7)
+        self.assertEqual(entities_by_name["dbo.Customers"].entity_type, "sql_table")
+        self.assertEqual(entities_by_name["dbo.LoadCustomer"].entity_type, "stored_procedure")
+        self.assertEqual(edges_by_operation["FOREIGN_KEY"].to_name, "dbo.Customers")
+        self.assertEqual(
+            edges_by_operation["MODULE_REFERENCE"].properties["metadata_source"], "sys.sql_expression_dependencies"
+        )
+
+    def test_sqlserver_live_connector_reports_missing_env_without_secret_value(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-db",
+            engine="sqlserver",
+            connection_env="REPO_GRAPH_EXAMPLE_SQLSERVER_URL",
+        )
+
+        facts = graph_from_sqlserver_source(request, connect=lambda _connection_string, _timeout: None)
+
+        self.assertEqual(facts.entities, [])
+        self.assertEqual(facts.edges, [])
+        self.assertEqual(
+            facts.errors,
+            ["Database source 'current-db' connection_env is not set in the runtime environment."],
+        )
+        self.assertNotIn("REPO_GRAPH_EXAMPLE_SQLSERVER_URL", facts.errors[0])
+
+    def test_sqlserver_live_connector_reports_unconfigured_connection_env(self) -> None:
+        request = DatabaseSourceRequest(source_name="current-db", engine="sqlserver", connection_env="")
+
+        facts = graph_from_sqlserver_source(request, connect=lambda _connection_string, _timeout: None)
+
+        self.assertEqual(facts.entities, [])
+        self.assertEqual(facts.edges, [])
+        self.assertEqual(facts.errors, ["Database source 'current-db' connection_env is not configured."])
+
+    def test_sqlserver_live_connector_redacts_connection_string_from_driver_errors(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-db",
+            engine="sqlserver",
+            connection_env="REPO_GRAPH_EXAMPLE_SQLSERVER_URL",
+        )
+
+        def fail_connection(connection_string: str, _timeout: int) -> None:
+            raise RuntimeError(f"could not open {connection_string}")
+
+        with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_SQLSERVER_URL": "Driver=example;Pwd=secret"}):
+            facts = graph_from_sqlserver_source(request, connect=fail_connection)
+
+        self.assertEqual(facts.entities, [])
+        self.assertEqual(facts.edges, [])
+        self.assertEqual(
+            facts.errors,
+            ["SQL Server metadata connection failed for 'current-db': RuntimeError: could not open [redacted]"],
+        )
+        self.assertNotIn("secret", facts.errors[0])
 
     def test_emits_current_database_sql_entities(self) -> None:
         facts = graph_from_sqlserver_metadata(
@@ -358,3 +435,57 @@ def single_edge(edges: list[Edge]) -> Edge:
     if len(edges) != 1:
         raise AssertionError(f"Expected exactly one edge, found {len(edges)}.")
     return edges[0]
+
+
+class FakeSqlServerConnection:
+    def __init__(self) -> None:
+        self.closed = False
+        self.cursor_instance = FakeSqlServerCursor()
+
+    def cursor(self) -> FakeSqlServerCursor:
+        return self.cursor_instance
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeSqlServerCursor:
+    def __init__(self) -> None:
+        self.timeout: int | None = None
+        self.rows: list[SimpleNamespace] = []
+
+    def execute(self, query: str, *_params: str) -> FakeSqlServerCursor:
+        if "FROM sys.objects AS o" in query:
+            self.rows = [
+                SimpleNamespace(schema_name="dbo", object_name="Customers", object_type="U"),
+                SimpleNamespace(schema_name="dbo", object_name="Orders", object_type="U"),
+                SimpleNamespace(schema_name="dbo", object_name="LoadCustomer", object_type="P"),
+            ]
+        elif "FROM sys.foreign_keys AS fk" in query:
+            self.rows = [
+                SimpleNamespace(
+                    schema_name="dbo",
+                    table_name="Orders",
+                    referenced_schema_name="dbo",
+                    referenced_table_name="Customers",
+                    constraint_name="FK_Orders_Customers",
+                )
+            ]
+        elif "FROM sys.sql_expression_dependencies AS d" in query:
+            self.rows = [
+                SimpleNamespace(
+                    from_schema_name="dbo",
+                    from_object_name="LoadCustomer",
+                    from_object_type="P",
+                    to_schema_name="dbo",
+                    to_object_name="Customers",
+                    to_object_type="U",
+                    dependency_name="OBJECT_OR_COLUMN",
+                )
+            ]
+        else:
+            raise AssertionError(f"Unexpected query: {query}")
+        return self
+
+    def fetchall(self) -> list[SimpleNamespace]:
+        return self.rows

@@ -271,10 +271,7 @@ sources:
 
         self.assertEqual(
             graph.errors,
-            [
-                "Database source 'current-db' uses engine 'sqlserver', which has a metadata adapter "
-                "but no live connector enabled yet."
-            ],
+            ["Database source 'current-db' connection_env is not set in the runtime environment."],
         )
         self.assertTrue(any(source["name"] == "service" for source in graph.to_dict()["sources"]))
         self.assertTrue(any(entity["name"] == "service" for entity in graph.to_dict()["entities"]))

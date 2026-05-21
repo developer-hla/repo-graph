@@ -16,7 +16,11 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from repo_graph.config import RepoGraphConfig, Source
-from repo_graph.database import database_connector_unavailable_message
+from repo_graph.database import (
+    SQLSERVER_ENGINE,
+    normalize_database_engine,
+    sqlserver_driver_available,
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,11 @@ def sync_sources_with_status(config: RepoGraphConfig) -> list[dict[str, Any]]:
             statuses.append(status)
             continue
         for expanded_source in expanded_sources:
+            if expanded_source.source_type == "database":
+                status = source_status(config, expanded_source)
+                status["sync"] = {"status": "skipped", "reason": "not_applicable"}
+                statuses.append(status)
+                continue
             try:
                 sync_one_source(config, expanded_source)
             except Exception as exc:
@@ -93,7 +102,7 @@ def sync_one_source(config: RepoGraphConfig, source: Source) -> None:
             raise FileNotFoundError(f"Local source path does not exist: {source.path}")
         return
     if source.source_type == "database":
-        raise NotImplementedError(database_connector_unavailable_message(source.name, source.engine))
+        return
     raise ValueError(f"Unsupported source type: {source.source_type}")
 
 
@@ -171,7 +180,7 @@ def safe_git_origin_url(path: Path) -> str | None:
 
 def source_ready(status: dict[str, Any], source: Source) -> bool:
     if source.source_type == "database":
-        return False
+        return not database_source_problems(source)
     if source.source_type == "local_path":
         return bool(status["exists"])
     if source.source_type == "git":
@@ -182,7 +191,7 @@ def source_ready(status: dict[str, Any], source: Source) -> bool:
 def source_problems(status: dict[str, Any], source: Source) -> list[str]:
     problems: list[str] = []
     if source.source_type == "database":
-        return ["database_connector_unavailable"]
+        return database_source_problems(source)
     if not status["exists"]:
         problems.append("path_missing")
     if source.source_type == "git":
@@ -192,6 +201,21 @@ def source_problems(status: dict[str, Any], source: Source) -> list[str]:
             problems.append("origin_url_mismatch")
         if not status.get("current_commit"):
             problems.append("commit_unknown")
+    return problems
+
+
+def database_source_problems(source: Source) -> list[str]:
+    problems: list[str] = []
+    if source.engine and normalize_database_engine(source.engine) != SQLSERVER_ENGINE:
+        problems.append("database_connector_unavailable")
+    if not source.connection_env or source.connection_env not in os.environ:
+        problems.append("connection_env_missing")
+    if (
+        source.engine
+        and normalize_database_engine(source.engine) == SQLSERVER_ENGINE
+        and not sqlserver_driver_available()
+    ):
+        problems.append("database_driver_missing")
     return problems
 
 
@@ -228,7 +252,7 @@ def resolve_expanded_sources(config: RepoGraphConfig, sources: list[Source]) -> 
                 )
             )
         elif source.source_type == "database":
-            raise NotImplementedError(database_connector_unavailable_message(source.name, source.engine))
+            continue
         else:
             raise ValueError(f"Unsupported source type: {source.source_type}")
     return resolved
@@ -244,7 +268,7 @@ def sync_sources(config: RepoGraphConfig) -> list[ResolvedSource]:
             if source.path is None or not source.path.exists():
                 raise FileNotFoundError(f"Local source path does not exist: {source.path}")
         elif source.source_type == "database":
-            raise NotImplementedError(database_connector_unavailable_message(source.name, source.engine))
+            continue
         else:
             raise ValueError(f"Unsupported source type: {source.source_type}")
     return resolve_expanded_sources(config, expanded_sources)

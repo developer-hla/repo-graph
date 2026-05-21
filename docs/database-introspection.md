@@ -1,9 +1,9 @@
 # Database Introspection Design
 
-RepoGraph supports the first adapter registry step for optional read-only
-database introspection. The config contract exists, and SQL Server and
-PostgreSQL metadata rows can be converted into the same graph facts. Live
-database connectors are still planned and are not enabled yet.
+RepoGraph supports optional read-only database introspection through a database
+source contract and engine adapter registry. SQL Server has a live metadata
+connector plus a pure metadata-row adapter. PostgreSQL has a pure metadata-row
+adapter; its live connector is still planned.
 
 ## Why This Exists
 
@@ -32,10 +32,10 @@ access.
 ## Source Contract
 
 The config parser understands this source type so users and agents can validate
-the contract. Build, sync, and refresh workflows still report database sources
-as having a metadata adapter but no live connector until a connector exists for
-that engine. Repository sources in the same config should still scan so users
-can load code evidence before database metadata is available.
+the contract. Build and refresh workflows read live SQL Server metadata when
+`pyodbc`, a SQL Server ODBC driver, and the configured connection environment
+variable are available in the runtime. Engines without a live connector still
+report a source error without blocking repository sources in the same config.
 
 ```yaml
 sources:
@@ -84,22 +84,27 @@ Fields:
 
 ## SQL Server Metadata
 
-The SQL Server adapter consumes catalog-shaped metadata rows only. A future
-connector should populate those rows from read-only catalog queries. Useful
-starting points:
+The SQL Server connector consumes catalog-shaped metadata rows only. It uses
+`pyodbc` when available, reads the connection string from `connection_env`, and
+sets a query timeout. The package and ODBC driver are optional runtime
+dependencies so public tests and normal repository scanning do not require a
+database driver.
+
+The connector reads these catalog sources:
 
 | Metadata | Candidate source |
 | --- | --- |
-| Tables | `sys.tables`, `sys.schemas`, `sys.columns` |
-| Views | `sys.views`, `sys.sql_modules` |
-| Stored procedures | `sys.procedures`, `sys.sql_modules` |
-| Functions | `sys.objects`, `sys.sql_modules` |
-| Foreign keys | `sys.foreign_keys`, `sys.foreign_key_columns` |
-| Triggers | `sys.triggers`, `sys.sql_modules` |
+| Tables | `sys.objects`, `sys.schemas` |
+| Views | `sys.objects`, `sys.schemas` |
+| Stored procedures | `sys.objects`, `sys.schemas` |
+| Functions | `sys.objects`, `sys.schemas` |
+| Foreign keys | `sys.foreign_keys`, `sys.tables`, `sys.schemas` |
 | Module dependencies | `sys.sql_expression_dependencies` |
 
-The connector should emit graph facts from metadata rows. It should not parse or
-run user table data queries.
+It does not read table data or execute application SQL. It emits graph facts
+from metadata rows and adds a source error if the connection fails, the driver
+is missing, the connection environment variable is absent, or
+`max_metadata_rows` is reached.
 
 ## PostgreSQL Direction
 
@@ -143,14 +148,15 @@ Every introspected SQL entity should include:
 - `full_name`
 - source provenance from the database source
 
-The current pure adapters live in `repo_graph.database` and expose typed
+The current adapters live in `repo_graph.database` and expose typed
 metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`,
 `SqlServerDependencyRow`, `PostgresObjectRow`, `PostgresForeignKeyRow`, and
 `PostgresDependencyRow`. `graph_from_database_metadata()` dispatches through
 the engine registry, while `graph_from_sqlserver_metadata()` and
-`graph_from_postgres_metadata()` remain direct adapter entry points. These
-functions convert metadata rows into normal `Entity` and `Edge` facts without
-opening a database connection or reading secrets.
+`graph_from_postgres_metadata()` remain direct pure adapter entry points.
+`graph_from_database_source()` is the live source entry point. These functions
+convert metadata rows into normal `Entity` and `Edge` facts without writing
+secrets to graph output.
 
 Introspected relationships should reuse the same interaction vocabulary:
 
@@ -206,5 +212,6 @@ not a live database query.
 4. Add reconciliation report APIs. Done.
 5. Add UI/report links after the API output is stable. Done.
 6. Add a shared adapter registry and PostgreSQL pure metadata adapter. Done.
-7. Add engine-specific live connectors, starting with SQL Server and then
-   PostgreSQL, behind the same `database` source contract.
+7. Add SQL Server live metadata connector behind the database source contract.
+   Done.
+8. Add PostgreSQL live connector behind the same `database` source contract.

@@ -59,9 +59,9 @@ shortcuts.
 ## Recommended Slice Order
 
 1. Add read-only database introspection as an optional source type.
-   SQL Server has a pure metadata-row adapter for tables, views, procedures,
-   functions, foreign keys, and module dependencies. Next, add the live
-   read-only connector. Do not read table data.
+   SQL Server has a live metadata connector plus a pure metadata-row adapter
+   for tables, views, procedures, functions, foreign keys, and module
+   dependencies. Do not read table data.
 2. Add reconciliation reports for code-vs-database drift. Done for graph facts.
    Reports flag objects found only in migration history, references missing
    from the current database, and current database objects with no code

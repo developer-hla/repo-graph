@@ -233,17 +233,19 @@ class SourceSyncTests(unittest.TestCase):
             ),
         )
 
-        payload = inspect_sources(config)
+        with patch("repo_graph.sources.sqlserver_driver_available", return_value=False):
+            payload = inspect_sources(config)
 
         self.assertEqual(payload[0]["name"], "current-db")
         self.assertEqual(payload[0]["type"], "database")
         self.assertFalse(payload[0]["ready"])
-        self.assertIn("database_connector_unavailable", payload[0]["problems"])
+        self.assertIn("connection_env_missing", payload[0]["problems"])
+        self.assertIn("database_driver_missing", payload[0]["problems"])
         self.assertEqual(payload[0]["configured"]["engine"], "sqlserver")
         self.assertEqual(payload[0]["configured"]["connection_env"], "REPO_GRAPH_EXAMPLE_SQLSERVER_URL")
         self.assertNotIn("connection_string", payload[0]["configured"])
 
-    def test_sync_sources_with_status_reports_unavailable_database_connector(self) -> None:
+    def test_sync_sources_with_status_skips_database_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             config = RepoGraphConfig(
@@ -263,9 +265,7 @@ class SourceSyncTests(unittest.TestCase):
 
             payload = sync_sources_with_status(config)
 
-        self.assertEqual(payload[0]["sync"]["status"], "failed")
-        self.assertIn("no live connector enabled yet", payload[0]["sync"]["error"])
-        self.assertNotIn("REPO_GRAPH_EXAMPLE_SQLSERVER_URL", payload[0]["sync"]["error"])
+        self.assertEqual(payload[0]["sync"], {"status": "skipped", "reason": "not_applicable"})
 
     def test_github_next_link_reads_pagination_header(self) -> None:
         next_url = github_next_link(

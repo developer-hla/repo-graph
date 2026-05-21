@@ -8,7 +8,13 @@ from typing import Any
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.graph import Graph
-from repo_graph.scanner import MAX_FILE_BYTES, default_extractors, scan_source, source_to_dict
+from repo_graph.scanner import (
+    MAX_FILE_BYTES,
+    config_without_unsupported_sources,
+    default_extractors,
+    scan_source,
+    source_to_dict,
+)
 from repo_graph.snapshots import (
     parser_fingerprint,
     snapshot_root,
@@ -23,7 +29,8 @@ def write_source_graphs(
     sync_first: bool = False,
     max_file_bytes: int = MAX_FILE_BYTES,
 ) -> dict[str, Any]:
-    sources = sync_sources(config) if sync_first else resolve_sources(config)
+    scannable_config = config_without_unsupported_sources(config)
+    sources = sync_sources(scannable_config) if sync_first else resolve_sources(scannable_config)
     root = snapshot_root(config)
     root.mkdir(parents=True, exist_ok=True)
     items = [write_source_graph(config, source, max_file_bytes=max_file_bytes) for source in sources]

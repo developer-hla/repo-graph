@@ -55,6 +55,24 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(item["modified_files"], ["index.ts"])
         self.assertEqual(item["removed_files"], ["package.json"])
 
+    def test_snapshot_status_marks_database_sources_as_external_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "service"
+            repo.mkdir()
+            (repo / "package.json").write_text('{"name": "@example/service"}', encoding="utf-8")
+            config = load_config(write_config(root, include_database=True))
+
+            written = write_snapshots(config)
+            status = snapshot_status(config)
+
+        items = {item["source_name"]: item for item in status["items"]}
+        self.assertEqual(written["count"], 1)
+        self.assertEqual(status["changed_count"], 1)
+        self.assertEqual(items["current-db"]["status"], "changed")
+        self.assertIn("database_metadata_external", items["current-db"]["reasons"])
+        self.assertEqual(items["current-db"]["current"]["source"]["engine"], "sqlserver")
+
     def test_source_snapshot_uses_scannable_file_rules(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -74,16 +92,27 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(len(snapshot["files"][0]["sha256"]), 64)
 
 
-def write_config(root: Path) -> Path:
+def write_config(root: Path, include_database: bool = False) -> Path:
     config_path = root / "sources.yaml"
-    config_path.write_text(
+    database_source = (
         """
+  - type: database
+    name: current-db
+    engine: sqlserver
+    connection_env: REPO_GRAPH_EXAMPLE_SQLSERVER_URL
+"""
+        if include_database
+        else ""
+    )
+    config_path.write_text(
+        f"""
 name: test-scope
 output_dir: .repo-graph/output
 sources:
   - type: local_path
     name: service
     path: service
+{database_source}
 """,
         encoding="utf-8",
     )

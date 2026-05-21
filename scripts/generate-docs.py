@@ -527,7 +527,8 @@ def config_reference_doc() -> str:
         "- `connection_env` names the environment variable that contains the connection string. "
         "Connection string values are not accepted in config.",
         f"- Supported `include_object_types` values: {format_inline_values(sorted(DATABASE_OBJECT_TYPES))}.",
-        "- Database sources are parsed and validated against metadata adapters; no live connector is enabled yet.",
+        "- SQL Server live metadata reads require optional `pyodbc` plus a SQL Server ODBC driver.",
+        "- Engines without a live connector emit source errors without blocking repository scans.",
         "",
         "## Include Rules",
         "",
