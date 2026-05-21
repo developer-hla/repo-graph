@@ -118,6 +118,7 @@ The connector reads these catalog sources:
 | Stored procedures | `sys.objects`, `sys.schemas` |
 | Functions | `sys.objects`, `sys.schemas` |
 | Foreign keys | `sys.foreign_keys`, `sys.tables`, `sys.schemas` |
+| Triggers | `sys.triggers`, `sys.trigger_events`, `sys.tables`, `sys.schemas` |
 | Module dependencies | `sys.sql_expression_dependencies` |
 
 It does not read table data or execute application SQL. It emits graph facts
@@ -141,6 +142,7 @@ The connector reads these catalog sources:
 | Views and materialized views | `pg_class`, `pg_namespace` |
 | Functions and procedures | `pg_proc`, `pg_namespace` |
 | Foreign keys | `pg_constraint` |
+| Triggers | `pg_trigger`, `pg_class`, `pg_namespace`, `pg_proc` |
 | View and routine dependencies | `pg_depend`, `pg_rewrite` |
 
 It does not read table data or execute application SQL. It emits graph facts
@@ -160,7 +162,7 @@ Introspected entities should use the existing SQL vocabulary where possible:
 | View | `sql_view` |
 | Stored procedure | `stored_procedure` |
 | Function | `sql_function` |
-| Trigger | planned `sql_trigger` |
+| Trigger | `sql_trigger` |
 
 Every introspected SQL entity should include:
 
@@ -172,9 +174,10 @@ Every introspected SQL entity should include:
 
 The current adapters live in `repo_graph.database` and expose typed
 metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`,
-`SqlServerDependencyRow`, `PostgresObjectRow`, `PostgresForeignKeyRow`, and
-`PostgresDependencyRow`. `graph_from_database_metadata()` dispatches through
-the engine registry, while `graph_from_sqlserver_metadata()` and
+`SqlServerTriggerRow`, `SqlServerDependencyRow`, `PostgresObjectRow`,
+`PostgresForeignKeyRow`, `PostgresTriggerRow`, and `PostgresDependencyRow`.
+`graph_from_database_metadata()` dispatches through the engine registry, while
+`graph_from_sqlserver_metadata()` and
 `graph_from_postgres_metadata()` remain direct pure adapter entry points.
 `graph_from_database_source()` is the live source entry point. These functions
 convert metadata rows into normal `Entity` and `Edge` facts without writing
@@ -187,7 +190,12 @@ Introspected relationships should reuse the same interaction vocabulary:
 | Foreign key dependency | `REFERENCES_SQL_OBJECT` |
 | Module object dependency | `REFERENCES_SQL_OBJECT` unless the catalog can safely classify read/write/call behavior |
 | Procedure/function execution dependency | `CALLS_SQL` when metadata proves an executable dependency |
-| Trigger on table | planned `TRIGGERS_ON_SQL_OBJECT` |
+| Trigger on table | `TRIGGERS_ON_SQL_OBJECT` |
+
+PostgreSQL trigger metadata also emits `CALLS_SQL` from the `sql_trigger` entity
+to the trigger function when `pg_trigger.tgfoid` resolves to a function in the
+introspected scope. SQL Server trigger body dependencies are read through
+`sys.sql_expression_dependencies` when the catalog exposes them.
 
 Do not infer `READS_SQL_OBJECT` or `WRITES_SQL_OBJECT` from metadata unless the
 metadata source can distinguish reads from writes safely. If not, use
@@ -238,3 +246,4 @@ not a live database query.
    Done.
 8. Add PostgreSQL live connector behind the same `database` source contract.
    Done.
+9. Add first-class SQL trigger entities and trigger-on-table edges. Done.

@@ -24,12 +24,13 @@ ENTITY_TYPES = (
     "solution",
     "sql_function",
     "sql_table",
+    "sql_trigger",
     "sql_view",
     "stored_procedure",
     "workspace",
 )
 EDGE_TARGET_TYPES = tuple(sorted({*ENTITY_TYPES, "sql_object"}))
-SQL_ENTITY_TYPES = frozenset({"sql_function", "sql_table", "sql_view", "stored_procedure"})
+SQL_ENTITY_TYPES = frozenset({"sql_function", "sql_table", "sql_trigger", "sql_view", "stored_procedure"})
 
 EDGE_TYPES = (
     "CALLS_HTTP",
@@ -59,9 +60,12 @@ EDGE_TYPES = (
     "ROUTES_TO_SERVICE",
     "RUNS_CONTAINER",
     "SELECTS_DEPLOYMENT",
+    "TRIGGERS_ON_SQL_OBJECT",
     "WRITES_SQL_OBJECT",
 )
-SQL_EDGE_TYPES = frozenset({"CALLS_SQL", "READS_SQL_OBJECT", "REFERENCES_SQL_OBJECT", "WRITES_SQL_OBJECT"})
+SQL_EDGE_TYPES = frozenset(
+    {"CALLS_SQL", "READS_SQL_OBJECT", "REFERENCES_SQL_OBJECT", "TRIGGERS_ON_SQL_OBJECT", "WRITES_SQL_OBJECT"}
+)
 INTERACTION_EDGE_TYPES = frozenset(
     {
         "CALLS_HTTP",
@@ -71,6 +75,7 @@ INTERACTION_EDGE_TYPES = frozenset(
         "READS_SQL_OBJECT",
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
+        "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
     }
 )
@@ -96,6 +101,7 @@ INTERACTION_KINDS = (
     "service_configuration",
     "sql_reference",
     "sql_schema_reference",
+    "sql_trigger",
 )
 
 PARSER_IDS = (
@@ -154,6 +160,7 @@ IMPACT_EDGE_TYPES = frozenset(
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "SELECTS_DEPLOYMENT",
+        "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
     }
 )
@@ -198,6 +205,7 @@ MISSING_SOURCE_EDGE_TYPES = frozenset(
         "READS_SQL_OBJECT",
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
+        "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
     }
 )
@@ -224,6 +232,7 @@ MISSING_SOURCE_TARGET_TYPES = frozenset(
         "sql_function",
         "sql_object",
         "sql_table",
+        "sql_trigger",
         "sql_view",
         "stored_procedure",
     }

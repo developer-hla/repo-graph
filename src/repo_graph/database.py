@@ -21,6 +21,7 @@ DEFAULT_DATABASE_MAX_METADATA_ROWS = 50_000
 SQLSERVER_OBJECT_METADATA_SOURCES = {
     "sql_table": "sys.tables",
     "sql_view": "sys.views",
+    "sql_trigger": "sys.triggers",
     "stored_procedure": "sys.procedures",
     "sql_function": "sys.objects",
 }
@@ -28,6 +29,7 @@ SQLSERVER_OBJECT_METADATA_SOURCES = {
 POSTGRES_OBJECT_METADATA_SOURCES = {
     "sql_table": "pg_class",
     "sql_view": "pg_class",
+    "sql_trigger": "pg_trigger",
     "stored_procedure": "pg_proc",
     "sql_function": "pg_proc",
 }
@@ -44,10 +46,13 @@ DATABASE_OBJECT_TYPE_ALIASES = {
     "sql_function": "sql_function",
     "sql_object": "sql_object",
     "sql_table": "sql_table",
+    "sql_trigger": "sql_trigger",
     "sql_view": "sql_view",
     "stored_procedure": "stored_procedure",
     "table": "sql_table",
     "tf": "sql_function",
+    "tr": "sql_trigger",
+    "trigger": "sql_trigger",
     "u": "sql_table",
     "user_table": "sql_table",
     "v": "sql_view",
@@ -80,7 +85,7 @@ POSTGRES_PROC_KINDS_BY_INCLUDE_TYPE = {
     "function": ("f",),
     "stored_procedure": ("p",),
 }
-POSTGRES_DEFAULT_INCLUDE_OBJECT_TYPES = ("function", "stored_procedure", "table", "view")
+POSTGRES_DEFAULT_INCLUDE_OBJECT_TYPES = ("function", "stored_procedure", "table", "trigger", "view")
 
 
 class DatabaseMetadataAdapter(Protocol):
@@ -132,6 +137,18 @@ class SqlServerDependencyRow:
 
 
 @dataclass(frozen=True)
+class SqlServerTriggerRow:
+    """One DML trigger relationship from SQL Server catalog metadata."""
+
+    schema: str
+    name: str
+    table_schema: str
+    table: str
+    events: tuple[str, ...] = ()
+    is_disabled: bool | None = None
+
+
+@dataclass(frozen=True)
 class SqlServerMetadata:
     """Typed SQL Server metadata rows used by the pure adapter."""
 
@@ -139,6 +156,7 @@ class SqlServerMetadata:
     views: tuple[SqlServerObjectRow, ...] = ()
     stored_procedures: tuple[SqlServerObjectRow, ...] = ()
     functions: tuple[SqlServerObjectRow, ...] = ()
+    triggers: tuple[SqlServerTriggerRow, ...] = ()
     foreign_keys: tuple[SqlServerForeignKeyRow, ...] = ()
     dependencies: tuple[SqlServerDependencyRow, ...] = ()
 
@@ -177,6 +195,20 @@ class PostgresDependencyRow:
 
 
 @dataclass(frozen=True)
+class PostgresTriggerRow:
+    """One trigger relationship from PostgreSQL catalog metadata."""
+
+    schema: str
+    name: str
+    table_schema: str
+    table: str
+    events: tuple[str, ...] = ()
+    is_enabled: bool | None = None
+    function_schema: str | None = None
+    function_name: str | None = None
+
+
+@dataclass(frozen=True)
 class PostgresMetadata:
     """Typed PostgreSQL metadata rows used by the pure adapter."""
 
@@ -185,6 +217,7 @@ class PostgresMetadata:
     materialized_views: tuple[PostgresObjectRow, ...] = ()
     functions: tuple[PostgresObjectRow, ...] = ()
     procedures: tuple[PostgresObjectRow, ...] = ()
+    triggers: tuple[PostgresTriggerRow, ...] = ()
     foreign_keys: tuple[PostgresForeignKeyRow, ...] = ()
     dependencies: tuple[PostgresDependencyRow, ...] = ()
 
@@ -537,6 +570,20 @@ def read_sqlserver_metadata(connection: Any, request: DatabaseSourceRequest) -> 
             )
         )
 
+    triggers: list[SqlServerTriggerRow] = []
+    if include_database_object_type_or_dependency(request.include_object_types, "trigger") and budget.has_remaining:
+        triggers.extend(
+            sqlserver_trigger_rows(
+                fetch_sqlserver_rows(
+                    cursor,
+                    sqlserver_triggers_query(budget.remaining, request.schemas),
+                    request.schemas,
+                    budget,
+                    "sys.triggers",
+                )
+            )
+        )
+
     dependencies: list[SqlServerDependencyRow] = []
     if include_database_object_type(request.include_object_types, "dependency") and budget.has_remaining:
         for row in fetch_sqlserver_rows(
@@ -566,6 +613,7 @@ def read_sqlserver_metadata(connection: Any, request: DatabaseSourceRequest) -> 
             views=tuple(views),
             stored_procedures=tuple(stored_procedures),
             functions=tuple(functions),
+            triggers=tuple(triggers),
             foreign_keys=tuple(foreign_keys),
             dependencies=tuple(dependencies),
         ),
@@ -642,6 +690,27 @@ def read_postgres_metadata(connection: Any, request: DatabaseSourceRequest) -> P
             )
         )
 
+    triggers: list[PostgresTriggerRow] = []
+    if include_database_object_type_or_dependency(request.include_object_types, "trigger") and budget.has_remaining:
+        for row in fetch_postgres_rows(
+            cursor,
+            postgres_triggers_query(budget.remaining, request.schemas),
+            request.schemas,
+            budget,
+            "pg_trigger",
+        ):
+            trigger = PostgresTriggerRow(
+                schema=row_text(row, "schema_name"),
+                name=row_text(row, "trigger_name"),
+                table_schema=row_text(row, "table_schema_name"),
+                table=row_text(row, "table_name"),
+                events=postgres_trigger_events(row),
+                is_enabled=not row_bool(row, "is_disabled"),
+                function_schema=optional_row_text(row, "function_schema_name"),
+                function_name=optional_row_text(row, "function_name"),
+            )
+            triggers.append(trigger)
+
     dependencies: list[PostgresDependencyRow] = []
     if include_database_object_type(request.include_object_types, "dependency") and budget.has_remaining:
         for row in fetch_postgres_rows(
@@ -671,6 +740,7 @@ def read_postgres_metadata(connection: Any, request: DatabaseSourceRequest) -> P
             materialized_views=tuple(materialized_views),
             functions=tuple(functions),
             procedures=tuple(procedures),
+            triggers=tuple(triggers),
             foreign_keys=tuple(foreign_keys),
             dependencies=tuple(dependencies),
         ),
@@ -730,6 +800,39 @@ def fetch_postgres_rows(
     return rows
 
 
+def sqlserver_trigger_rows(rows: list[Any]) -> list[SqlServerTriggerRow]:
+    triggers: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (
+            row_text(row, "schema_name"),
+            row_text(row, "trigger_name"),
+            row_text(row, "table_schema_name"),
+            row_text(row, "table_name"),
+        )
+        trigger = triggers.setdefault(
+            key,
+            {
+                "events": set(),
+                "is_disabled": row_bool(row, "is_disabled"),
+            },
+        )
+        event_name = optional_row_text(row, "event_name")
+        if event_name:
+            trigger["events"].add(normalize_trigger_event(event_name))
+
+    return [
+        SqlServerTriggerRow(
+            schema=schema,
+            name=name,
+            table_schema=table_schema,
+            table=table,
+            events=tuple(sorted(trigger["events"])),
+            is_disabled=bool(trigger["is_disabled"]),
+        )
+        for (schema, name, table_schema, table), trigger in triggers.items()
+    ]
+
+
 def sqlserver_objects_query(limit: int, schemas: tuple[str, ...], object_types: tuple[str, ...]) -> str:
     schema_filter = sqlserver_schema_filter("s", schemas)
     object_type_filter = sqlserver_in_filter("o.type", len(object_types))
@@ -765,6 +868,30 @@ WHERE pt.is_ms_shipped = 0
   AND rt.is_ms_shipped = 0
   {schema_filter}
 ORDER BY ps.name, pt.name, fk.name
+"""
+
+
+def sqlserver_triggers_query(limit: int, schemas: tuple[str, ...]) -> str:
+    schema_filter = sqlserver_schema_filter("parent_schema", schemas)
+    return f"""
+SELECT TOP ({safe_sql_limit(limit)})
+  trigger_schema.name AS schema_name,
+  trigger_object.name AS trigger_name,
+  parent_schema.name AS table_schema_name,
+  parent_table.name AS table_name,
+  trigger_event.type_desc AS event_name,
+  trigger_definition.is_disabled AS is_disabled
+FROM sys.triggers AS trigger_definition
+JOIN sys.objects AS trigger_object ON trigger_definition.object_id = trigger_object.object_id
+JOIN sys.schemas AS trigger_schema ON trigger_object.schema_id = trigger_schema.schema_id
+JOIN sys.tables AS parent_table ON trigger_definition.parent_id = parent_table.object_id
+JOIN sys.schemas AS parent_schema ON parent_table.schema_id = parent_schema.schema_id
+LEFT JOIN sys.trigger_events AS trigger_event ON trigger_definition.object_id = trigger_event.object_id
+WHERE trigger_definition.parent_class = 1
+  AND trigger_definition.is_ms_shipped = 0
+  AND parent_table.is_ms_shipped = 0
+  {schema_filter}
+ORDER BY trigger_schema.name, trigger_object.name, trigger_event.type_desc
 """
 
 
@@ -849,6 +976,33 @@ JOIN pg_catalog.pg_namespace AS rn ON rn.oid = rc.relnamespace
 WHERE con.contype = 'f'
   {schema_filter}
 ORDER BY n.nspname, c.relname, con.conname
+LIMIT {safe_sql_limit(limit)}
+"""
+
+
+def postgres_triggers_query(limit: int, schemas: tuple[str, ...]) -> str:
+    schema_filter = postgres_schema_filter("table_schema", schemas)
+    return f"""
+SELECT
+  table_schema.nspname AS schema_name,
+  trigger_definition.tgname AS trigger_name,
+  table_schema.nspname AS table_schema_name,
+  parent_table.relname AS table_name,
+  ((trigger_definition.tgtype::int & 4) <> 0) AS fires_insert,
+  ((trigger_definition.tgtype::int & 8) <> 0) AS fires_delete,
+  ((trigger_definition.tgtype::int & 16) <> 0) AS fires_update,
+  ((trigger_definition.tgtype::int & 32) <> 0) AS fires_truncate,
+  trigger_definition.tgenabled = 'D' AS is_disabled,
+  function_schema.nspname AS function_schema_name,
+  trigger_function.proname AS function_name
+FROM pg_catalog.pg_trigger AS trigger_definition
+JOIN pg_catalog.pg_class AS parent_table ON parent_table.oid = trigger_definition.tgrelid
+JOIN pg_catalog.pg_namespace AS table_schema ON table_schema.oid = parent_table.relnamespace
+JOIN pg_catalog.pg_proc AS trigger_function ON trigger_function.oid = trigger_definition.tgfoid
+JOIN pg_catalog.pg_namespace AS function_schema ON function_schema.oid = trigger_function.pronamespace
+WHERE NOT trigger_definition.tgisinternal
+  {schema_filter}
+ORDER BY table_schema.nspname, parent_table.relname, trigger_definition.tgname
 LIMIT {safe_sql_limit(limit)}
 """
 
@@ -997,6 +1151,10 @@ def include_database_object_type(include_object_types: tuple[str, ...], object_t
     return not include_object_types or object_type in include_object_types
 
 
+def include_database_object_type_or_dependency(include_object_types: tuple[str, ...], object_type: str) -> bool:
+    return include_database_object_type(include_object_types, object_type) or "dependency" in include_object_types
+
+
 def sqlserver_catalog_object_type(value: str | None) -> str:
     if not value:
         return "sql_object"
@@ -1033,6 +1191,43 @@ def row_value(row: Any, field_name: str) -> Any:
     if isinstance(row, Mapping):
         return row.get(field_name)
     return getattr(row, field_name, None)
+
+
+def row_bool(row: Any, field_name: str) -> bool:
+    value = row_value(row, field_name)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        return normalize_metadata_value(value) in {"1", "true", "t", "yes", "y"}
+    return False
+
+
+def postgres_trigger_events(row: Any) -> tuple[str, ...]:
+    events = [
+        event_name
+        for field_name, event_name in (
+            ("fires_insert", "INSERT"),
+            ("fires_update", "UPDATE"),
+            ("fires_delete", "DELETE"),
+            ("fires_truncate", "TRUNCATE"),
+        )
+        if row_bool(row, field_name)
+    ]
+    return tuple(events)
+
+
+def normalize_trigger_event(value: str) -> str:
+    return normalize_metadata_value(value).upper()
+
+
+def trigger_source_name(table: str, trigger_name: str) -> str:
+    return f"{normalize_sql_identifier(table)}.{normalize_sql_identifier(trigger_name)}"
+
+
+def trigger_source_schema(schema: str, table: str) -> str:
+    return f"{normalize_sql_identifier(schema)}.{normalize_sql_identifier(table)}"
 
 
 def set_cursor_timeout(cursor: Any, timeout: int) -> None:
@@ -1074,12 +1269,18 @@ def graph_from_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata)
                     metadata_source=SQLSERVER_OBJECT_METADATA_SOURCES[entity_type],
                 ),
             )
+    for row in metadata.triggers:
+        add_entity(entities_by_id, sqlserver_trigger_entity(source_name, row))
 
     result.entities = list(entities_by_id.values())
     entity_index = build_entity_index(result.entities)
 
     for row in metadata.foreign_keys:
         edge_result = foreign_key_edge(source_name, row, entity_index)
+        append_edge_result(result, edge_result)
+
+    for row in metadata.triggers:
+        edge_result = sqlserver_trigger_edge(source_name, row, entity_index)
         append_edge_result(result, edge_result)
 
     for row in metadata.dependencies:
@@ -1135,6 +1336,8 @@ def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -
                     extra_properties=extra_properties,
                 ),
             )
+    for row in metadata.triggers:
+        add_entity(entities_by_id, postgres_trigger_entity(source_name, row))
 
     result.entities = list(entities_by_id.values())
     entity_index = build_entity_index(result.entities)
@@ -1142,6 +1345,13 @@ def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -
     for row in metadata.foreign_keys:
         edge_result = postgres_foreign_key_edge(source_name, row, entity_index)
         append_edge_result(result, edge_result)
+
+    for row in metadata.triggers:
+        edge_result = postgres_trigger_edge(source_name, row, entity_index)
+        append_edge_result(result, edge_result)
+        trigger_function_dependency = postgres_trigger_function_dependency(row)
+        if trigger_function_dependency is not None:
+            append_edge_result(result, postgres_dependency_edge(source_name, trigger_function_dependency, entity_index))
 
     for row in metadata.dependencies:
         edge_result = postgres_dependency_edge(source_name, row, entity_index)
@@ -1177,6 +1387,81 @@ def postgres_object_entity(
         name=row.name,
         metadata_source=metadata_source,
         extra_properties=extra_properties,
+    )
+
+
+def sqlserver_trigger_entity(source_name: str, row: SqlServerTriggerRow) -> Entity:
+    return database_trigger_entity(
+        source_name=source_name,
+        database_engine=SQLSERVER_ENGINE,
+        schema=row.schema,
+        name=row.name,
+        table_schema=row.table_schema,
+        table=row.table,
+        metadata_source="sys.triggers",
+        events=row.events,
+        is_enabled=None if row.is_disabled is None else not row.is_disabled,
+    )
+
+
+def postgres_trigger_entity(source_name: str, row: PostgresTriggerRow) -> Entity:
+    return database_trigger_entity(
+        source_name=source_name,
+        database_engine=POSTGRES_ENGINE,
+        schema=row.schema,
+        name=row.name,
+        table_schema=row.table_schema,
+        table=row.table,
+        metadata_source="pg_trigger",
+        events=row.events,
+        is_enabled=row.is_enabled,
+        extra_properties={
+            "trigger_function": (
+                database_full_name(row.function_schema, row.function_name)
+                if row.function_schema and row.function_name
+                else None
+            )
+        },
+    )
+
+
+def database_trigger_entity(
+    source_name: str,
+    database_engine: str,
+    schema: str,
+    name: str,
+    table_schema: str,
+    table: str,
+    metadata_source: str,
+    events: tuple[str, ...],
+    is_enabled: bool | None,
+    extra_properties: dict[str, Any] | None = None,
+) -> Entity:
+    trigger_name = normalize_sql_identifier(name)
+    table_full_name = database_full_name(table_schema, table)
+    full_name = database_trigger_full_name(table_schema, table, trigger_name)
+    trigger_properties = {
+        "schema": normalize_sql_identifier(schema),
+        "object_name": trigger_name,
+        "full_name": full_name,
+        "schema_state": CURRENT_DATABASE_SCHEMA_STATE,
+        "database_engine": database_engine,
+        "metadata_source": metadata_source,
+        "trigger_table": table_full_name,
+        "trigger_events": list(events),
+        "trigger_enabled": is_enabled,
+        **(extra_properties or {}),
+    }
+    return Entity(
+        entity_type="sql_trigger",
+        name=full_name,
+        source_name=source_name,
+        aliases={
+            trigger_name,
+            database_full_name(schema, trigger_name),
+            trigger_source_name(table, trigger_name),
+        },
+        properties={key: value for key, value in trigger_properties.items() if value is not None},
     )
 
 
@@ -1244,6 +1529,118 @@ def foreign_key_edge(
             metadata_source="sys.foreign_keys",
             identity_key=metadata_identity_key("foreign_key", source_full_name, target_full_name, row.name),
             extra_properties={"constraint_name": row.name},
+        )
+    )
+
+
+def sqlserver_trigger_edge(
+    source_name: str,
+    row: SqlServerTriggerRow,
+    entity_index: dict[tuple[str | None, str], list[Entity]],
+) -> EdgeBuildResult:
+    return trigger_edge(
+        engine_label="SQL Server",
+        source_name=source_name,
+        metadata_source="sys.triggers",
+        database_engine=SQLSERVER_ENGINE,
+        parser=SQLSERVER_METADATA_PARSER,
+        trigger_schema=row.schema,
+        trigger_name=row.name,
+        table_schema=row.table_schema,
+        table_name=row.table,
+        events=row.events,
+        is_enabled=None if row.is_disabled is None else not row.is_disabled,
+        entity_index=entity_index,
+    )
+
+
+def postgres_trigger_edge(
+    source_name: str,
+    row: PostgresTriggerRow,
+    entity_index: dict[tuple[str | None, str], list[Entity]],
+) -> EdgeBuildResult:
+    return trigger_edge(
+        engine_label="PostgreSQL",
+        source_name=source_name,
+        metadata_source="pg_trigger",
+        database_engine=POSTGRES_ENGINE,
+        parser=POSTGRES_METADATA_PARSER,
+        trigger_schema=row.schema,
+        trigger_name=row.name,
+        table_schema=row.table_schema,
+        table_name=row.table,
+        events=row.events,
+        is_enabled=row.is_enabled,
+        entity_index=entity_index,
+    )
+
+
+def postgres_trigger_function_dependency(row: PostgresTriggerRow) -> PostgresDependencyRow | None:
+    if not row.function_schema or not row.function_name:
+        return None
+    return PostgresDependencyRow(
+        from_schema=trigger_source_schema(row.table_schema, row.table),
+        from_name=row.name,
+        from_type="trigger",
+        to_schema=row.function_schema,
+        to_name=row.function_name,
+        to_type="function",
+        dependency_type="execute",
+        name=row.name,
+    )
+
+
+def trigger_edge(
+    engine_label: str,
+    source_name: str,
+    metadata_source: str,
+    database_engine: str,
+    parser: str,
+    trigger_schema: str,
+    trigger_name: str,
+    table_schema: str,
+    table_name: str,
+    events: tuple[str, ...],
+    is_enabled: bool | None,
+    entity_index: dict[tuple[str | None, str], list[Entity]],
+) -> EdgeBuildResult:
+    trigger_full_name = database_trigger_full_name(table_schema, table_name, trigger_name)
+    table_full_name = database_full_name(table_schema, table_name)
+    source_match = find_entity(entity_index, "sql_trigger", trigger_full_name)
+    if source_match.entity is None:
+        return EdgeBuildResult(
+            error=missing_source_error(
+                engine_label=engine_label,
+                source_name=source_name,
+                metadata_source=metadata_source,
+                relationship_name="trigger",
+                source_object=database_full_name(trigger_schema, trigger_name),
+                target_object=table_full_name,
+                candidates=source_match.candidates,
+            )
+        )
+
+    return EdgeBuildResult(
+        edge=database_metadata_edge(
+            source_entity=source_match.entity,
+            target_match=find_entity(entity_index, "sql_table", table_full_name),
+            target_name=table_full_name,
+            target_type="sql_table",
+            edge_type="TRIGGERS_ON_SQL_OBJECT",
+            source_name=source_name,
+            operation="TRIGGER_ON",
+            database_object_type="sql_table",
+            dependency_scope="runtime",
+            interaction_kind="sql_trigger",
+            metadata_source=metadata_source,
+            identity_key=metadata_identity_key("trigger", trigger_full_name, table_full_name),
+            database_engine=database_engine,
+            parser=parser,
+            extra_properties={
+                "trigger_events": list(events),
+                "trigger_enabled": is_enabled,
+                "trigger_name": trigger_name,
+            },
         )
     )
 
@@ -1637,6 +2034,16 @@ def sqlserver_full_name(schema: str, name: str) -> str:
 
 def postgres_full_name(schema: str, name: str) -> str:
     return database_full_name(schema, name)
+
+
+def database_trigger_full_name(schema: str, table: str, trigger_name: str) -> str:
+    return ".".join(
+        (
+            normalize_sql_identifier(schema),
+            normalize_sql_identifier(table),
+            normalize_sql_identifier(trigger_name),
+        )
+    )
 
 
 def database_full_name(schema: str, name: str) -> str:

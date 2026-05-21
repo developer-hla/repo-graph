@@ -77,7 +77,7 @@ use regular evidence fields. The canonical list lives in
 `repo_graph.vocabulary.INTERACTION_EDGE_TYPES` and currently includes
 `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
 `CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, and
-`REFERENCES_SQL_OBJECT`.
+`REFERENCES_SQL_OBJECT`, and `TRIGGERS_ON_SQL_OBJECT`.
 
 Database-to-database dependencies use the same interaction contract. For
 example, a stored procedure or view that reads a table should emit
@@ -85,7 +85,8 @@ example, a stored procedure or view that reads a table should emit
 SQL statements that mutate tables should emit `WRITES_SQL_OBJECT` so impact
 analysis can distinguish readers from writers.
 Schema-time relationships such as foreign keys should emit
-`REFERENCES_SQL_OBJECT`.
+`REFERENCES_SQL_OBJECT`. Trigger metadata should emit
+`TRIGGERS_ON_SQL_OBJECT` from the trigger entity to the table it fires on.
 
 - `target_boundary`: `application` or `database`
 - `dependency_scope`: `runtime`, `configuration`, `deployment`, or `schema`
@@ -131,8 +132,9 @@ agents should expose to users.
 - `api_route`: an HTTP route declared in source code.
 - `function`, `class`, `module`, and `interface`: exported JavaScript,
   TypeScript, Python, C#, or legacy VB symbols.
-- `sql_table`, `sql_view`, `sql_function`, `stored_procedure`: SQL objects
-  declared in SQL files or emitted from database metadata.
+- `sql_table`, `sql_view`, `sql_function`, `sql_trigger`,
+  `stored_procedure`: SQL objects declared in SQL files or emitted from
+  database metadata.
 
 ## Core Edge Types
 
@@ -172,6 +174,7 @@ agents should expose to users.
   procedure target being inserted, updated, deleted, merged, or truncated.
 - `REFERENCES_SQL_OBJECT`: file or SQL object to table, view, function, or
   procedure target referenced by a schema-time dependency such as a foreign key.
+- `TRIGGERS_ON_SQL_OBJECT`: trigger entity to the table that fires it.
 
 Scanner-derived reference edges include evidence in `properties`, such as
 `raw_target`, `normalized_target`, dependency type, ecosystem, package version,

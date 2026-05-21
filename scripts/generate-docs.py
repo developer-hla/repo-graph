@@ -503,8 +503,8 @@ def config_reference_doc() -> str:
         "| `github_org` | `type`, `name`, `org` | `ref`, `visibility`, `include`, `exclude`, `limit` | "
         "Expand repositories from a GitHub organization through the GitHub REST API. |",
         "| `database` | `type`, `name`, `engine`, `connection_env` | `schemas`, `include_object_types`, "
-        "`query_timeout_seconds`, `max_metadata_rows`, `ref` | Planned read-only metadata source. "
-        "Parsed and validated, but build/sync report it as not implemented until a connector exists. |",
+        "`query_timeout_seconds`, `max_metadata_rows`, `ref` | Optional read-only metadata source for live "
+        "database catalogs. |",
         "",
         "## Source Dataclass Fields",
         "",

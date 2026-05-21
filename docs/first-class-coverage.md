@@ -38,6 +38,7 @@ evidence.
 | Database object writes | `WRITES_SQL_OBJECT` | Covered for inserts, updates, deletes, merges, truncates, and same-line `SELECT INTO` statements in SQL definitions and application SQL snippets. |
 | SQL schema dependencies | `REFERENCES_SQL_OBJECT` | Covered for `REFERENCES` clauses with provenance that distinguishes current schema files from migration history. |
 | SQL-to-SQL execution | `CALLS_SQL` from SQL objects | Covered for stored procedure execution discovered inside SQL definitions. |
+| Database triggers | `sql_trigger`, `TRIGGERS_ON_SQL_OBJECT` | Covered for SQL Server and PostgreSQL metadata, including catalog-proven trigger function calls for PostgreSQL. |
 
 ## Gaps To Promote
 
@@ -53,7 +54,6 @@ shortcuts.
 | Medium | File, blob, and transfer storage | Legacy and integration systems often couple through shared paths, buckets, FTP/SFTP drops, or blob containers. | Entities: `storage_location`; edges: `READS_STORAGE_OBJECT`, `WRITES_STORAGE_OBJECT`. |
 | Medium | Cache and distributed state | Redis or similar caches can couple services through key names and invalidation behavior. | Entities: `cache_store`, `cache_key`; edges: `READS_CACHE_KEY`, `WRITES_CACHE_KEY`. |
 | Medium | Scheduled and background work | Jobs create runtime entry points and dependencies that do not appear as HTTP routes. | Entities: `scheduled_job`, `worker`; edges: `DECLARES_JOB`, `RUNS_JOB`, `SCHEDULES_JOB`. |
-| Medium | Database triggers | A table mutation can execute trigger logic that calls procedures or changes other tables. | Entity: `sql_trigger`; edges: `TRIGGERS_ON_SQL_OBJECT`, plus normal SQL call/read/write edges from the trigger. |
 | Lower | Auth, identity, and policy boundaries | Auth changes can have wide blast radius, but many references are configuration-only and need careful false-positive control. | Prefer evidence-backed `USES_IDENTITY_PROVIDER` only when stable targets are available. |
 
 ## Recommended Slice Order

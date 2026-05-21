@@ -13,10 +13,12 @@ from repo_graph.database import (
     PostgresForeignKeyRow,
     PostgresMetadata,
     PostgresObjectRow,
+    PostgresTriggerRow,
     SqlServerDependencyRow,
     SqlServerForeignKeyRow,
     SqlServerMetadata,
     SqlServerObjectRow,
+    SqlServerTriggerRow,
     database_connector_unavailable_message,
     database_metadata_adapter,
     graph_from_database_metadata,
@@ -93,8 +95,10 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertTrue(connection.closed)
         self.assertEqual(connection.cursor_instance.timeout, 7)
         self.assertEqual(entities_by_name["dbo.Customers"].entity_type, "sql_table")
+        self.assertEqual(entities_by_name["dbo.Orders.TR_Orders_Audit"].entity_type, "sql_trigger")
         self.assertEqual(entities_by_name["dbo.LoadCustomer"].entity_type, "stored_procedure")
         self.assertEqual(edges_by_operation["FOREIGN_KEY"].to_name, "dbo.Customers")
+        self.assertEqual(edges_by_operation["TRIGGER_ON"].edge_type, "TRIGGERS_ON_SQL_OBJECT")
         self.assertEqual(
             edges_by_operation["MODULE_REFERENCE"].properties["metadata_source"], "sys.sql_expression_dependencies"
         )
@@ -169,9 +173,12 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(entities_by_name["public.customers"].entity_type, "sql_table")
         self.assertEqual(entities_by_name["public.active_customers"].entity_type, "sql_view")
         self.assertEqual(entities_by_name["public.customer_rollup"].properties["postgres_relkind"], "materialized_view")
+        self.assertEqual(entities_by_name["public.orders.orders_audit_trigger"].entity_type, "sql_trigger")
         self.assertEqual(entities_by_name["public.refresh_customer"].entity_type, "stored_procedure")
         self.assertEqual(entities_by_name["public.format_customer"].entity_type, "sql_function")
         self.assertEqual(edges_by_operation["FOREIGN_KEY"].to_name, "public.customers")
+        self.assertEqual(edges_by_operation["TRIGGER_ON"].edge_type, "TRIGGERS_ON_SQL_OBJECT")
+        self.assertEqual(edges_by_operation["EXECUTE"].from_type, "sql_trigger")
         self.assertEqual(edges_by_operation["OBJECT_DEPENDENCY"].properties["metadata_source"], "pg_depend")
 
     def test_postgres_live_connector_reports_missing_env_without_secret_value(self) -> None:
@@ -220,20 +227,37 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
                 views=(SqlServerObjectRow("reporting", "ActiveCustomers"),),
                 stored_procedures=(SqlServerObjectRow("dbo", "LoadCustomer"),),
                 functions=(SqlServerObjectRow("dbo", "FormatCustomer"),),
+                triggers=(
+                    SqlServerTriggerRow(
+                        schema="dbo",
+                        name="TR_Customers_Audit",
+                        table_schema="dbo",
+                        table="Customers",
+                        events=("INSERT", "UPDATE"),
+                        is_disabled=False,
+                    ),
+                ),
             ),
         )
 
         entities_by_name = {entity.name: entity for entity in facts.entities}
+        edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
 
         self.assertEqual(facts.errors, [])
         self.assertEqual(entities_by_name["dbo.Customers"].entity_type, "sql_table")
         self.assertEqual(entities_by_name["reporting.ActiveCustomers"].entity_type, "sql_view")
         self.assertEqual(entities_by_name["dbo.LoadCustomer"].entity_type, "stored_procedure")
         self.assertEqual(entities_by_name["dbo.FormatCustomer"].entity_type, "sql_function")
+        self.assertEqual(entities_by_name["dbo.Customers.TR_Customers_Audit"].entity_type, "sql_trigger")
         self.assertEqual(entities_by_name["dbo.Customers"].aliases, {"Customers"})
         self.assertEqual(entities_by_name["dbo.Customers"].properties["schema_state"], CURRENT_DATABASE_SCHEMA_STATE)
         self.assertEqual(entities_by_name["dbo.Customers"].properties["database_engine"], "sqlserver")
         self.assertEqual(entities_by_name["dbo.Customers"].properties["metadata_source"], "sys.tables")
+        self.assertEqual(
+            entities_by_name["dbo.Customers.TR_Customers_Audit"].properties["trigger_table"], "dbo.Customers"
+        )
+        self.assertEqual(edges_by_operation["TRIGGER_ON"].to_name, "dbo.Customers")
+        self.assertEqual(edges_by_operation["TRIGGER_ON"].properties["trigger_events"], ["INSERT", "UPDATE"])
 
     def test_emits_resolved_foreign_key_edge(self) -> None:
         facts = graph_from_sqlserver_metadata(
@@ -460,6 +484,18 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
                 materialized_views=(PostgresObjectRow("reporting", "customer_rollup"),),
                 functions=(PostgresObjectRow("public", "format_customer"),),
                 procedures=(PostgresObjectRow("public", "refresh_customer"),),
+                triggers=(
+                    PostgresTriggerRow(
+                        schema="public",
+                        name="orders_audit_trigger",
+                        table_schema="public",
+                        table="orders",
+                        events=("INSERT", "UPDATE"),
+                        is_enabled=True,
+                        function_schema="public",
+                        function_name="format_customer",
+                    ),
+                ),
                 foreign_keys=(
                     PostgresForeignKeyRow(
                         schema="public",
@@ -485,6 +521,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
 
         entities_by_name = {entity.name: entity for entity in facts.entities}
         edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
+        execute_edges = [edge for edge in facts.edges if edge.properties["sql_operation"] == "EXECUTE"]
 
         self.assertEqual(facts.errors, [])
         self.assertEqual(entities_by_name["public.customers"].entity_type, "sql_table")
@@ -492,17 +529,27 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(entities_by_name["reporting.customer_rollup"].entity_type, "sql_view")
         self.assertEqual(entities_by_name["public.refresh_customer"].entity_type, "stored_procedure")
         self.assertEqual(entities_by_name["public.format_customer"].entity_type, "sql_function")
+        self.assertEqual(entities_by_name["public.orders.orders_audit_trigger"].entity_type, "sql_trigger")
         self.assertEqual(entities_by_name["public.customers"].properties["database_engine"], "postgres")
         self.assertEqual(entities_by_name["public.customers"].properties["metadata_source"], "pg_class")
         self.assertEqual(
             entities_by_name["reporting.customer_rollup"].properties["postgres_relkind"],
             "materialized_view",
         )
+        self.assertEqual(
+            entities_by_name["public.orders.orders_audit_trigger"].properties["trigger_function"],
+            "public.format_customer",
+        )
         self.assertEqual(edges_by_operation["FOREIGN_KEY"].parser, POSTGRES_METADATA_PARSER)
         self.assertEqual(edges_by_operation["FOREIGN_KEY"].properties["metadata_source"], "pg_constraint")
         self.assertEqual(edges_by_operation["FOREIGN_KEY"].properties["database_engine"], "postgres")
-        self.assertEqual(edges_by_operation["EXECUTE"].edge_type, "CALLS_SQL")
-        self.assertEqual(edges_by_operation["EXECUTE"].to_type, "sql_function")
+        self.assertEqual(edges_by_operation["TRIGGER_ON"].parser, POSTGRES_METADATA_PARSER)
+        self.assertEqual(edges_by_operation["TRIGGER_ON"].to_name, "public.orders")
+        self.assertEqual({edge.edge_type for edge in execute_edges}, {"CALLS_SQL"})
+        self.assertIn(
+            ("public.orders.orders_audit_trigger", "public.format_customer"),
+            {(edge.from_name, edge.to_name) for edge in execute_edges},
+        )
 
 
 def single_edge(edges: list[Edge]) -> Edge:
@@ -543,6 +590,17 @@ class FakeSqlServerCursor:
                     referenced_schema_name="dbo",
                     referenced_table_name="Customers",
                     constraint_name="FK_Orders_Customers",
+                )
+            ]
+        elif "FROM sys.triggers AS trigger_definition" in query:
+            self.rows = [
+                SimpleNamespace(
+                    schema_name="dbo",
+                    trigger_name="TR_Orders_Audit",
+                    table_schema_name="dbo",
+                    table_name="Orders",
+                    event_name="INSERT",
+                    is_disabled=False,
                 )
             ]
         elif "FROM sys.sql_expression_dependencies AS d" in query:
@@ -606,6 +664,22 @@ class FakePostgresCursor:
                     referenced_schema_name="public",
                     referenced_table_name="customers",
                     constraint_name="orders_customer_id_fkey",
+                )
+            ]
+        elif "FROM pg_catalog.pg_trigger AS trigger_definition" in query:
+            self.rows = [
+                SimpleNamespace(
+                    schema_name="public",
+                    trigger_name="orders_audit_trigger",
+                    table_schema_name="public",
+                    table_name="orders",
+                    fires_insert=True,
+                    fires_update=True,
+                    fires_delete=False,
+                    fires_truncate=False,
+                    is_disabled=False,
+                    function_schema_name="public",
+                    function_name="format_customer",
                 )
             ]
         elif "FROM pg_catalog.pg_rewrite AS rw" in query:

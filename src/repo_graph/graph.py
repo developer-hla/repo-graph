@@ -218,7 +218,7 @@ def resolution_candidates(
 
 def resolution_entity_types(target_type: str | None) -> list[str | None]:
     if target_type == "sql_object":
-        return ["sql_table", "sql_view", "sql_function", "stored_procedure"]
+        return ["sql_table", "sql_view", "sql_function", "sql_trigger", "stored_procedure"]
     if target_type == "service":
         return ["service", "project", "repository"]
     if target_type:

@@ -24,6 +24,7 @@ This file is generated from `repo_graph.vocabulary`.
 - `solution`
 - `sql_function`
 - `sql_table`
+- `sql_trigger`
 - `sql_view`
 - `stored_procedure`
 - `workspace`
@@ -52,6 +53,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `sql_function`
 - `sql_object`
 - `sql_table`
+- `sql_trigger`
 - `sql_view`
 - `stored_procedure`
 - `workspace`
@@ -85,6 +87,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `ROUTES_TO_SERVICE`
 - `RUNS_CONTAINER`
 - `SELECTS_DEPLOYMENT`
+- `TRIGGERS_ON_SQL_OBJECT`
 - `WRITES_SQL_OBJECT`
 
 ## Interaction Evidence
@@ -100,6 +103,7 @@ These edge types represent application-to-application or application-to-database
 - `READS_SQL_OBJECT`
 - `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
+- `TRIGGERS_ON_SQL_OBJECT`
 - `WRITES_SQL_OBJECT`
 
 ### Required Evidence Keys
@@ -128,6 +132,7 @@ These edge types represent application-to-application or application-to-database
 - `service_configuration`
 - `sql_reference`
 - `sql_schema_reference`
+- `sql_trigger`
 
 ## Parser IDs
 
@@ -177,7 +182,7 @@ These edge types represent application-to-application or application-to-database
 | Profile | Edge Types | Description |
 | --- | --- | --- |
 | `all` | `all` | Traverse all edge types. |
-| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
+| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
 | `structural` | `CONTAINS_FILE`, `CONTAINS_PROJECT`, `DECLARES_BUILD_CONFIG`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `DECLARES_PACKAGE`, `DECLARES_ROUTE`, `DECLARES_SERVICE`, `DECLARES_SOLUTION`, `DECLARES_SYMBOL`, `DECLARES_WORKSPACE`, `DEFINES`, `EXPOSES_ROUTE`, `RUNS_CONTAINER` | Traverse containment and declaration edges. |
 
 ## Unresolved Classifications

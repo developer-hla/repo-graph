@@ -340,7 +340,7 @@ discarding relationships discovered from the scanned sources.
 
 Future parser slices should add:
 
-- deeper database metadata such as triggers and computed dependencies
+- deeper database metadata such as computed dependencies and richer trigger body impact
 - route/function/query context so endpoint impact paths do not stop at file
   ownership
 - messaging publish/consume boundaries for queues, topics, and event contracts
