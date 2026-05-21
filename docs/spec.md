@@ -327,8 +327,7 @@ discarding relationships discovered from the scanned sources.
 
 Future parser slices should add:
 
-- SQL writes, schema dependencies, triggers, and richer SQL object impact
-  paths
+- SQL schema dependencies, triggers, and richer SQL object impact paths
 - route/function/query context so endpoint impact paths do not stop at file
   ownership
 - messaging publish/consume boundaries for queues, topics, and event contracts

@@ -4,3 +4,4 @@ CREATE TABLE dbo.things (
 
 CREATE PROCEDURE dbo.get_thing_by_id AS
 SELECT * FROM dbo.things;
+UPDATE dbo.things SET id = id;

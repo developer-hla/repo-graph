@@ -49,7 +49,7 @@ intended shape and meaning of the graph.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -71,11 +71,13 @@ Application-to-application and application-to-database interaction edges should
 use regular evidence fields. The canonical list lives in
 `repo_graph.vocabulary.INTERACTION_EDGE_TYPES` and currently includes
 `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
-`CALLS_SQL`, and `READS_SQL_OBJECT`.
+`CALLS_SQL`, `READS_SQL_OBJECT`, and `WRITES_SQL_OBJECT`.
 
 Database-to-database dependencies use the same interaction contract. For
 example, a stored procedure or view that reads a table should emit
 `READS_SQL_OBJECT` from the SQL object entity to the referenced SQL object.
+SQL statements that mutate tables should emit `WRITES_SQL_OBJECT` so impact
+analysis can distinguish readers from writers.
 
 - `target_boundary`: `application` or `database`
 - `dependency_scope`: `runtime`, `configuration`, or `deployment`
@@ -145,7 +147,10 @@ agents should expose to users.
   URL settings or WCF endpoints.
 - `DEFINES`: SQL file to SQL object declaration.
 - `CALLS_SQL`: file to stored procedure target.
-- `READS_SQL_OBJECT`: file to table, view, function, or procedure target.
+- `READS_SQL_OBJECT`: file or SQL object to table, view, function, or
+  procedure target being read.
+- `WRITES_SQL_OBJECT`: file or SQL object to table, view, function, or
+  procedure target being inserted, updated, deleted, merged, or truncated.
 
 Scanner-derived reference edges include evidence in `properties`, such as
 `raw_target`, `normalized_target`, dependency type, ecosystem, package version,
@@ -285,8 +290,8 @@ The Neo4j loader stores graph exports with a small public-safe model:
 - `RepoGraphTarget`: one node per unresolved target string.
 - `(:RepoGraphGraph)-[:INCLUDES_SOURCE]->(:RepoGraphSource)` records the
   source set used by the loaded graph.
-- Relationships use sanitized edge types such as `IMPORTS`, `CALLS_SQL`, and
-  `READS_SQL_OBJECT`.
+- Relationships use sanitized edge types such as `IMPORTS`, `CALLS_SQL`,
+  `READS_SQL_OBJECT`, and `WRITES_SQL_OBJECT`.
 
 Each loaded node and relationship keeps the original graph fields as
 properties. Nested `properties` maps are preserved as `properties_json` and

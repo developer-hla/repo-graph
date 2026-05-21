@@ -57,6 +57,7 @@ EDGE_TYPES = (
     "ROUTES_TO_SERVICE",
     "RUNS_CONTAINER",
     "SELECTS_DEPLOYMENT",
+    "WRITES_SQL_OBJECT",
 )
 INTERACTION_EDGE_TYPES = frozenset(
     {
@@ -66,6 +67,7 @@ INTERACTION_EDGE_TYPES = frozenset(
         "CONFIGURES_SERVICE",
         "READS_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
+        "WRITES_SQL_OBJECT",
     }
 )
 INTERACTION_EVIDENCE_KEYS = (
@@ -143,6 +145,7 @@ IMPACT_EDGE_TYPES = frozenset(
         "READS_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "SELECTS_DEPLOYMENT",
+        "WRITES_SQL_OBJECT",
     }
 )
 STRUCTURAL_EDGE_TYPES = frozenset(
@@ -185,6 +188,7 @@ MISSING_SOURCE_EDGE_TYPES = frozenset(
         "DEPENDS_ON_PROJECT",
         "READS_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
+        "WRITES_SQL_OBJECT",
     }
 )
 PARSER_GAP_EDGE_TYPES = frozenset(
@@ -272,6 +276,12 @@ EDGE_TYPE_COVERAGE_WARNING_RULES = (
         "READS_SQL_OBJECT",
         "unresolved_sql_reads",
         "This source has unresolved SQL object reads.",
+        "warning",
+    ),
+    CoverageWarningRule(
+        "WRITES_SQL_OBJECT",
+        "unresolved_sql_writes",
+        "This source has unresolved SQL object writes.",
         "warning",
     ),
     CoverageWarningRule(

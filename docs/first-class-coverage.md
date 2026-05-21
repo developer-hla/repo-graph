@@ -35,6 +35,7 @@ evidence.
 | Packages and project structure | `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, containment/declaration edges | Covered for supported package and project manifests. |
 | Application-to-database calls | `CALLS_SQL` | Covered for application stored procedure calls in supported languages. |
 | Database object reads | `READS_SQL_OBJECT` | Covered for SQL object reads from SQL definitions and application SQL snippets. |
+| Database object writes | `WRITES_SQL_OBJECT` | Covered for inserts, updates, deletes, merges, truncates, and same-line `SELECT INTO` statements in SQL definitions and application SQL snippets. |
 | SQL-to-SQL execution | `CALLS_SQL` from SQL objects | Covered for stored procedure execution discovered inside SQL definitions. |
 
 ## Gaps To Promote
@@ -44,7 +45,6 @@ shortcuts.
 
 | Priority | Area | Why it matters | Candidate vocabulary |
 | --- | --- | --- | --- |
-| High | SQL writes and mutations | Changing a table affects code that inserts, updates, deletes, merges, or truncates it. Today these can look like generic reads. | `WRITES_SQL_OBJECT`; evidence: `sql_operation`, `database_object_type`. |
 | High | SQL schema dependencies | Foreign keys, schema-bound views, constraints, and computed objects create database blast radius even when no runtime query calls them. | `REFERENCES_SQL_OBJECT`; add `schema` as an interaction/dependency scope if used. |
 | High | Route/function/query context | A table or stored procedure impact path is more useful when it reaches a handler or endpoint, not only a file. | `HANDLES_ROUTE`, `CALLS_SYMBOL`, or narrower call-context edges after design review. |
 | High | Messaging and event streams | Services often depend through queues, topics, and event contracts instead of HTTP. Refactors need publisher and consumer impact. | Entities: `message_topic`, `message_queue`, `message_contract`; edges: `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`. |
@@ -56,21 +56,18 @@ shortcuts.
 
 ## Recommended Slice Order
 
-1. Split SQL reads from SQL writes.
-   Add `WRITES_SQL_OBJECT`, classify `INSERT`, `UPDATE`, `DELETE`, `MERGE`,
-   and `TRUNCATE`, and keep `SELECT`/`FROM`/`JOIN` as reads.
-2. Add SQL schema dependency extraction.
+1. Add SQL schema dependency extraction.
    Start with foreign keys and `REFERENCES` clauses, then evaluate views,
    triggers, and schema-bound objects.
-3. Improve execution context.
+2. Improve execution context.
    Attach SQL and service calls to functions or route handlers where parsers
    can do this safely, then expose route-to-query impact paths.
-4. Add messaging boundaries.
+3. Add messaging boundaries.
    Keep Kafka, RabbitMQ, Azure Service Bus, SQS, and similar client libraries as
    evidence for generic publish/consume graph facts.
-5. Add storage and transfer boundaries.
+4. Add storage and transfer boundaries.
    Model shared storage as a dependency target, not as one edge type per SDK.
-6. Add cache and scheduled-job slices when examples and stable naming rules are
+5. Add cache and scheduled-job slices when examples and stable naming rules are
    clear.
 
 ## Review Questions For New Parsers

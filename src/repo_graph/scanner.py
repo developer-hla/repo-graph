@@ -111,9 +111,35 @@ SQL_OBJECT_KIND_RE = re.compile(
     re.IGNORECASE,
 )
 SQL_EXEC_RE = re.compile(r"\bEXEC(?:UTE)?\s+([\[\]\w.]+)", re.IGNORECASE)
-SQL_TABLE_REF_RE = re.compile(
-    r"\b(?P<operation>FROM|JOIN|UPDATE|INTO)\s+(?P<target>[\[\]\w.]+)(?![\w.]|\s+import\b)",
+SQL_READ_REF_RE = re.compile(
+    r"\b(?P<operation>FROM|JOIN)\s+(?P<target>[\[\]\w.]+)(?![\w.]|\s+import\b)",
     re.IGNORECASE,
+)
+SQL_WRITE_REF_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("INSERT", re.compile(r"\bINSERT\s+(?:INTO\s+)?(?P<target>[\[\]\w.]+)(?![\w.])", re.IGNORECASE)),
+    ("UPDATE", re.compile(r"\bUPDATE\s+(?P<target>[\[\]\w.]+)(?![\w.])", re.IGNORECASE)),
+    ("DELETE", re.compile(r"\bDELETE\s+FROM\s+(?P<target>[\[\]\w.]+)(?![\w.])", re.IGNORECASE)),
+    ("MERGE", re.compile(r"\bMERGE\s+(?:INTO\s+)?(?P<target>[\[\]\w.]+)(?![\w.])", re.IGNORECASE)),
+    ("TRUNCATE", re.compile(r"\bTRUNCATE\s+TABLE\s+(?P<target>[\[\]\w.]+)(?![\w.])", re.IGNORECASE)),
+    ("SELECT_INTO", re.compile(r"\bSELECT\b.*?\bINTO\s+(?P<target>[\[\]\w.]+)(?![\w.])", re.IGNORECASE)),
+)
+SQL_REFERENCE_STOPWORDS = frozenset(
+    {
+        "ACTION",
+        "AS",
+        "CASCADE",
+        "DEFAULT",
+        "FROM",
+        "NO",
+        "NULL",
+        "ON",
+        "OUTPUT",
+        "SELECT",
+        "SET",
+        "TABLE",
+        "VALUES",
+        "WHERE",
+    }
 )
 SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE)
 
@@ -1303,7 +1329,8 @@ class SqlExtractor:
             if definition_result.entities:
                 current_sql_entity = definition_result.entities[-1]
             result.edges.extend(sql_call_edges(context, line, line_number, from_entity=current_sql_entity))
-            result.edges.extend(sql_object_reference_edges(context, line, line_number, from_entity=current_sql_entity))
+            result.edges.extend(sql_object_read_edges(context, line, line_number, from_entity=current_sql_entity))
+            result.edges.extend(sql_object_write_edges(context, line, line_number, from_entity=current_sql_entity))
         return result
 
 
@@ -1596,7 +1623,8 @@ def scan_sql_references(context: FileScanContext, content: str, from_entity: Ent
     result = ScanResult()
     for line_number, line in enumerate(content.splitlines(), start=1):
         result.edges.extend(sql_call_edges(context, line, line_number, from_entity=from_entity))
-        result.edges.extend(sql_object_reference_edges(context, line, line_number, from_entity=from_entity))
+        result.edges.extend(sql_object_read_edges(context, line, line_number, from_entity=from_entity))
+        result.edges.extend(sql_object_write_edges(context, line, line_number, from_entity=from_entity))
     return result
 
 
@@ -1657,7 +1685,7 @@ def sql_call_edges(
     ]
 
 
-def sql_object_reference_edges(
+def sql_object_read_edges(
     context: FileScanContext,
     line: str,
     line_number: int,
@@ -1676,7 +1704,30 @@ def sql_object_reference_edges(
             line_number=line_number,
             properties=sql_interaction_properties(match.group("target"), match.group("operation"), "sql_object"),
         )
-        for match in SQL_TABLE_REF_RE.finditer(line)
+        for match in SQL_READ_REF_RE.finditer(line)
+    ]
+
+
+def sql_object_write_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
+    source_entity = from_entity or context.file_entity
+    return [
+        unresolved_edge(
+            source_entity,
+            normalize_sql_name(match.group("target")),
+            "WRITES_SQL_OBJECT",
+            context.source.name,
+            context.rel_path,
+            "sql_reference",
+            to_type="sql_object",
+            line_number=line_number,
+            properties=sql_interaction_properties(match.group("target"), operation, "sql_object"),
+        )
+        for operation, match in sql_write_reference_matches(line)
     ]
 
 
@@ -1691,6 +1742,17 @@ def sql_interaction_properties(raw_target: str, operation: str, database_object_
         sql_operation=operation.upper(),
         database_object_type=database_object_type,
     )
+
+
+def sql_write_reference_matches(line: str) -> Iterable[tuple[str, re.Match[str]]]:
+    for operation, pattern in SQL_WRITE_REF_PATTERNS:
+        for match in pattern.finditer(line):
+            if sql_reference_target_is_valid(match.group("target")):
+                yield operation, match
+
+
+def sql_reference_target_is_valid(target: str) -> bool:
+    return normalize_sql_name(target).upper() not in SQL_REFERENCE_STOPWORDS
 
 
 def resolved_edge(
@@ -2138,7 +2200,11 @@ def python_sql_call_edges(context: FileScanContext, call: ast.Call) -> list[Edge
     raw_sql = python_string_arg(call, 0)
     if not raw_sql:
         return []
-    return [*sql_call_edges(context, raw_sql, call.lineno), *sql_object_reference_edges(context, raw_sql, call.lineno)]
+    return [
+        *sql_call_edges(context, raw_sql, call.lineno),
+        *sql_object_read_edges(context, raw_sql, call.lineno),
+        *sql_object_write_edges(context, raw_sql, call.lineno),
+    ]
 
 
 def python_attribute_name(node: ast.AST) -> str | None:

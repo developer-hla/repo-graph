@@ -64,9 +64,9 @@ complete until code, examples, tests, and generated references all agree.
   `docs/first-class-coverage.md` as the checklist.
 - Use interaction evidence for app-to-app and app-to-database relationships:
   `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
-  `CALLS_SQL`, and `READS_SQL_OBJECT`. Do not use interaction evidence for
-  containment, declaration, or ownership edges such as `CONTAINS_FILE`,
-  `DECLARES_SYMBOL`, or `DEFINES`.
+  `CALLS_SQL`, `READS_SQL_OBJECT`, and `WRITES_SQL_OBJECT`. Do not use
+  interaction evidence for containment, declaration, or ownership edges such as
+  `CONTAINS_FILE`, `DECLARES_SYMBOL`, or `DEFINES`.
 - Keep extractor failures local by returning `ScanResult.errors` instead of
   stopping the whole graph build.
 

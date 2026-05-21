@@ -30,9 +30,11 @@ const sql = 'EXEC dbo.get_things';
                 """
 CREATE PROCEDURE dbo.get_things AS
 SELECT * FROM dbo.things
+UPDATE dbo.things SET id = id
 GO
 SELECT * FROM dbo.audit_log
 CREATE TABLE dbo.things (id int)
+ALTER TABLE dbo.things ADD CONSTRAINT fk_things FOREIGN KEY (id) REFERENCES dbo.other(id) ON UPDATE CASCADE
 """,
                 encoding="utf-8",
             )
@@ -74,6 +76,20 @@ sources:
                 for edge in graph_data["edges"]
             )
         )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "WRITES_SQL_OBJECT"
+                and edge["from_type"] == "stored_procedure"
+                and edge["from_name"] == "dbo.get_things"
+                and edge["to_name"] == "dbo.things"
+                and edge["resolved"]
+                and edge["properties"].get("target_boundary") == "database"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("interaction_kind") == "sql_reference"
+                and edge["properties"].get("sql_operation") == "UPDATE"
+                for edge in graph_data["edges"]
+            )
+        )
         self.assertFalse(
             any(
                 edge["edge_type"] == "READS_SQL_OBJECT"
@@ -81,6 +97,68 @@ sources:
                 and edge["to_name"] == "dbo.audit_log"
                 for edge in graph_data["edges"]
             )
+        )
+        self.assertFalse(
+            any(
+                edge["edge_type"] == "WRITES_SQL_OBJECT" and edge["to_name"] == "cascade"
+                for edge in graph_data["edges"]
+            )
+        )
+
+    def test_build_graph_discovers_sql_write_operations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "database"
+            repo.mkdir()
+            (repo / "schema.sql").write_text(
+                """
+CREATE TABLE dbo.things (id int)
+CREATE TABLE dbo.archive (id int)
+CREATE TABLE dbo.copy (id int)
+CREATE PROCEDURE dbo.mutate_things AS
+INSERT INTO dbo.things (id) VALUES (1)
+DELETE FROM dbo.things WHERE id = 1
+MERGE INTO dbo.things USING dbo.archive ON 1 = 1 WHEN MATCHED THEN UPDATE SET id = 1
+TRUNCATE TABLE dbo.archive
+SELECT id INTO dbo.copy FROM dbo.things
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: database
+    path: database
+""",
+                encoding="utf-8",
+            )
+
+            graph = build_graph(load_config(config_path))
+            graph_data = graph.to_dict()
+
+        write_edges = [
+            edge
+            for edge in graph_data["edges"]
+            if edge["edge_type"] == "WRITES_SQL_OBJECT" and edge["from_name"] == "dbo.mutate_things"
+        ]
+        operations_by_target = {
+            (edge["to_name"], edge["properties"].get("sql_operation"))
+            for edge in write_edges
+            if edge["resolved"] and edge["properties"].get("target_boundary") == "database"
+        }
+
+        self.assertEqual(
+            operations_by_target,
+            {
+                ("dbo.things", "INSERT"),
+                ("dbo.things", "DELETE"),
+                ("dbo.things", "MERGE"),
+                ("dbo.archive", "TRUNCATE"),
+                ("dbo.copy", "SELECT_INTO"),
+            },
         )
 
     def test_build_graph_resolves_cross_source_code_relationships(self) -> None:
@@ -508,6 +586,7 @@ async def read_thing(thing_id: str) -> dict[str, str]:
     Worker().fetch_inventory(thing_id)
     query = text("EXEC dbo.get_thing_by_id")
     rows = text("SELECT * FROM dbo.things")
+    write = text("INSERT INTO dbo.things (id) VALUES (1)")
     return format_thing(str(query))
 """,
                 encoding="utf-8",
@@ -619,6 +698,18 @@ sources:
                 and edge["properties"].get("target_boundary") == "database"
                 and edge["properties"].get("dependency_scope") == "runtime"
                 and edge["properties"].get("sql_operation") == "FROM"
+                and edge["properties"].get("database_object_type") == "sql_object"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "WRITES_SQL_OBJECT"
+                and edge["to_name"] == "dbo.things"
+                and edge["resolved"]
+                and edge["properties"].get("target_boundary") == "database"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                and edge["properties"].get("sql_operation") == "INSERT"
                 and edge["properties"].get("database_object_type") == "sql_object"
                 for edge in graph_data["edges"]
             )
