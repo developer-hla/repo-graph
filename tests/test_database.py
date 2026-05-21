@@ -4,17 +4,63 @@ import unittest
 
 from repo_graph.database import (
     CURRENT_DATABASE_SCHEMA_STATE,
+    POSTGRES_METADATA_PARSER,
     SQLSERVER_METADATA_PARSER,
+    DatabaseConnectorUnavailable,
+    DatabaseSourceRequest,
+    PostgresDependencyRow,
+    PostgresForeignKeyRow,
+    PostgresMetadata,
+    PostgresObjectRow,
     SqlServerDependencyRow,
     SqlServerForeignKeyRow,
     SqlServerMetadata,
     SqlServerObjectRow,
+    database_connector_unavailable_message,
+    database_metadata_adapter,
+    graph_from_database_metadata,
+    graph_from_database_source,
+    graph_from_postgres_metadata,
     graph_from_sqlserver_metadata,
+    supported_database_engines,
 )
 from repo_graph.graph import Edge, Graph
 
 
 class SqlServerMetadataGraphTests(unittest.TestCase):
+    def test_adapter_registry_dispatches_supported_engines(self) -> None:
+        self.assertEqual(supported_database_engines(), frozenset({"postgres", "sqlserver"}))
+        self.assertEqual(database_metadata_adapter("sqlserver").metadata_parser, SQLSERVER_METADATA_PARSER)
+        self.assertEqual(database_metadata_adapter("postgres").metadata_parser, POSTGRES_METADATA_PARSER)
+
+        facts = graph_from_database_metadata(
+            "current-db",
+            "sqlserver",
+            SqlServerMetadata(tables=(SqlServerObjectRow("dbo", "Customers"),)),
+        )
+
+        self.assertEqual(facts.entities[0].name, "dbo.Customers")
+
+    def test_live_database_connector_reports_safe_unavailable_error(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-db",
+            engine="postgres",
+            connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
+        )
+
+        with self.assertRaises(DatabaseConnectorUnavailable) as error:
+            graph_from_database_source(request)
+
+        self.assertIn("current-db", str(error.exception))
+        self.assertIn("postgres", str(error.exception))
+        self.assertIn("no live connector enabled yet", str(error.exception))
+        self.assertNotIn("REPO_GRAPH_EXAMPLE_POSTGRES_URL", str(error.exception))
+        self.assertEqual(
+            database_connector_unavailable_message("current-db", "postgres"),
+            "Database source 'current-db' uses engine 'postgres', which has a metadata adapter "
+            "but no live connector enabled yet.",
+        )
+
     def test_emits_current_database_sql_entities(self) -> None:
         facts = graph_from_sqlserver_metadata(
             "current-db",
@@ -250,6 +296,62 @@ class SqlServerMetadataGraphTests(unittest.TestCase):
         self.assertEqual(edge.properties["dependency_scope"], "runtime")
         self.assertEqual(edge.properties["interaction_kind"], "sql_reference")
         self.assertEqual(edge.properties["sql_operation"], "EXECUTE")
+
+    def test_postgres_metadata_emits_current_database_entities_and_edges(self) -> None:
+        facts = graph_from_postgres_metadata(
+            "current-pg",
+            PostgresMetadata(
+                tables=(
+                    PostgresObjectRow("public", "customers"),
+                    PostgresObjectRow("public", "orders"),
+                ),
+                views=(PostgresObjectRow("reporting", "active_customers"),),
+                materialized_views=(PostgresObjectRow("reporting", "customer_rollup"),),
+                functions=(PostgresObjectRow("public", "format_customer"),),
+                procedures=(PostgresObjectRow("public", "refresh_customer"),),
+                foreign_keys=(
+                    PostgresForeignKeyRow(
+                        schema="public",
+                        table="orders",
+                        referenced_schema="public",
+                        referenced_table="customers",
+                        name="orders_customer_id_fkey",
+                    ),
+                ),
+                dependencies=(
+                    PostgresDependencyRow(
+                        from_schema="public",
+                        from_name="refresh_customer",
+                        from_type="procedure",
+                        to_schema="public",
+                        to_name="format_customer",
+                        to_type="function",
+                        dependency_type="execute",
+                    ),
+                ),
+            ),
+        )
+
+        entities_by_name = {entity.name: entity for entity in facts.entities}
+        edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
+
+        self.assertEqual(facts.errors, [])
+        self.assertEqual(entities_by_name["public.customers"].entity_type, "sql_table")
+        self.assertEqual(entities_by_name["reporting.active_customers"].entity_type, "sql_view")
+        self.assertEqual(entities_by_name["reporting.customer_rollup"].entity_type, "sql_view")
+        self.assertEqual(entities_by_name["public.refresh_customer"].entity_type, "stored_procedure")
+        self.assertEqual(entities_by_name["public.format_customer"].entity_type, "sql_function")
+        self.assertEqual(entities_by_name["public.customers"].properties["database_engine"], "postgres")
+        self.assertEqual(entities_by_name["public.customers"].properties["metadata_source"], "pg_class")
+        self.assertEqual(
+            entities_by_name["reporting.customer_rollup"].properties["postgres_relkind"],
+            "materialized_view",
+        )
+        self.assertEqual(edges_by_operation["FOREIGN_KEY"].parser, POSTGRES_METADATA_PARSER)
+        self.assertEqual(edges_by_operation["FOREIGN_KEY"].properties["metadata_source"], "pg_constraint")
+        self.assertEqual(edges_by_operation["FOREIGN_KEY"].properties["database_engine"], "postgres")
+        self.assertEqual(edges_by_operation["EXECUTE"].edge_type, "CALLS_SQL")
+        self.assertEqual(edges_by_operation["EXECUTE"].to_type, "sql_function")
 
 
 def single_edge(edges: list[Edge]) -> Edge:

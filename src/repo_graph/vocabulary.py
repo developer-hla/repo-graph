@@ -123,6 +123,7 @@ PARSER_IDS = (
     "package_json",
     "packages_config",
     "pnpm_workspace",
+    "postgres_metadata",
     "project_discovery",
     "pyproject",
     "python_http",

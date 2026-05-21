@@ -149,14 +149,35 @@ name: test
 sources:
   - type: database
     name: current-db
-    engine: postgres
-    connection_env: REPO_GRAPH_EXAMPLE_POSTGRES_URL
+    engine: mysql
+    connection_env: REPO_GRAPH_EXAMPLE_MYSQL_URL
 """,
                 encoding="utf-8",
             )
 
             with self.assertRaisesRegex(ValueError, "unsupported engine"):
                 load_config(config_path)
+
+    def test_load_config_reads_postgres_database_source_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+sources:
+  - type: database
+    name: current-pg
+    engine: postgres
+    connection_env: REPO_GRAPH_EXAMPLE_POSTGRES_URL
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.sources[0].source_type, "database")
+        self.assertEqual(config.sources[0].engine, "postgres")
+        self.assertEqual(config.sources[0].connection_env, "REPO_GRAPH_EXAMPLE_POSTGRES_URL")
 
     def test_load_config_reads_dependency_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

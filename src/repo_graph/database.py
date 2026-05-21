@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from repo_graph.graph import Edge, Entity, normalize_key, resolution_entity_types
 
 SQLSERVER_METADATA_PARSER = "sqlserver_metadata"
+POSTGRES_METADATA_PARSER = "postgres_metadata"
 SQLSERVER_ENGINE = "sqlserver"
+POSTGRES_ENGINE = "postgres"
 CURRENT_DATABASE_SCHEMA_STATE = "current_database"
 
 SQLSERVER_OBJECT_METADATA_SOURCES = {
@@ -18,10 +20,19 @@ SQLSERVER_OBJECT_METADATA_SOURCES = {
     "sql_function": "sys.objects",
 }
 
-SQLSERVER_OBJECT_TYPE_ALIASES = {
+POSTGRES_OBJECT_METADATA_SOURCES = {
+    "sql_table": "pg_class",
+    "sql_view": "pg_class",
+    "stored_procedure": "pg_proc",
+    "sql_function": "pg_proc",
+}
+
+DATABASE_OBJECT_TYPE_ALIASES = {
     "function": "sql_function",
     "fn": "sql_function",
     "if": "sql_function",
+    "matview": "sql_view",
+    "materialized_view": "sql_view",
     "p": "stored_procedure",
     "proc": "stored_procedure",
     "procedure": "stored_procedure",
@@ -38,6 +49,8 @@ SQLSERVER_OBJECT_TYPE_ALIASES = {
     "view": "sql_view",
 }
 
+SQLSERVER_OBJECT_TYPE_ALIASES = DATABASE_OBJECT_TYPE_ALIASES
+
 EXECUTE_DEPENDENCY_TYPES = frozenset(
     {
         "call",
@@ -48,6 +61,21 @@ EXECUTE_DEPENDENCY_TYPES = frozenset(
         "procedure_execution",
     }
 )
+
+
+class DatabaseMetadataAdapter(Protocol):
+    """Converts engine-specific metadata rows into graph facts."""
+
+    engine: str
+    metadata_parser: str
+
+    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseGraphFacts:
+        """Convert engine metadata rows into RepoGraph facts."""
+        ...
+
+
+class DatabaseConnectorUnavailable(RuntimeError):
+    """Raised when a database engine has no live connector enabled."""
 
 
 @dataclass(frozen=True)
@@ -95,6 +123,52 @@ class SqlServerMetadata:
     dependencies: tuple[SqlServerDependencyRow, ...] = ()
 
 
+@dataclass(frozen=True)
+class PostgresObjectRow:
+    """One object row from PostgreSQL catalog metadata."""
+
+    schema: str
+    name: str
+
+
+@dataclass(frozen=True)
+class PostgresForeignKeyRow:
+    """One foreign key relationship from PostgreSQL catalog metadata."""
+
+    schema: str
+    table: str
+    referenced_schema: str
+    referenced_table: str
+    name: str | None = None
+
+
+@dataclass(frozen=True)
+class PostgresDependencyRow:
+    """One object dependency from PostgreSQL catalog metadata."""
+
+    from_schema: str
+    from_name: str
+    to_schema: str
+    to_name: str
+    from_type: str = "sql_object"
+    to_type: str = "sql_object"
+    dependency_type: str = "object_dependency"
+    name: str | None = None
+
+
+@dataclass(frozen=True)
+class PostgresMetadata:
+    """Typed PostgreSQL metadata rows used by the pure adapter."""
+
+    tables: tuple[PostgresObjectRow, ...] = ()
+    views: tuple[PostgresObjectRow, ...] = ()
+    materialized_views: tuple[PostgresObjectRow, ...] = ()
+    functions: tuple[PostgresObjectRow, ...] = ()
+    procedures: tuple[PostgresObjectRow, ...] = ()
+    foreign_keys: tuple[PostgresForeignKeyRow, ...] = ()
+    dependencies: tuple[PostgresDependencyRow, ...] = ()
+
+
 @dataclass
 class DatabaseGraphFacts:
     """Graph facts emitted from a database metadata source."""
@@ -102,6 +176,19 @@ class DatabaseGraphFacts:
     entities: list[Entity] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DatabaseSourceRequest:
+    """Database source settings needed by a live metadata connector."""
+
+    source_name: str
+    engine: str
+    connection_env: str
+    schemas: tuple[str, ...] = ()
+    include_object_types: tuple[str, ...] = ()
+    query_timeout_seconds: int | None = None
+    max_metadata_rows: int | None = None
 
 
 @dataclass(frozen=True)
@@ -137,6 +224,88 @@ class EntityMatch:
     @property
     def is_ambiguous(self) -> bool:
         return len(self.candidates) > 1
+
+
+@dataclass(frozen=True)
+class SqlServerMetadataAdapter:
+    """Pure SQL Server metadata adapter."""
+
+    engine: str = SQLSERVER_ENGINE
+    metadata_parser: str = SQLSERVER_METADATA_PARSER
+
+    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseGraphFacts:
+        if not isinstance(metadata, SqlServerMetadata):
+            raise TypeError("SQL Server metadata adapter requires SqlServerMetadata.")
+        return graph_from_sqlserver_metadata(source_name, metadata)
+
+
+@dataclass(frozen=True)
+class PostgresMetadataAdapter:
+    """Pure PostgreSQL metadata adapter."""
+
+    engine: str = POSTGRES_ENGINE
+    metadata_parser: str = POSTGRES_METADATA_PARSER
+
+    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseGraphFacts:
+        if not isinstance(metadata, PostgresMetadata):
+            raise TypeError("PostgreSQL metadata adapter requires PostgresMetadata.")
+        return graph_from_postgres_metadata(source_name, metadata)
+
+
+DATABASE_METADATA_ADAPTERS: dict[str, DatabaseMetadataAdapter] = {
+    SQLSERVER_ENGINE: SqlServerMetadataAdapter(),
+    POSTGRES_ENGINE: PostgresMetadataAdapter(),
+}
+
+
+def supported_database_engines() -> frozenset[str]:
+    """Return database engines with a metadata adapter contract."""
+
+    return frozenset(DATABASE_METADATA_ADAPTERS)
+
+
+def database_metadata_adapter(engine: str) -> DatabaseMetadataAdapter:
+    """Return the metadata adapter for a supported database engine."""
+
+    normalized = normalize_database_engine(engine)
+    adapter = DATABASE_METADATA_ADAPTERS.get(normalized)
+    if adapter is None:
+        raise ValueError(f"Unsupported database engine: {engine}")
+    return adapter
+
+
+def graph_from_database_metadata(source_name: str, engine: str, metadata: object) -> DatabaseGraphFacts:
+    """Convert metadata rows for any supported database engine into graph facts."""
+
+    return database_metadata_adapter(engine).graph_from_metadata(source_name, metadata)
+
+
+def database_connector_unavailable_message(source_name: str, engine: str | None) -> str:
+    """Return the standard safe error for a database source without a live connector."""
+
+    source_name = required_text(source_name, "source_name")
+    if engine:
+        normalized = normalize_database_engine(engine)
+        database_metadata_adapter(normalized)
+        return (
+            f"Database source '{source_name}' uses engine '{normalized}', which has a metadata adapter "
+            "but no live connector enabled yet."
+        )
+    return f"Database source '{source_name}' is missing a database engine."
+
+
+def graph_from_database_source(_request: DatabaseSourceRequest) -> DatabaseGraphFacts:
+    """Live database connector entry point.
+
+    The registry and request contract are in place, but no connector opens a
+    real database connection yet.
+    """
+
+    raise DatabaseConnectorUnavailable(database_connector_unavailable_message(_request.source_name, _request.engine))
+
+
+def normalize_database_engine(engine: str) -> str:
+    return required_text(engine, "database engine").lower()
 
 
 def graph_from_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata) -> DatabaseGraphFacts:
@@ -189,7 +358,90 @@ def sqlserver_object_entity(
     row: SqlServerObjectRow,
     metadata_source: str,
 ) -> Entity:
-    full_name = sqlserver_full_name(row.schema, row.name)
+    return database_object_entity(
+        source_name=source_name,
+        database_engine=SQLSERVER_ENGINE,
+        entity_type=entity_type,
+        schema=row.schema,
+        name=row.name,
+        metadata_source=metadata_source,
+    )
+
+
+def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -> DatabaseGraphFacts:
+    """Convert PostgreSQL catalog metadata rows into RepoGraph facts."""
+
+    source_name = required_text(source_name, "source_name")
+    result = DatabaseGraphFacts()
+
+    entities_by_id: dict[str, Entity] = {}
+    for entity_type, rows, metadata_source, extra_properties in postgres_object_groups(metadata):
+        for row in rows:
+            add_entity(
+                entities_by_id,
+                postgres_object_entity(
+                    source_name=source_name,
+                    entity_type=entity_type,
+                    row=row,
+                    metadata_source=metadata_source,
+                    extra_properties=extra_properties,
+                ),
+            )
+
+    result.entities = list(entities_by_id.values())
+    entity_index = build_entity_index(result.entities)
+
+    for row in metadata.foreign_keys:
+        edge_result = postgres_foreign_key_edge(source_name, row, entity_index)
+        append_edge_result(result, edge_result)
+
+    for row in metadata.dependencies:
+        edge_result = postgres_dependency_edge(source_name, row, entity_index)
+        append_edge_result(result, edge_result)
+
+    return result
+
+
+def postgres_object_groups(
+    metadata: PostgresMetadata,
+) -> tuple[tuple[str, tuple[PostgresObjectRow, ...], str, dict[str, Any]], ...]:
+    return (
+        ("sql_table", metadata.tables, "pg_class", {}),
+        ("sql_view", metadata.views, "pg_class", {"postgres_relkind": "view"}),
+        ("sql_view", metadata.materialized_views, "pg_class", {"postgres_relkind": "materialized_view"}),
+        ("stored_procedure", metadata.procedures, "pg_proc", {}),
+        ("sql_function", metadata.functions, "pg_proc", {}),
+    )
+
+
+def postgres_object_entity(
+    source_name: str,
+    entity_type: str,
+    row: PostgresObjectRow,
+    metadata_source: str,
+    extra_properties: dict[str, Any],
+) -> Entity:
+    return database_object_entity(
+        source_name=source_name,
+        database_engine=POSTGRES_ENGINE,
+        entity_type=entity_type,
+        schema=row.schema,
+        name=row.name,
+        metadata_source=metadata_source,
+        extra_properties=extra_properties,
+    )
+
+
+def database_object_entity(
+    source_name: str,
+    database_engine: str,
+    entity_type: str,
+    schema: str,
+    name: str,
+    metadata_source: str,
+    extra_properties: dict[str, Any] | None = None,
+) -> Entity:
+    full_name = database_full_name(schema, name)
     schema, short_name = split_sql_name(full_name)
     return Entity(
         entity_type=entity_type,
@@ -201,8 +453,9 @@ def sqlserver_object_entity(
             "object_name": short_name,
             "full_name": full_name,
             "schema_state": CURRENT_DATABASE_SCHEMA_STATE,
-            "database_engine": SQLSERVER_ENGINE,
+            "database_engine": database_engine,
             "metadata_source": metadata_source,
+            **(extra_properties or {}),
         },
     )
 
@@ -218,6 +471,7 @@ def foreign_key_edge(
     if source_match.entity is None:
         return EdgeBuildResult(
             error=missing_source_error(
+                engine_label="SQL Server",
                 source_name=source_name,
                 metadata_source="sys.foreign_keys",
                 relationship_name="foreign key",
@@ -247,6 +501,7 @@ def foreign_key_edge(
 
 
 def missing_source_error(
+    engine_label: str,
     source_name: str,
     metadata_source: str,
     relationship_name: str,
@@ -255,10 +510,10 @@ def missing_source_error(
     candidates: tuple[Entity, ...],
 ) -> DatabaseGraphError:
     if candidates:
-        message = f"Ambiguous source entity for SQL Server {relationship_name}: {source_object}"
+        message = f"Ambiguous source entity for {engine_label} {relationship_name}: {source_object}"
         code = "ambiguous_source_entity"
     else:
-        message = f"Missing source entity for SQL Server {relationship_name}: {source_object}"
+        message = f"Missing source entity for {engine_label} {relationship_name}: {source_object}"
         code = "missing_source_entity"
     return DatabaseGraphError(
         code=code,
@@ -277,10 +532,11 @@ def dependency_edge(
 ) -> EdgeBuildResult:
     source_full_name = sqlserver_full_name(row.from_schema, row.from_name)
     target_full_name = sqlserver_full_name(row.to_schema, row.to_name)
-    source_match = find_entity(entity_index, graph_entity_type(row.from_type), source_full_name)
+    source_match = find_entity(entity_index, graph_entity_type(row.from_type, "SQL Server"), source_full_name)
     if source_match.entity is None:
         return EdgeBuildResult(
             error=missing_source_error(
+                engine_label="SQL Server",
                 source_name=source_name,
                 metadata_source="sys.sql_expression_dependencies",
                 relationship_name="dependency",
@@ -292,7 +548,7 @@ def dependency_edge(
 
     dependency_type = normalize_metadata_value(row.dependency_type)
     edge_type = "CALLS_SQL" if dependency_type in EXECUTE_DEPENDENCY_TYPES else "REFERENCES_SQL_OBJECT"
-    target_type = graph_entity_type(row.to_type)
+    target_type = graph_entity_type(row.to_type, "SQL Server")
     if edge_type == "CALLS_SQL" and target_type == "sql_object":
         target_type = "stored_procedure"
     return EdgeBuildResult(
@@ -323,6 +579,104 @@ def dependency_edge(
     )
 
 
+def postgres_foreign_key_edge(
+    source_name: str,
+    row: PostgresForeignKeyRow,
+    entity_index: dict[tuple[str | None, str], list[Entity]],
+) -> EdgeBuildResult:
+    source_full_name = postgres_full_name(row.schema, row.table)
+    target_full_name = postgres_full_name(row.referenced_schema, row.referenced_table)
+    source_match = find_entity(entity_index, "sql_table", source_full_name)
+    if source_match.entity is None:
+        return EdgeBuildResult(
+            error=missing_source_error(
+                engine_label="PostgreSQL",
+                source_name=source_name,
+                metadata_source="pg_constraint",
+                relationship_name="foreign key",
+                source_object=source_full_name,
+                target_object=target_full_name,
+                candidates=source_match.candidates,
+            )
+        )
+
+    return EdgeBuildResult(
+        edge=database_metadata_edge(
+            source_entity=source_match.entity,
+            target_match=find_entity(entity_index, "sql_table", target_full_name),
+            target_name=target_full_name,
+            target_type="sql_table",
+            edge_type="REFERENCES_SQL_OBJECT",
+            source_name=source_name,
+            operation="FOREIGN_KEY",
+            database_object_type="sql_object",
+            dependency_scope="schema",
+            interaction_kind="sql_schema_reference",
+            metadata_source="pg_constraint",
+            identity_key=metadata_identity_key("foreign_key", source_full_name, target_full_name, row.name),
+            database_engine=POSTGRES_ENGINE,
+            parser=POSTGRES_METADATA_PARSER,
+            extra_properties={"constraint_name": row.name},
+        )
+    )
+
+
+def postgres_dependency_edge(
+    source_name: str,
+    row: PostgresDependencyRow,
+    entity_index: dict[tuple[str | None, str], list[Entity]],
+) -> EdgeBuildResult:
+    source_full_name = postgres_full_name(row.from_schema, row.from_name)
+    target_full_name = postgres_full_name(row.to_schema, row.to_name)
+    source_match = find_entity(entity_index, graph_entity_type(row.from_type, "PostgreSQL"), source_full_name)
+    if source_match.entity is None:
+        return EdgeBuildResult(
+            error=missing_source_error(
+                engine_label="PostgreSQL",
+                source_name=source_name,
+                metadata_source="pg_depend",
+                relationship_name="dependency",
+                source_object=source_full_name,
+                target_object=target_full_name,
+                candidates=source_match.candidates,
+            )
+        )
+
+    dependency_type = normalize_metadata_value(row.dependency_type)
+    edge_type = "CALLS_SQL" if dependency_type in EXECUTE_DEPENDENCY_TYPES else "REFERENCES_SQL_OBJECT"
+    target_type = graph_entity_type(row.to_type, "PostgreSQL")
+    if edge_type == "CALLS_SQL" and target_type == "sql_object":
+        target_type = "stored_procedure"
+    return EdgeBuildResult(
+        edge=database_metadata_edge(
+            source_entity=source_match.entity,
+            target_match=find_entity(entity_index, target_type, target_full_name),
+            target_name=target_full_name,
+            target_type=target_type,
+            edge_type=edge_type,
+            source_name=source_name,
+            operation="EXECUTE" if edge_type == "CALLS_SQL" else "OBJECT_DEPENDENCY",
+            database_object_type=target_type,
+            dependency_scope="runtime" if edge_type == "CALLS_SQL" else "schema",
+            interaction_kind="sql_reference" if edge_type == "CALLS_SQL" else "sql_schema_reference",
+            metadata_source="pg_depend",
+            identity_key=metadata_identity_key(
+                "dependency",
+                source_full_name,
+                target_full_name,
+                row.dependency_type,
+                row.name,
+            ),
+            database_engine=POSTGRES_ENGINE,
+            parser=POSTGRES_METADATA_PARSER,
+            extra_properties={
+                "dependency_name": row.name,
+                "dependency_type": row.dependency_type,
+            },
+        )
+    )
+
+
 def sqlserver_metadata_edge(
     source_entity: Entity,
     target_match: EntityMatch,
@@ -338,14 +692,51 @@ def sqlserver_metadata_edge(
     identity_key: str,
     extra_properties: dict[str, Any] | None = None,
 ) -> Edge:
-    properties = sqlserver_interaction_properties(
-        target_name,
-        operation,
-        database_object_type,
-        dependency_scope,
-        interaction_kind,
-        metadata_source,
-        extra_properties or {},
+    return database_metadata_edge(
+        source_entity=source_entity,
+        target_match=target_match,
+        target_name=target_name,
+        target_type=target_type,
+        edge_type=edge_type,
+        source_name=source_name,
+        operation=operation,
+        database_object_type=database_object_type,
+        dependency_scope=dependency_scope,
+        interaction_kind=interaction_kind,
+        metadata_source=metadata_source,
+        identity_key=identity_key,
+        database_engine=SQLSERVER_ENGINE,
+        parser=SQLSERVER_METADATA_PARSER,
+        extra_properties=extra_properties,
+    )
+
+
+def database_metadata_edge(
+    source_entity: Entity,
+    target_match: EntityMatch,
+    target_name: str,
+    target_type: str,
+    edge_type: str,
+    source_name: str,
+    operation: str,
+    database_object_type: str,
+    dependency_scope: str,
+    interaction_kind: str,
+    metadata_source: str,
+    identity_key: str,
+    database_engine: str,
+    parser: str,
+    extra_properties: dict[str, Any] | None = None,
+) -> Edge:
+    properties = database_interaction_properties(
+        raw_target=target_name,
+        operation=operation,
+        database_object_type=database_object_type,
+        dependency_scope=dependency_scope,
+        interaction_kind=interaction_kind,
+        metadata_source=metadata_source,
+        database_engine=database_engine,
+        extra_properties=extra_properties or {},
     )
     if target_match.is_ambiguous:
         properties["resolution_status"] = "ambiguous"
@@ -363,7 +754,7 @@ def sqlserver_metadata_edge(
         source_name=source_name,
         identity_key=identity_key,
         confidence="high",
-        parser=SQLSERVER_METADATA_PARSER,
+        parser=parser,
         properties=properties,
     )
 
@@ -377,6 +768,28 @@ def sqlserver_interaction_properties(
     metadata_source: str,
     extra_properties: dict[str, Any],
 ) -> dict[str, Any]:
+    return database_interaction_properties(
+        raw_target=raw_target,
+        operation=operation,
+        database_object_type=database_object_type,
+        dependency_scope=dependency_scope,
+        interaction_kind=interaction_kind,
+        metadata_source=metadata_source,
+        database_engine=SQLSERVER_ENGINE,
+        extra_properties=extra_properties,
+    )
+
+
+def database_interaction_properties(
+    raw_target: str,
+    operation: str,
+    database_object_type: str,
+    dependency_scope: str,
+    interaction_kind: str,
+    metadata_source: str,
+    database_engine: str,
+    extra_properties: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "target_boundary": "database",
         "dependency_scope": dependency_scope,
@@ -387,7 +800,7 @@ def sqlserver_interaction_properties(
         "sql_operation": operation.upper(),
         "database_object_type": database_object_type,
         "schema_state": CURRENT_DATABASE_SCHEMA_STATE,
-        "database_engine": SQLSERVER_ENGINE,
+        "database_engine": database_engine,
         "metadata_source": metadata_source,
         **{key: value for key, value in extra_properties.items() if value is not None},
     }
@@ -460,17 +873,25 @@ def metadata_identity_key(*parts: str | None) -> str:
     return "|".join(required_text(part, "metadata identity value") for part in parts if part is not None)
 
 
-def graph_entity_type(value: str | None) -> str | None:
+def graph_entity_type(value: str | None, engine_label: str = "database") -> str | None:
     if value is None:
         return None
     normalized = normalize_metadata_value(value)
-    entity_type = SQLSERVER_OBJECT_TYPE_ALIASES.get(normalized)
+    entity_type = DATABASE_OBJECT_TYPE_ALIASES.get(normalized)
     if entity_type is None:
-        raise ValueError(f"Unsupported SQL Server object type: {value}")
+        raise ValueError(f"Unsupported {engine_label} object type: {value}")
     return entity_type
 
 
 def sqlserver_full_name(schema: str, name: str) -> str:
+    return database_full_name(schema, name)
+
+
+def postgres_full_name(schema: str, name: str) -> str:
+    return database_full_name(schema, name)
+
+
+def database_full_name(schema: str, name: str) -> str:
     normalized_name = normalize_sql_identifier(name)
     parts = tuple(part for part in normalized_name.split(".") if part)
     if len(parts) >= 2:

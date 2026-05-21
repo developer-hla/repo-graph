@@ -212,7 +212,7 @@ class SourceSyncTests(unittest.TestCase):
         self.assertFalse(payload[0]["ready"])
         self.assertIn("path_missing", payload[0]["problems"])
 
-    def test_inspect_sources_reports_database_source_as_planned(self) -> None:
+    def test_inspect_sources_reports_database_source_connector_status(self) -> None:
         root = Path("/repo")
         config = RepoGraphConfig(
             name="test",
@@ -238,12 +238,12 @@ class SourceSyncTests(unittest.TestCase):
         self.assertEqual(payload[0]["name"], "current-db")
         self.assertEqual(payload[0]["type"], "database")
         self.assertFalse(payload[0]["ready"])
-        self.assertIn("database_source_not_implemented", payload[0]["problems"])
+        self.assertIn("database_connector_unavailable", payload[0]["problems"])
         self.assertEqual(payload[0]["configured"]["engine"], "sqlserver")
         self.assertEqual(payload[0]["configured"]["connection_env"], "REPO_GRAPH_EXAMPLE_SQLSERVER_URL")
         self.assertNotIn("connection_string", payload[0]["configured"])
 
-    def test_sync_sources_with_status_reports_database_source_as_not_implemented(self) -> None:
+    def test_sync_sources_with_status_reports_unavailable_database_connector(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             config = RepoGraphConfig(
@@ -264,7 +264,8 @@ class SourceSyncTests(unittest.TestCase):
             payload = sync_sources_with_status(config)
 
         self.assertEqual(payload[0]["sync"]["status"], "failed")
-        self.assertIn("planned but not implemented", payload[0]["sync"]["error"])
+        self.assertIn("no live connector enabled yet", payload[0]["sync"]["error"])
+        self.assertNotIn("REPO_GRAPH_EXAMPLE_SQLSERVER_URL", payload[0]["sync"]["error"])
 
     def test_github_next_link_reads_pagination_header(self) -> None:
         next_url = github_next_link(

@@ -9,10 +9,12 @@ from typing import Any
 
 import yaml
 
+from repo_graph.database import supported_database_engines
+
 DEFAULT_CACHE_DIR = ".repo-graph/cache/repos"
 DEFAULT_OUTPUT_DIR = ".repo-graph/output"
 GITHUB_ORG_VISIBILITIES = {"all", "public", "private", "forks", "sources", "member"}
-DATABASE_ENGINES = {"sqlserver"}
+DATABASE_ENGINES = supported_database_engines()
 DATABASE_OBJECT_TYPES = {
     "dependency",
     "foreign_key",

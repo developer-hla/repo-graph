@@ -155,6 +155,7 @@ These edge types represent application-to-application or application-to-database
 - `package_json`
 - `packages_config`
 - `pnpm_workspace`
+- `postgres_metadata`
 - `project_discovery`
 - `pyproject`
 - `python_http`

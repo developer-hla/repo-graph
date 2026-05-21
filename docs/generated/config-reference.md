@@ -59,10 +59,10 @@ YAML source `type` values are loaded into the `source_type` field.
 
 ## Database Source
 
-- Supported `engine` values: `sqlserver`.
+- Supported `engine` values: `postgres`, `sqlserver`.
 - `connection_env` names the environment variable that contains the connection string. Connection string values are not accepted in config.
 - Supported `include_object_types` values: `dependency`, `foreign_key`, `function`, `stored_procedure`, `table`, `trigger`, `view`.
-- Database sources are parsed and validated only; no connector is enabled yet.
+- Database sources are parsed and validated against metadata adapters; no live connector is enabled yet.
 
 ## Include Rules
 

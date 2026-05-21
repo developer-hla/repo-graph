@@ -9,7 +9,7 @@ import re
 import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import yaml
 
 from repo_graph.config import RepoGraphConfig
+from repo_graph.database import database_connector_unavailable_message
 from repo_graph.graph import Edge, Entity, Graph
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 from repo_graph.validation import positive_int
@@ -214,7 +215,8 @@ def build_graph(
     strict: bool = False,
 ) -> Graph:
     errors = unsupported_source_errors(config)
-    sources = [] if errors else sync_sources(config) if sync_first else resolve_sources(config)
+    scannable_config = config_without_unsupported_sources(config)
+    sources = sync_sources(scannable_config) if sync_first else resolve_sources(scannable_config)
     graph = Graph(scope_name=config.name, sources=[source_to_dict(source) for source in sources], errors=errors)
     extractors = default_extractors()
     for source in sources:
@@ -229,10 +231,14 @@ def build_graph(
 
 def unsupported_source_errors(config: RepoGraphConfig) -> list[str]:
     return [
-        "Database sources are planned but not implemented yet."
+        database_connector_unavailable_message(source.name, source.engine)
         for source in config.sources
         if source.source_type == "database"
     ]
+
+
+def config_without_unsupported_sources(config: RepoGraphConfig) -> RepoGraphConfig:
+    return replace(config, sources=tuple(source for source in config.sources if source.source_type != "database"))
 
 
 def apply_dependency_filter(graph: Graph, config: RepoGraphConfig) -> None:

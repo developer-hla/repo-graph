@@ -16,6 +16,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from repo_graph.config import RepoGraphConfig, Source
+from repo_graph.database import database_connector_unavailable_message
 
 
 @dataclass(frozen=True)
@@ -92,7 +93,7 @@ def sync_one_source(config: RepoGraphConfig, source: Source) -> None:
             raise FileNotFoundError(f"Local source path does not exist: {source.path}")
         return
     if source.source_type == "database":
-        raise NotImplementedError("Database sources are planned but not implemented yet.")
+        raise NotImplementedError(database_connector_unavailable_message(source.name, source.engine))
     raise ValueError(f"Unsupported source type: {source.source_type}")
 
 
@@ -181,7 +182,7 @@ def source_ready(status: dict[str, Any], source: Source) -> bool:
 def source_problems(status: dict[str, Any], source: Source) -> list[str]:
     problems: list[str] = []
     if source.source_type == "database":
-        return ["database_source_not_implemented"]
+        return ["database_connector_unavailable"]
     if not status["exists"]:
         problems.append("path_missing")
     if source.source_type == "git":
@@ -227,7 +228,7 @@ def resolve_expanded_sources(config: RepoGraphConfig, sources: list[Source]) -> 
                 )
             )
         elif source.source_type == "database":
-            raise NotImplementedError("Database sources are planned but not implemented yet.")
+            raise NotImplementedError(database_connector_unavailable_message(source.name, source.engine))
         else:
             raise ValueError(f"Unsupported source type: {source.source_type}")
     return resolved
@@ -243,7 +244,7 @@ def sync_sources(config: RepoGraphConfig) -> list[ResolvedSource]:
             if source.path is None or not source.path.exists():
                 raise FileNotFoundError(f"Local source path does not exist: {source.path}")
         elif source.source_type == "database":
-            raise NotImplementedError("Database sources are planned but not implemented yet.")
+            raise NotImplementedError(database_connector_unavailable_message(source.name, source.engine))
         else:
             raise ValueError(f"Unsupported source type: {source.source_type}")
     return resolve_expanded_sources(config, expanded_sources)

@@ -92,8 +92,9 @@ SQL files are useful but not equally authoritative:
 
 Database introspection should be opt-in, read-only, timeout-limited, and driven
 by ignored private config. The public project should contain only generic
-adapters and synthetic examples; connection strings, server names, and database
-names belong outside the repo. The planned source contract lives in
+adapters, metadata adapter contracts, and synthetic examples; connection
+strings, server names, and database names belong outside the repo. The source
+contract lives in
 [database-introspection.md](database-introspection.md).
 
 ## Review Questions For New Parsers

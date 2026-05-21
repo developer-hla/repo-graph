@@ -73,9 +73,11 @@ sources:
 
 The planned database source shape is defined in
 [database-introspection.md](database-introspection.md). This source type is
-parsed and validated, but it is not connected yet. Build, sync, and refresh
-workflows should report database sources as planned but not implemented until a
-read-only connector exists.
+parsed and validated for supported engines. Build, sync, and refresh workflows
+should report database sources as having a metadata adapter but no live
+connector until a read-only connector exists for that engine. A database source
+without a live connector should not prevent repository sources in the same
+config from being scanned.
 
 ## Graph Model
 
@@ -357,9 +359,10 @@ SQL revision and migration files are historical evidence. They can describe
 objects that no longer exist, so they should not be treated as authoritative
 current database state by default.
 
-RepoGraph supports an optional `database` source type contract and a pure SQL
-Server metadata adapter. The live connector is still planned. For SQL Server,
-the connector should inspect catalog metadata such as `sys.tables`, `sys.views`,
+RepoGraph supports an optional `database` source type contract, an engine
+metadata adapter registry, and pure SQL Server and PostgreSQL metadata
+adapters. The live connectors are still planned. For SQL Server, the connector
+should inspect catalog metadata such as `sys.tables`, `sys.views`,
 `sys.procedures`, `sys.foreign_keys`, `sys.sql_expression_dependencies`,
 `sys.triggers`, and `sys.sql_modules`. PostgreSQL and other database engines
 should use engine-specific catalogs while emitting the same normalized graph

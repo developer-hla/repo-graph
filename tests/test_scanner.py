@@ -242,14 +242,20 @@ sources:
             )
         )
 
-    def test_build_graph_reports_database_sources_as_not_implemented(self) -> None:
+    def test_build_graph_reports_unavailable_database_connectors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
+            service = root / "service"
+            service.mkdir()
+            (service / "package.json").write_text('{"name":"service"}', encoding="utf-8")
             config_path = root / "sources.yaml"
             config_path.write_text(
                 """
 name: test-scope
 sources:
+  - type: local_path
+    name: service
+    path: service
   - type: database
     name: current-db
     engine: sqlserver
@@ -263,7 +269,15 @@ sources:
             with self.assertRaisesRegex(RuntimeError, "scanner errors"):
                 build_graph(config, strict=True)
 
-        self.assertEqual(graph.errors, ["Database sources are planned but not implemented yet."])
+        self.assertEqual(
+            graph.errors,
+            [
+                "Database source 'current-db' uses engine 'sqlserver', which has a metadata adapter "
+                "but no live connector enabled yet."
+            ],
+        )
+        self.assertTrue(any(source["name"] == "service" for source in graph.to_dict()["sources"]))
+        self.assertTrue(any(entity["name"] == "service" for entity in graph.to_dict()["entities"]))
 
     def test_build_graph_resolves_cross_source_code_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,9 +1,9 @@
 # Database Introspection Design
 
-RepoGraph supports the first pure adapter step for optional read-only database
-introspection. The config contract exists, and SQL Server metadata rows can be
-converted into graph facts. A live database connector is still planned and is
-not enabled yet.
+RepoGraph supports the first adapter registry step for optional read-only
+database introspection. The config contract exists, and SQL Server and
+PostgreSQL metadata rows can be converted into the same graph facts. Live
+database connectors are still planned and are not enabled yet.
 
 ## Why This Exists
 
@@ -29,11 +29,13 @@ access.
 - Do not commit connection strings, server names, database names, or private
   environment variable names.
 
-## Planned Source Contract
+## Source Contract
 
 The config parser understands this source type so users and agents can validate
-the planned contract. Build, sync, and refresh workflows still report database
-sources as not implemented until a connector exists.
+the contract. Build, sync, and refresh workflows still report database sources
+as having a metadata adapter but no live connector until a connector exists for
+that engine. Repository sources in the same config should still scan so users
+can load code evidence before database metadata is available.
 
 ```yaml
 sources:
@@ -61,7 +63,7 @@ Fields:
 | --- | --- | --- |
 | `type` | yes | Must be `database`. |
 | `name` | yes | Public-safe graph source name. |
-| `engine` | yes | Start with `sqlserver`. Future engines such as `postgres` must keep the same graph vocabulary where possible. |
+| `engine` | yes | Supported values include `sqlserver` and `postgres`; all engines must keep the same graph vocabulary where possible. |
 | `connection_env` | yes | Environment variable containing the connection string. The value must not be written to graph output. |
 | `schemas` | no | Optional allow-list. If omitted, use engine-safe defaults such as user schemas only. |
 | `include_object_types` | no | Optional object-type allow-list. |
@@ -136,16 +138,19 @@ Introspected entities should use the existing SQL vocabulary where possible:
 Every introspected SQL entity should include:
 
 - `schema_state=current_database`
-- `database_engine=sqlserver`
+- `database_engine`, such as `sqlserver` or `postgres`
 - `schema`
 - `full_name`
 - source provenance from the database source
 
-The current pure adapter lives in `repo_graph.database` and exposes typed
-metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`, and
-`SqlServerDependencyRow`. `graph_from_sqlserver_metadata()` converts those rows
-into normal `Entity` and `Edge` facts without opening a database connection or
-reading secrets.
+The current pure adapters live in `repo_graph.database` and expose typed
+metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`,
+`SqlServerDependencyRow`, `PostgresObjectRow`, `PostgresForeignKeyRow`, and
+`PostgresDependencyRow`. `graph_from_database_metadata()` dispatches through
+the engine registry, while `graph_from_sqlserver_metadata()` and
+`graph_from_postgres_metadata()` remain direct adapter entry points. These
+functions convert metadata rows into normal `Entity` and `Edge` facts without
+opening a database connection or reading secrets.
 
 Introspected relationships should reuse the same interaction vocabulary:
 
@@ -200,5 +205,6 @@ not a live database query.
 3. Emit `schema_state=current_database` entities and relationships. Done.
 4. Add reconciliation report APIs. Done.
 5. Add UI/report links after the API output is stable. Done.
-6. Add engine-specific live connectors, starting with SQL Server and then
+6. Add a shared adapter registry and PostgreSQL pure metadata adapter. Done.
+7. Add engine-specific live connectors, starting with SQL Server and then
    PostgreSQL, behind the same `database` source contract.
