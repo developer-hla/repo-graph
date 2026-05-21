@@ -5,9 +5,9 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents the graph types exercised by the synthetic examples, not a private source set.
 
 - Graph schema version: `0.1`
-- Entity count: `88`
-- Edge count: `175`
-- Resolved edge count: `158`
+- Entity count: `90`
+- Edge count: `179`
+- Resolved edge count: `162`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -22,7 +22,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `container` | 1 |
 | `deployment` | 1 |
 | `file` | 26 |
-| `function` | 8 |
+| `function` | 10 |
 | `ingress` | 1 |
 | `package` | 8 |
 | `project` | 9 |
@@ -39,7 +39,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `CALLS_HTTP` | 1 |
 | `CALLS_SERVICE` | 9 |
 | `CALLS_SQL` | 7 |
-| `CALLS_SYMBOL` | 2 |
+| `CALLS_SYMBOL` | 4 |
 | `CONFIGURES_SERVICE` | 3 |
 | `CONTAINS_FILE` | 51 |
 | `CONTAINS_PROJECT` | 11 |
@@ -52,7 +52,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `DECLARES_ROUTE` | 8 |
 | `DECLARES_SERVICE` | 1 |
 | `DECLARES_SOLUTION` | 1 |
-| `DECLARES_SYMBOL` | 12 |
+| `DECLARES_SYMBOL` | 14 |
 | `DEFINES` | 5 |
 | `DEPENDS_ON_PACKAGE` | 12 |
 | `DEPENDS_ON_PROJECT` | 1 |
@@ -71,13 +71,14 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Parser | Example Edge Count |
 | --- | ---: |
 | `dotnet_build_config` | 2 |
+| `dotnet_call` | 1 |
 | `dotnet_controller_route` | 3 |
 | `dotnet_framework_config` | 6 |
 | `dotnet_http` | 2 |
 | `dotnet_minimal_route` | 2 |
 | `dotnet_project` | 8 |
 | `dotnet_solution` | 3 |
-| `dotnet_symbol` | 2 |
+| `dotnet_symbol` | 3 |
 | `filesystem` | 51 |
 | `javascript_export` | 2 |
 | `javascript_http` | 2 |
@@ -103,15 +104,16 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `requirements` | 1 |
 | `sql` | 5 |
 | `sql_reference` | 8 |
+| `vb_call` | 1 |
 | `vb_config_service` | 2 |
 | `vb_contract_route` | 3 |
 | `vb_http` | 2 |
 | `vb_sql_command` | 2 |
-| `vb_symbol` | 2 |
+| `vb_symbol` | 3 |
 
 ## Confidence Values
 
 | Confidence | Example Edge Count |
 | --- | ---: |
-| `high` | 125 |
-| `medium` | 50 |
+| `high` | 127 |
+| `medium` | 52 |

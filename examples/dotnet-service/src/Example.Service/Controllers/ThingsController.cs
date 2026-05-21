@@ -17,7 +17,12 @@ public class ThingsController : ControllerBase
     public async Task<string> GetThing(string id)
     {
         await httpClient.GetAsync("http://inventory-service/inventory/" + id);
-        var query = "EXEC dbo.get_thing_by_id";
+        var query = BuildThingQuery(id);
         return query;
+    }
+
+    private string BuildThingQuery(string id)
+    {
+        return "EXEC dbo.get_thing_by_id";
     }
 }

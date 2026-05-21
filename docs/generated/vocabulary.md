@@ -139,6 +139,7 @@ These edge types represent application-to-application or application-to-database
 ## Parser IDs
 
 - `dotnet_build_config`
+- `dotnet_call`
 - `dotnet_controller_route`
 - `dotnet_framework_config`
 - `dotnet_http`
@@ -174,6 +175,7 @@ These edge types represent application-to-application or application-to-database
 - `sql`
 - `sql_reference`
 - `sqlserver_metadata`
+- `vb_call`
 - `vb_config_service`
 - `vb_contract_route`
 - `vb_http`

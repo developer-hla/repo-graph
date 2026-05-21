@@ -4,8 +4,8 @@
 This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
-- Parser count: `38`
-- Edge count: `175`
+- Parser count: `40`
+- Edge count: `179`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -13,13 +13,14 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | Parser | Edge Count | Unresolved | Edge Types | From Types | To Types | Sources |
 | --- | ---: | ---: | --- | --- | --- | --- |
 | `dotnet_build_config` | 2 | 1 | `DECLARES_BUILD_CONFIG`, `DEPENDS_ON_PACKAGE` | `build_config`, `file` | `build_config`, `package` | `dotnet-service` |
+| `dotnet_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `dotnet-service` |
 | `dotnet_controller_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `dotnet-service` |
 | `dotnet_framework_config` | 6 | 0 | `CONFIGURES_SERVICE`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE` | `config_file`, `config_value`, `file` | `config_file`, `config_value`, `service` | `legacy-vb-service` |
 | `dotnet_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `dotnet-service` |
 | `dotnet_minimal_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `dotnet-service` |
 | `dotnet_project` | 8 | 0 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT` | `file`, `package`, `project` | `package`, `project` | `dotnet-service`, `legacy-vb-service` |
 | `dotnet_solution` | 3 | 2 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
-| `dotnet_symbol` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `dotnet-service` |
+| `dotnet_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `dotnet-service` |
 | `filesystem` | 51 | 0 | `CONTAINS_FILE` | `project`, `repository` | `file` | `api-service`, `database-project`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
 | `javascript_export` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service`, `shared-library` |
 | `javascript_http` | 2 | 0 | `CALLS_HTTP`, `CALLS_SERVICE` | `file` | `api_route`, `service` | `api-service` |
@@ -45,11 +46,12 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
 | `sql` | 5 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
 | `sql_reference` | 8 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `function`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
+| `vb_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `legacy-vb-service` |
 | `vb_config_service` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
 | `vb_contract_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `legacy-vb-service` |
 | `vb_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
 | `vb_sql_command` | 2 | 0 | `CALLS_SQL` | `file`, `function` | `stored_procedure` | `legacy-vb-service` |
-| `vb_symbol` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `legacy-vb-service` |
+| `vb_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `legacy-vb-service` |
 
 ## Notes
 

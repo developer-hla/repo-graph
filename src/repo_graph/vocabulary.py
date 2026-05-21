@@ -108,6 +108,7 @@ INTERACTION_KINDS = (
 
 PARSER_IDS = (
     "dotnet_build_config",
+    "dotnet_call",
     "dotnet_controller_route",
     "dotnet_framework_config",
     "dotnet_http",
@@ -143,6 +144,7 @@ PARSER_IDS = (
     "sql",
     "sql_reference",
     "sqlserver_metadata",
+    "vb_call",
     "vb_config_service",
     "vb_contract_route",
     "vb_http",

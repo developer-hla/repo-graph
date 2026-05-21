@@ -335,12 +335,12 @@ Start with parsers that are useful across many codebases:
 - JavaScript, Python, and .NET package manifests and dependency declarations
 - .NET solution, project reference, and shared build config manifests
 - legacy .NET Framework `Web.config`, `App.config`, `packages.config`,
-  ASMX/WCF endpoints, VB symbols, config-driven service URLs, and SQL command
-  stored procedure references
+  ASMX/WCF endpoints, VB symbols, conservative VB internal calls,
+  config-driven service URLs, and SQL command stored procedure references
 - modern C#/.NET controller routes, minimal API routes, symbols, and HTTP
-  service calls
+  service calls, plus conservative same-class or explicit class method calls
 - Python imports, FastAPI or Flask routes, HTTP calls, and exported
-  application symbols
+  application symbols, plus conservative local function and method calls
 - Kubernetes services, deployments, containers, ingress routes, and
   service-selection topology
 - TypeScript and JavaScript imports, exports, and route declarations

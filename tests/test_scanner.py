@@ -931,8 +931,13 @@ public class ThingsController : ControllerBase
     public async Task<string> GetThing(string id)
     {
         await httpClient.GetAsync("http://inventory-service/inventory/" + id);
-        var query = "EXEC dbo.get_thing_by_id";
+        var query = BuildThingQuery(id);
         return query;
+    }
+
+    private string BuildThingQuery(string id)
+    {
+        return "EXEC dbo.get_thing_by_id";
     }
 }
 """,
@@ -973,6 +978,7 @@ sources:
         self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
         self.assertIn("EXPOSES_ROUTE", graph_data["edge_counts"])
         self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SYMBOL", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertTrue(
@@ -1027,6 +1033,18 @@ sources:
         )
         self.assertTrue(
             any(
+                edge["edge_type"] == "CALLS_SYMBOL"
+                and edge["from_name"] == "Example.Service.Controllers.ThingsController.GetThing"
+                and edge["to_name"] == "ThingsController.BuildThingQuery"
+                and edge["parser"] == "dotnet_call"
+                and edge["resolved"]
+                and edge["properties"].get("call_kind") == "direct"
+                and edge["properties"].get("source_context_type") == "function"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
                 edge["edge_type"] == "HANDLES_ROUTE"
                 and edge["from_name"] == "GET /api/Things/{id}"
                 and edge["to_name"] == "Example.Service.Controllers.ThingsController.GetThing"
@@ -1038,7 +1056,7 @@ sources:
             any(
                 edge["edge_type"] == "CALLS_SQL"
                 and edge["from_type"] == "function"
-                and edge["from_name"] == "Example.Service.Controllers.ThingsController.GetThing"
+                and edge["from_name"] == "Example.Service.Controllers.ThingsController.BuildThingQuery"
                 and edge["to_name"] == "dbo.get_thing_by_id"
                 and edge["resolved"]
                 and edge["properties"].get("source_context_type") == "function"
@@ -1337,9 +1355,14 @@ Namespace Example.Legacy
     Public Function GetOrder(id As Integer) As String
       Dim baseUrl = ConfigurationManager.AppSettings("InventoryServiceUrl")
       Dim request = WebRequest.Create("http://inventory-service/api/orders/" & id)
+      Dim commandName = BuildCommandName(id)
       Dim command As New SqlCommand("dbo.GetOrder")
       command.CommandType = CommandType.StoredProcedure
       Return baseUrl
+    End Function
+
+    Private Function BuildCommandName(id As Integer) As String
+      Return "dbo.GetOrder"
     End Function
   End Class
 End Namespace
@@ -1376,6 +1399,7 @@ sources:
         self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
         self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
         self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SYMBOL", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertIn("DEPENDS_ON_PACKAGE", graph_data["edge_counts"])
@@ -1403,6 +1427,18 @@ sources:
                 and edge["from_name"] == "POST /LegacyOrderService.asmx/GetOrder"
                 and edge["to_name"] == "Example.Legacy.LegacyOrderService.GetOrder"
                 and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SYMBOL"
+                and edge["from_name"] == "Example.Legacy.LegacyOrderService.GetOrder"
+                and edge["to_name"] == "LegacyOrderService.BuildCommandName"
+                and edge["parser"] == "vb_call"
+                and edge["resolved"]
+                and edge["properties"].get("call_kind") == "direct"
+                and edge["properties"].get("source_context_type") == "function"
                 for edge in graph_data["edges"]
             )
         )

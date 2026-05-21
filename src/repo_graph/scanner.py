@@ -83,6 +83,9 @@ CS_HTTP_CALL_RE = re.compile(
     r"\.\s*(Get|Post|Put|Patch|Delete)Async\s*\(\s*(?:\$@|@\$|\$|@)?\"((?:\"\"|\\.|[^\"])*)\"",
     re.IGNORECASE,
 )
+CS_NEW_METHOD_CALL_RE = re.compile(r"\bnew\s+(?P<class>[A-Za-z_]\w*)\s*\([^)]*\)\s*\.\s*(?P<method>[A-Za-z_]\w*)\s*\(")
+CS_QUALIFIED_METHOD_CALL_RE = re.compile(r"\b(?P<receiver>this|[A-Za-z_]\w*)\s*\.\s*(?P<method>[A-Za-z_]\w*)\s*\(")
+CS_DIRECT_METHOD_CALL_RE = re.compile(r"(?<![\.\w])(?P<method>[A-Za-z_]\w*)\s*\(")
 VB_ATTRIBUTE_RE = re.compile(r"^\s*<\s*([A-Za-z_][\w.]*)", re.IGNORECASE)
 VB_NAMESPACE_RE = re.compile(r"^\s*Namespace\s+([A-Za-z_][\w.]*)", re.IGNORECASE)
 VB_TYPE_RE = re.compile(
@@ -104,6 +107,15 @@ VB_HTTP_LITERAL_RE = re.compile(
     r"\s*\(\s*\"([^\"]+)\"",
     re.IGNORECASE,
 )
+VB_NEW_METHOD_CALL_RE = re.compile(
+    r"\bNew\s+(?P<class>[A-Za-z_]\w*)\s*\([^)]*\)\s*\.\s*(?P<method>[A-Za-z_]\w*)\s*\(",
+    re.IGNORECASE,
+)
+VB_QUALIFIED_METHOD_CALL_RE = re.compile(
+    r"\b(?P<receiver>Me|[A-Za-z_]\w*)\s*\.\s*(?P<method>[A-Za-z_]\w*)\s*\(",
+    re.IGNORECASE,
+)
+VB_DIRECT_METHOD_CALL_RE = re.compile(r"(?<![\.\w])(?P<method>[A-Za-z_]\w*)\s*\(", re.IGNORECASE)
 SQL_OBJECT_RE = re.compile(
     r"\bCREATE\s+(?:OR\s+ALTER\s+)?(?:PROCEDURE|PROC|TABLE|VIEW|FUNCTION)\s+([\[\]\w.]+)",
     re.IGNORECASE,
@@ -214,7 +226,15 @@ class PythonCallableIndex:
 
 
 @dataclass(frozen=True)
-class PythonCallTarget:
+class TypeMethodIndex:
+    type_methods: dict[str, frozenset[str]]
+
+    def has_method(self, type_name: str | None, method_name: str) -> bool:
+        return bool(type_name) and method_name in self.type_methods.get(type_name, frozenset())
+
+
+@dataclass(frozen=True)
+class SymbolCallTarget:
     name: str
     raw_target: str
     call_kind: str
@@ -1304,6 +1324,7 @@ class CSharpCodeExtractor:
 
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
+        method_index = csharp_method_index(content)
         namespace: str | None = None
         current_type: str | None = None
         current_route_prefix: str | None = None
@@ -1318,6 +1339,16 @@ class CSharpCodeExtractor:
                 result.edges.extend(csharp_http_call_edges(context, line, line_number, from_entity=current_function))
                 result.edges.extend(
                     sql_reference_edges_for_line(context, line, line_number, from_entity=current_function)
+                )
+                result.edges.extend(
+                    csharp_symbol_call_edges(
+                        context,
+                        line,
+                        line_number,
+                        from_entity=current_function,
+                        current_type=current_type,
+                        method_index=method_index,
+                    )
                 )
 
             attributes = csharp_attributes(line, line_number)
@@ -1405,6 +1436,7 @@ class VbCodeExtractor:
 
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
+        method_index = vb_method_index(content)
         namespace: str | None = None
         current_type: str | None = None
         current_function: Entity | None = None
@@ -1452,6 +1484,17 @@ class VbCodeExtractor:
             if current_function:
                 result.edges.extend(vb_service_call_edges(context, line, line_number, from_entity=current_function))
                 result.edges.extend(vb_sql_command_edges(context, line, line_number, from_entity=current_function))
+                if not method_match:
+                    result.edges.extend(
+                        vb_symbol_call_edges(
+                            context,
+                            line,
+                            line_number,
+                            from_entity=current_function,
+                            current_type=current_type,
+                            method_index=method_index,
+                        )
+                    )
 
             if not attribute_match and line.strip():
                 pending_attributes = []
@@ -2594,50 +2637,68 @@ def python_symbol_call_edges(
     target = python_symbol_call_target(call.func, class_stack, callable_index)
     if not target:
         return []
-    properties = {
-        "raw_target": target.raw_target,
-        "normalized_target": target.name,
-        "call_kind": target.call_kind,
-        **source_context_properties(from_entity),
-    }
-    if target.receiver:
-        properties["receiver"] = target.receiver
-    return [
-        unresolved_edge(
-            from_entity,
-            target.name,
-            "CALLS_SYMBOL",
-            context.source.name,
-            context.rel_path,
-            "python_call",
-            to_type="function",
-            line_number=call.lineno,
-            properties=properties,
-        )
-    ]
+    return symbol_call_edges(context, from_entity, [target], "python_call", call.lineno)
 
 
 def python_symbol_call_target(
     func: ast.expr,
     class_stack: Sequence[str],
     callable_index: PythonCallableIndex,
-) -> PythonCallTarget | None:
+) -> SymbolCallTarget | None:
     if isinstance(func, ast.Name) and callable_index.has_function(func.id):
-        return PythonCallTarget(func.id, func.id, "direct")
+        return SymbolCallTarget(func.id, func.id, "direct")
     if not isinstance(func, ast.Attribute):
         return None
 
     receiver = python_call_receiver_name(func.value)
     class_name = python_receiver_class_name(func.value)
     if class_name and callable_index.has_method(class_name, func.attr):
-        return PythonCallTarget(f"{class_name}.{func.attr}", python_call_raw_target(func), "class_method", receiver)
+        return SymbolCallTarget(f"{class_name}.{func.attr}", python_call_raw_target(func), "class_method", receiver)
     if receiver in {"self", "cls"} and class_stack:
         current_class = ".".join(class_stack)
         if callable_index.has_method(current_class, func.attr):
-            return PythonCallTarget(
+            return SymbolCallTarget(
                 f"{current_class}.{func.attr}", python_call_raw_target(func), "instance_method", receiver
             )
     return None
+
+
+def symbol_call_edges(
+    context: FileScanContext,
+    from_entity: Entity,
+    targets: Sequence[SymbolCallTarget],
+    parser: str,
+    line_number: int,
+) -> list[Edge]:
+    edges: list[Edge] = []
+    seen: set[tuple[str, str]] = set()
+    for target in targets:
+        key = (target.name, target.raw_target)
+        if key in seen or target.name == from_entity.name or target.name in from_entity.aliases:
+            continue
+        seen.add(key)
+        properties = {
+            "raw_target": target.raw_target,
+            "normalized_target": target.name,
+            "call_kind": target.call_kind,
+            **source_context_properties(from_entity),
+        }
+        if target.receiver:
+            properties["receiver"] = target.receiver
+        edges.append(
+            unresolved_edge(
+                from_entity,
+                target.name,
+                "CALLS_SYMBOL",
+                context.source.name,
+                context.rel_path,
+                parser,
+                to_type="function",
+                line_number=line_number,
+                properties=properties,
+            )
+        )
+    return edges
 
 
 def python_attribute_name(node: ast.AST) -> str | None:
@@ -3259,6 +3320,20 @@ def csharp_attribute_name(name: str) -> str:
     return name.rsplit(".", 1)[-1].removesuffix("Attribute").lower()
 
 
+def csharp_method_index(content: str) -> TypeMethodIndex:
+    current_type: str | None = None
+    type_methods: dict[str, set[str]] = {}
+    for line in content.splitlines():
+        type_match = CS_TYPE_RE.match(line)
+        if type_match:
+            current_type = type_match.group(2)
+            continue
+        method_match = CS_METHOD_RE.match(line)
+        if current_type and method_match:
+            type_methods.setdefault(current_type, set()).add(method_match.group(1))
+    return TypeMethodIndex(type_methods={type_name: frozenset(methods) for type_name, methods in type_methods.items()})
+
+
 def csharp_symbol_result(
     context: FileScanContext,
     symbol_kind: str,
@@ -3270,13 +3345,16 @@ def csharp_symbol_result(
     result = ScanResult()
     entity_type = csharp_entity_type(symbol_kind)
     full_name = ".".join(part for part in (namespace, parent_name, name) if part)
+    aliases = {name, full_name or name}
+    if parent_name:
+        aliases.add(f"{parent_name}.{name}")
     symbol = Entity(
         entity_type=entity_type,
         name=full_name or name,
         source_name=context.source.name,
         file_path=context.rel_path,
         line_number=line_number,
-        aliases={name, full_name or name},
+        aliases=aliases,
         properties={
             "symbol_kind": symbol_kind,
             "namespace": namespace,
@@ -3396,6 +3474,68 @@ def csharp_minimal_route_result(context: FileScanContext, line: str, line_number
             )
         )
     return result
+
+
+def csharp_symbol_call_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity,
+    current_type: str | None,
+    method_index: TypeMethodIndex,
+) -> list[Edge]:
+    code = csharp_scope_code(line)
+    targets = [
+        *csharp_new_method_call_targets(code, method_index),
+        *csharp_qualified_method_call_targets(code, current_type, method_index),
+        *csharp_direct_method_call_targets(code, current_type, method_index),
+    ]
+    return symbol_call_edges(context, from_entity, targets, "dotnet_call", line_number)
+
+
+def csharp_new_method_call_targets(code: str, method_index: TypeMethodIndex) -> list[SymbolCallTarget]:
+    return [
+        SymbolCallTarget(
+            f"{match.group('class')}.{match.group('method')}",
+            f"new {match.group('class')}().{match.group('method')}",
+            "class_method",
+            receiver=match.group("class"),
+        )
+        for match in CS_NEW_METHOD_CALL_RE.finditer(code)
+        if method_index.has_method(match.group("class"), match.group("method"))
+    ]
+
+
+def csharp_qualified_method_call_targets(
+    code: str,
+    current_type: str | None,
+    method_index: TypeMethodIndex,
+) -> list[SymbolCallTarget]:
+    targets: list[SymbolCallTarget] = []
+    for match in CS_QUALIFIED_METHOD_CALL_RE.finditer(code):
+        receiver = match.group("receiver")
+        method_name = match.group("method")
+        if receiver == "this" and method_index.has_method(current_type, method_name):
+            targets.append(
+                SymbolCallTarget(f"{current_type}.{method_name}", f"this.{method_name}", "instance_method", receiver)
+            )
+        elif method_index.has_method(receiver, method_name):
+            targets.append(
+                SymbolCallTarget(f"{receiver}.{method_name}", f"{receiver}.{method_name}", "class_method", receiver)
+            )
+    return targets
+
+
+def csharp_direct_method_call_targets(
+    code: str,
+    current_type: str | None,
+    method_index: TypeMethodIndex,
+) -> list[SymbolCallTarget]:
+    return [
+        SymbolCallTarget(f"{current_type}.{method_name}", method_name, "direct")
+        for match in CS_DIRECT_METHOD_CALL_RE.finditer(code)
+        if (method_name := match.group("method")) and method_index.has_method(current_type, method_name)
+    ]
 
 
 def csharp_http_call_edges(
@@ -3638,13 +3778,16 @@ def vb_symbol_result(
     result = ScanResult()
     entity_type = "function" if symbol_kind in {"function", "sub"} else symbol_kind
     full_name = ".".join(part for part in (namespace, parent_name, name) if part)
+    aliases = {name, full_name or name}
+    if parent_name:
+        aliases.add(f"{parent_name}.{name}")
     symbol = Entity(
         entity_type=entity_type,
         name=full_name or name,
         source_name=context.source.name,
         file_path=context.rel_path,
         line_number=line_number,
-        aliases={name, full_name or name},
+        aliases=aliases,
         properties={
             "symbol_kind": symbol_kind,
             "namespace": namespace,
@@ -3665,6 +3808,20 @@ def vb_symbol_result(
         )
     )
     return result
+
+
+def vb_method_index(content: str) -> TypeMethodIndex:
+    current_type: str | None = None
+    type_methods: dict[str, set[str]] = {}
+    for line in content.splitlines():
+        type_match = VB_TYPE_RE.match(line)
+        if type_match:
+            current_type = type_match.group(2)
+            continue
+        method_match = VB_METHOD_RE.match(line)
+        if current_type and method_match:
+            type_methods.setdefault(current_type, set()).add(method_match.group(2))
+    return TypeMethodIndex(type_methods={type_name: frozenset(methods) for type_name, methods in type_methods.items()})
 
 
 def vb_contract_route_result(
@@ -3736,6 +3893,72 @@ def legacy_dotnet_service_path(rel_path: str, framework: str) -> str:
         suffix = ".asmx" if framework == "asmx" else ".svc"
         path = f"{path[:-3]}{suffix}"
     return "/" + path
+
+
+def vb_symbol_call_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity,
+    current_type: str | None,
+    method_index: TypeMethodIndex,
+) -> list[Edge]:
+    code = vb_scope_code(line)
+    targets = [
+        *vb_new_method_call_targets(code, method_index),
+        *vb_qualified_method_call_targets(code, current_type, method_index),
+        *vb_direct_method_call_targets(code, current_type, method_index),
+    ]
+    return symbol_call_edges(context, from_entity, targets, "vb_call", line_number)
+
+
+def vb_new_method_call_targets(code: str, method_index: TypeMethodIndex) -> list[SymbolCallTarget]:
+    return [
+        SymbolCallTarget(
+            f"{match.group('class')}.{match.group('method')}",
+            f"New {match.group('class')}().{match.group('method')}",
+            "class_method",
+            receiver=match.group("class"),
+        )
+        for match in VB_NEW_METHOD_CALL_RE.finditer(code)
+        if method_index.has_method(match.group("class"), match.group("method"))
+    ]
+
+
+def vb_qualified_method_call_targets(
+    code: str,
+    current_type: str | None,
+    method_index: TypeMethodIndex,
+) -> list[SymbolCallTarget]:
+    targets: list[SymbolCallTarget] = []
+    for match in VB_QUALIFIED_METHOD_CALL_RE.finditer(code):
+        receiver = match.group("receiver")
+        method_name = match.group("method")
+        if receiver.lower() == "me" and method_index.has_method(current_type, method_name):
+            targets.append(
+                SymbolCallTarget(f"{current_type}.{method_name}", f"Me.{method_name}", "instance_method", receiver)
+            )
+        elif method_index.has_method(receiver, method_name):
+            targets.append(
+                SymbolCallTarget(f"{receiver}.{method_name}", f"{receiver}.{method_name}", "class_method", receiver)
+            )
+    return targets
+
+
+def vb_direct_method_call_targets(
+    code: str,
+    current_type: str | None,
+    method_index: TypeMethodIndex,
+) -> list[SymbolCallTarget]:
+    return [
+        SymbolCallTarget(f"{current_type}.{method_name}", method_name, "direct")
+        for match in VB_DIRECT_METHOD_CALL_RE.finditer(code)
+        if (method_name := match.group("method")) and method_index.has_method(current_type, method_name)
+    ]
+
+
+def vb_scope_code(line: str) -> str:
+    return re.sub(r'"(?:[^"]|"")*"', '""', line)
 
 
 def vb_service_call_edges(
