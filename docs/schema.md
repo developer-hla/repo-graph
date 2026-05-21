@@ -49,7 +49,7 @@ intended shape and meaning of the graph.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | CALLS_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -93,6 +93,9 @@ the function that handles that route when the parser can identify it. Function
 context should then be preserved on runtime and database interaction edges, so
 an endpoint impact path can look like:
 `api_route -HANDLES_ROUTE-> function -CALLS_SQL-> sql_table`.
+When handler code delegates to another discovered function, use `CALLS_SYMBOL`
+from the caller function to the callee function. This keeps app-internal
+delegation visible without treating it as an app-to-app interaction.
 
 - `target_boundary`: `application` or `database`
 - `dependency_scope`: `runtime`, `configuration`, `deployment`, or `schema`
@@ -164,6 +167,7 @@ agents should expose to users.
 - `EXPOSES_ROUTE`: project to route.
 - `HANDLES_ROUTE`: API route to the function that handles that route.
 - `DECLARES_SYMBOL`: file to exported function or class.
+- `CALLS_SYMBOL`: function to another discovered function or method target.
 - `RUNS_CONTAINER`: Kubernetes deployment to container.
 - `SELECTS_DEPLOYMENT`: Kubernetes service to deployment selected by labels.
 - `ROUTES_TO_SERVICE`: Kubernetes ingress route to backend service.

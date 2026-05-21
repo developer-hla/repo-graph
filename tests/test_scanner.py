@@ -748,6 +748,7 @@ sources:
         self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
         self.assertIn("EXPOSES_ROUTE", graph_data["edge_counts"])
         self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SYMBOL", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertTrue(
@@ -799,6 +800,25 @@ sources:
                 and edge["from_name"] == "GET /things/{thing_id}"
                 and edge["to_name"] == "example_python_worker.app.read_thing"
                 and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SYMBOL"
+                and edge["from_name"] == "example_python_worker.app.read_thing"
+                and edge["to_name"] == "Worker.fetch_inventory"
+                and edge["to_type"] == "function"
+                and edge["resolved"]
+                and edge["properties"].get("raw_target") == "Worker().fetch_inventory"
+                and edge["properties"].get("call_kind") == "class_method"
+                and edge["properties"].get("source_context_type") == "function"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertFalse(
+            any(
+                edge["edge_type"] == "CALLS_SYMBOL" and edge["to_name"] in {"str", "text", "requests.get"}
                 for edge in graph_data["edges"]
             )
         )

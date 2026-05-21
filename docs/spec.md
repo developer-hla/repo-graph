@@ -118,7 +118,13 @@ file and line evidence. This lets blast-radius queries follow paths such as:
 
 ```text
 endpoint -> handler function -> database table or stored procedure
+endpoint -> handler function -> service-layer function -> database table
 ```
+
+Internal code delegation should use `CALLS_SYMBOL` when a parser can identify
+that one function calls another discovered function or method. Parser-specific
+syntax such as `self.method()`, `Worker().load()`, or a direct local function
+call is evidence for the same semantic edge.
 
 Unresolved edges are expected. They mean a reference was found but the scanner
 could not map it to a known entity in the current graph scope.

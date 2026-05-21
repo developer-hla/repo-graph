@@ -4,8 +4,8 @@
 This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
-- Parser count: `37`
-- Edge count: `173`
+- Parser count: `38`
+- Edge count: `175`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -37,6 +37,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `packages_config` | 2 | 1 | `DECLARES_CONFIG_FILE`, `DEPENDS_ON_PACKAGE` | `file`, `project` | `config_file`, `package` | `legacy-vb-service` |
 | `project_discovery` | 9 | 0 | `CONTAINS_PROJECT` | `repository` | `project` | `api-service`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
 | `pyproject` | 9 | 4 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE` | `file`, `package`, `project` | `package` | `python-shared`, `python-worker` |
+| `python_call` | 2 | 0 | `CALLS_SYMBOL` | `function` | `function` | `python-shared`, `python-worker` |
 | `python_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `python-worker` |
 | `python_import` | 6 | 4 | `IMPORTS` | `file` | `package` | `python-shared`, `python-worker` |
 | `python_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `python-worker` |

@@ -82,6 +82,10 @@ logic in the CLI, or graph-resolution policy in storage code.
   the `api_route` to the handler `function`. Runtime or database calls inside
   that function should use the function as the edge source and keep file and
   line evidence.
+- When a parser can identify app-internal delegation between discovered
+  functions or methods, emit `CALLS_SYMBOL` from caller to callee. Be
+  conservative to avoid turning standard-library or third-party helper calls
+  into false-positive blast-radius paths.
 - Important integration boundaries should become first-class graph facts when
   they are stable, discoverable, and useful for impact analysis. Examples
   include SQL reads and writes, SQL schema dependencies, message publish/consume

@@ -36,6 +36,7 @@ EDGE_TYPES = (
     "CALLS_HTTP",
     "CALLS_SERVICE",
     "CALLS_SQL",
+    "CALLS_SYMBOL",
     "CONFIGURES_SERVICE",
     "CONTAINS_FILE",
     "CONTAINS_PROJECT",
@@ -133,6 +134,7 @@ PARSER_IDS = (
     "postgres_metadata",
     "project_discovery",
     "pyproject",
+    "python_call",
     "python_http",
     "python_import",
     "python_route",
@@ -153,6 +155,7 @@ IMPACT_EDGE_TYPES = frozenset(
         "CALLS_HTTP",
         "CALLS_SERVICE",
         "CALLS_SQL",
+        "CALLS_SYMBOL",
         "CONFIGURES_SERVICE",
         "DEPENDS_ON_PACKAGE",
         "DEPENDS_ON_PROJECT",
@@ -214,6 +217,7 @@ MISSING_SOURCE_EDGE_TYPES = frozenset(
 PARSER_GAP_EDGE_TYPES = frozenset(
     {
         "CALLS_HTTP",
+        "CALLS_SYMBOL",
         "DECLARES_SYMBOL",
         "IMPORTS",
     }

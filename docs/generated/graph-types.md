@@ -6,8 +6,8 @@ It documents the graph types exercised by the synthetic examples, not a private 
 
 - Graph schema version: `0.1`
 - Entity count: `88`
-- Edge count: `173`
-- Resolved edge count: `156`
+- Edge count: `175`
+- Resolved edge count: `158`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -39,6 +39,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `CALLS_HTTP` | 1 |
 | `CALLS_SERVICE` | 9 |
 | `CALLS_SQL` | 7 |
+| `CALLS_SYMBOL` | 2 |
 | `CONFIGURES_SERVICE` | 3 |
 | `CONTAINS_FILE` | 51 |
 | `CONTAINS_PROJECT` | 11 |
@@ -94,6 +95,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `packages_config` | 2 |
 | `project_discovery` | 9 |
 | `pyproject` | 9 |
+| `python_call` | 2 |
 | `python_http` | 2 |
 | `python_import` | 6 |
 | `python_route` | 3 |
@@ -112,4 +114,4 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Confidence | Example Edge Count |
 | --- | ---: |
 | `high` | 125 |
-| `medium` | 48 |
+| `medium` | 50 |

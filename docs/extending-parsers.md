@@ -33,6 +33,10 @@ complete until code, examples, tests, and generated references all agree.
    function, emit `HANDLES_ROUTE` from the route to that function. When HTTP
    or database calls are inside a known function, use that function as the
    source entity and keep the file path and line number as evidence.
+   If a parser can identify one discovered function calling another discovered
+   function or method, emit `CALLS_SYMBOL` from caller to callee. Keep this
+   conservative; do not emit symbol-call edges for obvious standard-library or
+   third-party calls unless the target can resolve to a scanned symbol.
    If the parser discovers a new boundary type, evaluate it against
    [first-class coverage](first-class-coverage.md) before deciding whether to
    add graph vocabulary or reuse an existing edge type.

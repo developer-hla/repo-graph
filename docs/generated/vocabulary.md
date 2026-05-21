@@ -63,6 +63,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `CALLS_HTTP`
 - `CALLS_SERVICE`
 - `CALLS_SQL`
+- `CALLS_SYMBOL`
 - `CONFIGURES_SERVICE`
 - `CONTAINS_FILE`
 - `CONTAINS_PROJECT`
@@ -164,6 +165,7 @@ These edge types represent application-to-application or application-to-database
 - `postgres_metadata`
 - `project_discovery`
 - `pyproject`
+- `python_call`
 - `python_http`
 - `python_import`
 - `python_route`
@@ -183,7 +185,7 @@ These edge types represent application-to-application or application-to-database
 | Profile | Edge Types | Description |
 | --- | --- | --- |
 | `all` | `all` | Traverse all edge types. |
-| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `HANDLES_ROUTE`, `IMPORTS`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
+| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CALLS_SYMBOL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `HANDLES_ROUTE`, `IMPORTS`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
 | `structural` | `CONTAINS_FILE`, `CONTAINS_PROJECT`, `DECLARES_BUILD_CONFIG`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `DECLARES_PACKAGE`, `DECLARES_ROUTE`, `DECLARES_SERVICE`, `DECLARES_SOLUTION`, `DECLARES_SYMBOL`, `DECLARES_WORKSPACE`, `DEFINES`, `EXPOSES_ROUTE`, `RUNS_CONTAINER` | Traverse containment and declaration edges. |
 
 ## Unresolved Classifications

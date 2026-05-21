@@ -32,6 +32,7 @@ evidence.
 | Service configuration | `CONFIGURES_SERVICE` | Covered for environment values, Web.config/App.config, and WCF-style endpoints. |
 | Deployment routing | `DECLARES_SERVICE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `ROUTES_TO_SERVICE`, `RUNS_CONTAINER`, `SELECTS_DEPLOYMENT` | Covered for Kubernetes manifests. |
 | API routes | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | Route declarations are covered for common JavaScript, Python, .NET, and legacy VB route forms. Route-to-handler edges are covered when Python decorators, .NET controller actions, or legacy VB contract methods expose a clear handler function. |
+| Internal code delegation | `CALLS_SYMBOL` | Covered for Python local functions and class/instance method calls when the AST parser can identify a discovered callable target without obvious third-party noise. |
 | Packages and project structure | `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, containment/declaration edges | Covered for supported package and project manifests. |
 | Application-to-database calls | `CALLS_SQL` | Covered for application stored procedure calls in supported languages, with function-level context when the parser can identify the enclosing handler or method. |
 | Database object reads | `READS_SQL_OBJECT` | Covered for SQL object reads from SQL definitions and application SQL snippets, with function-level context when available. |
@@ -48,7 +49,7 @@ shortcuts.
 | Priority | Area | Why it matters | Candidate vocabulary |
 | --- | --- | --- | --- |
 | High | Current database introspection | Revision and migration files can describe objects that no longer exist. Read-only introspection can provide the current database shape and reconcile code evidence against reality. | Source type: `database`; schema state: `current_database`; SQL Server metadata from `sys.*` catalogs; PostgreSQL metadata from `pg_catalog` catalogs. |
-| High | Function-to-function calls | A route handler often delegates to service-layer functions before making HTTP or database calls. Impact paths need those internal calls to connect endpoint blast radius to deeper dependencies. | `CALLS_SYMBOL` or a narrower function-call edge after design review. |
+| High | Cross-language function-to-function calls | A route handler often delegates to service-layer functions before making HTTP or database calls. Impact paths need those internal calls to connect endpoint blast radius to deeper dependencies across .NET, VB, JavaScript, and richer Python import forms. | Continue using `CALLS_SYMBOL` when the target is a discovered function or method. |
 | High | Messaging and event streams | Services often depend through queues, topics, and event contracts instead of HTTP. Refactors need publisher and consumer impact. | Entities: `message_topic`, `message_queue`, `message_contract`; edges: `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`. |
 | Medium | Deeper SQL schema dependencies | Schema-bound views, computed columns, constraints, and SQL module dependencies create blast radius beyond simple `REFERENCES` clauses. | Continue using `REFERENCES_SQL_OBJECT` with `sql_operation` evidence such as `SCHEMA_BOUND_VIEW` or catalog-derived dependency type. |
 | Medium | File, blob, and transfer storage | Legacy and integration systems often couple through shared paths, buckets, FTP/SFTP drops, or blob containers. | Entities: `storage_location`; edges: `READS_STORAGE_OBJECT`, `WRITES_STORAGE_OBJECT`. |
@@ -68,9 +69,9 @@ shortcuts.
    evidence.
 3. Improve execution context. In progress.
    SQL and service calls now attach to functions or route handlers where the
-   Python, .NET controller, and legacy VB parsers can do this safely. Next,
-   add function-to-function calls so route-to-query impact paths can cross
-   service-layer delegation.
+   Python, .NET controller, and legacy VB parsers can do this safely. Python
+   now emits `CALLS_SYMBOL` for local callable delegation. Next, extend
+   `CALLS_SYMBOL` to .NET, VB, JavaScript, and safe imported Python symbols.
 4. Add messaging boundaries.
    Keep Kafka, RabbitMQ, Azure Service Bus, SQS, and similar client libraries as
    evidence for generic publish/consume graph facts.

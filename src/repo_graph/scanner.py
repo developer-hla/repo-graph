@@ -201,6 +201,26 @@ class KubernetesDeployment:
     pod_labels: dict[str, str]
 
 
+@dataclass(frozen=True)
+class PythonCallableIndex:
+    functions: frozenset[str]
+    class_methods: dict[str, frozenset[str]]
+
+    def has_function(self, name: str) -> bool:
+        return name in self.functions
+
+    def has_method(self, class_name: str, method_name: str) -> bool:
+        return method_name in self.class_methods.get(class_name, frozenset())
+
+
+@dataclass(frozen=True)
+class PythonCallTarget:
+    name: str
+    raw_target: str
+    call_kind: str
+    receiver: str | None = None
+
+
 class FileExtractor(Protocol):
     name: str
 
@@ -817,14 +837,15 @@ class PythonCodeExtractor:
             result.errors.append(f"Invalid Python {context.source.name}/{context.rel_path}: {exc}")
             return result
 
-        visitor = PythonAstVisitor(context)
+        visitor = PythonAstVisitor(context, python_callable_index(tree))
         visitor.visit(tree)
         return visitor.result
 
 
 class PythonAstVisitor(ast.NodeVisitor):
-    def __init__(self, context: FileScanContext) -> None:
+    def __init__(self, context: FileScanContext, callable_index: PythonCallableIndex) -> None:
         self.context = context
+        self.callable_index = callable_index
         self.result = ScanResult()
         self.class_stack: list[str] = []
         self.function_stack: list[Entity] = []
@@ -871,6 +892,42 @@ class PythonAstVisitor(ast.NodeVisitor):
             function_entity = self.function_stack[-1]
             self.result.edges.extend(python_http_call_edges(self.context, node, from_entity=function_entity))
             self.result.edges.extend(python_sql_call_edges(self.context, node, from_entity=function_entity))
+            self.result.edges.extend(
+                python_symbol_call_edges(
+                    self.context,
+                    node,
+                    from_entity=function_entity,
+                    class_stack=self.class_stack,
+                    callable_index=self.callable_index,
+                )
+            )
+        self.generic_visit(node)
+
+
+class PythonCallableCollector(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.functions: set[str] = set()
+        self.class_methods: dict[str, set[str]] = {}
+        self.class_stack: list[str] = []
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.class_stack.append(node.name)
+        self.generic_visit(node)
+        self.class_stack.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.visit_python_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.visit_python_function(node)
+
+    def visit_python_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        if self.class_stack:
+            class_name = ".".join(self.class_stack)
+            self.class_methods.setdefault(class_name, set()).add(node.name)
+            self.generic_visit(node)
+            return
+        self.functions.add(node.name)
         self.generic_visit(node)
 
 
@@ -2306,6 +2363,15 @@ def python_import_edge(context: FileScanContext, raw_target: str, level: int, li
     )
 
 
+def python_callable_index(tree: ast.AST) -> PythonCallableIndex:
+    collector = PythonCallableCollector()
+    collector.visit(tree)
+    return PythonCallableIndex(
+        functions=frozenset(collector.functions),
+        class_methods={class_name: frozenset(methods) for class_name, methods in collector.class_methods.items()},
+    )
+
+
 def python_symbol_result(
     context: FileScanContext,
     symbol_kind: str,
@@ -2318,13 +2384,16 @@ def python_symbol_result(
     parent_name = ".".join(class_stack) or None
     full_name = ".".join(part for part in (module_name, parent_name, name) if part)
     entity_type = "function" if symbol_kind in {"function", "async_function"} else symbol_kind
+    aliases = {name, full_name or name}
+    if parent_name:
+        aliases.add(f"{parent_name}.{name}")
     symbol = Entity(
         entity_type=entity_type,
         name=full_name or name,
         source_name=context.source.name,
         file_path=context.rel_path,
         line_number=line_number,
-        aliases={name, full_name or name},
+        aliases=aliases,
         properties={
             "symbol_kind": symbol_kind,
             "module": module_name or None,
@@ -2515,6 +2584,62 @@ def python_sql_call_edges(
     ]
 
 
+def python_symbol_call_edges(
+    context: FileScanContext,
+    call: ast.Call,
+    from_entity: Entity,
+    class_stack: Sequence[str],
+    callable_index: PythonCallableIndex,
+) -> list[Edge]:
+    target = python_symbol_call_target(call.func, class_stack, callable_index)
+    if not target:
+        return []
+    properties = {
+        "raw_target": target.raw_target,
+        "normalized_target": target.name,
+        "call_kind": target.call_kind,
+        **source_context_properties(from_entity),
+    }
+    if target.receiver:
+        properties["receiver"] = target.receiver
+    return [
+        unresolved_edge(
+            from_entity,
+            target.name,
+            "CALLS_SYMBOL",
+            context.source.name,
+            context.rel_path,
+            "python_call",
+            to_type="function",
+            line_number=call.lineno,
+            properties=properties,
+        )
+    ]
+
+
+def python_symbol_call_target(
+    func: ast.expr,
+    class_stack: Sequence[str],
+    callable_index: PythonCallableIndex,
+) -> PythonCallTarget | None:
+    if isinstance(func, ast.Name) and callable_index.has_function(func.id):
+        return PythonCallTarget(func.id, func.id, "direct")
+    if not isinstance(func, ast.Attribute):
+        return None
+
+    receiver = python_call_receiver_name(func.value)
+    class_name = python_receiver_class_name(func.value)
+    if class_name and callable_index.has_method(class_name, func.attr):
+        return PythonCallTarget(f"{class_name}.{func.attr}", python_call_raw_target(func), "class_method", receiver)
+    if receiver in {"self", "cls"} and class_stack:
+        current_class = ".".join(class_stack)
+        if callable_index.has_method(current_class, func.attr):
+            return PythonCallTarget(
+                f"{current_class}.{func.attr}", python_call_raw_target(func), "instance_method", receiver
+            )
+    return None
+
+
 def python_attribute_name(node: ast.AST) -> str | None:
     if isinstance(node, ast.Attribute):
         return node.attr.lower()
@@ -2531,6 +2656,31 @@ def python_call_root_name(node: ast.AST) -> str | None:
     if isinstance(node, ast.Call):
         return python_call_root_name(node.func)
     return None
+
+
+def python_call_receiver_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Call):
+        return python_call_receiver_name(node.func)
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def python_receiver_class_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Call):
+        return python_call_receiver_name(node.func)
+    if isinstance(node, ast.Name):
+        return node.id
+    return None
+
+
+def python_call_raw_target(node: ast.AST) -> str:
+    try:
+        return ast.unparse(node)
+    except ValueError:
+        return "unknown"
 
 
 def python_string_arg(call: ast.Call, index: int) -> str | None:
