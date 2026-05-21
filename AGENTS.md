@@ -64,6 +64,10 @@ logic in the CLI, or graph-resolution policy in storage code.
   relationships between applications, services, projects, data objects, and
   deployment resources. Parser names, HTTP client libraries, and syntax details
   are evidence, not the primary graph language.
+- First-class coverage discipline: when a parser discovers a new kind of
+  application, data, deployment, or integration boundary, evaluate it against
+  `docs/first-class-coverage.md` before hiding it in generic properties or
+  creating parser-specific vocabulary.
 
 ## Graph Rules
 
@@ -74,6 +78,11 @@ logic in the CLI, or graph-resolution policy in storage code.
   calls, SQL usage, package dependencies, project references, deployment
   topology, declarations, and ownership. Do not create graph vocabulary around
   low-level implementation details such as a specific HTTP client library.
+- Important integration boundaries should become first-class graph facts when
+  they are stable, discoverable, and useful for impact analysis. Examples
+  include SQL reads and writes, SQL schema dependencies, message publish/consume
+  boundaries, storage reads and writes, cache usage, and scheduled/background
+  work.
 - Interaction edges should preserve evidence on the edge, including protocol,
   method, route or target path, raw target, normalized target, config key,
   client library, parser, file path, and line number when those values are

@@ -29,6 +29,9 @@ complete until code, examples, tests, and generated references all agree.
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
    such as `fetch`, `axios`, `requests`, `httpx`, or `HttpClient` in edge
    properties. Do not add one edge type or parser ID per client library.
+   If the parser discovers a new boundary type, evaluate it against
+   [first-class coverage](first-class-coverage.md) before deciding whether to
+   add graph vocabulary or reuse an existing edge type.
    For interaction edge types listed in `repo_graph.vocabulary.INTERACTION_EDGE_TYPES`,
    use the scanner `interaction_properties` helper or an equivalent wrapper so
    `target_boundary`, `dependency_scope`, and `interaction_kind` are present.
@@ -56,6 +59,9 @@ complete until code, examples, tests, and generated references all agree.
 - Optimize parser output for app-boundary dependencies. Parser names and
   library names are evidence; edge types should remain useful for impact
   analysis and agent summaries.
+- Promote important integration boundaries to first-class graph facts when
+  they are stable, discoverable, and useful for blast-radius analysis. Use
+  `docs/first-class-coverage.md` as the checklist.
 - Use interaction evidence for app-to-app and app-to-database relationships:
   `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
   `CALLS_SQL`, and `READS_SQL_OBJECT`. Do not use interaction evidence for

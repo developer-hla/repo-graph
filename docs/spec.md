@@ -327,6 +327,14 @@ discarding relationships discovered from the scanned sources.
 
 Future parser slices should add:
 
+- SQL writes, schema dependencies, triggers, and richer SQL object impact
+  paths
+- route/function/query context so endpoint impact paths do not stop at file
+  ownership
+- messaging publish/consume boundaries for queues, topics, and event contracts
+- shared storage and file-transfer boundaries such as blob storage, network
+  shares, FTP, and SFTP
+- cache and scheduled-job boundaries when stable target naming rules are clear
 - deeper MSBuild metadata
 - optional LLM-assisted documentation discovery that emits evidence-backed
   candidate entities and edges
