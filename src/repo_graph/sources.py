@@ -17,8 +17,10 @@ from urllib.request import Request, urlopen
 
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.database import (
+    POSTGRES_ENGINE,
     SQLSERVER_ENGINE,
     normalize_database_engine,
+    postgres_driver_available,
     sqlserver_driver_available,
 )
 
@@ -206,15 +208,14 @@ def source_problems(status: dict[str, Any], source: Source) -> list[str]:
 
 def database_source_problems(source: Source) -> list[str]:
     problems: list[str] = []
-    if source.engine and normalize_database_engine(source.engine) != SQLSERVER_ENGINE:
+    engine = normalize_database_engine(source.engine) if source.engine else ""
+    if engine and engine not in {POSTGRES_ENGINE, SQLSERVER_ENGINE}:
         problems.append("database_connector_unavailable")
     if not source.connection_env or source.connection_env not in os.environ:
         problems.append("connection_env_missing")
-    if (
-        source.engine
-        and normalize_database_engine(source.engine) == SQLSERVER_ENGINE
-        and not sqlserver_driver_available()
-    ):
+    if engine == SQLSERVER_ENGINE and not sqlserver_driver_available():
+        problems.append("database_driver_missing")
+    if engine == POSTGRES_ENGINE and not postgres_driver_available():
         problems.append("database_driver_missing")
     return problems
 

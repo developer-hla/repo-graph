@@ -72,6 +72,15 @@ SQLSERVER_OBJECT_TYPES_BY_INCLUDE_TYPE = {
     "table": ("U",),
     "view": ("V",),
 }
+POSTGRES_CLASS_RELKINDS_BY_INCLUDE_TYPE = {
+    "table": ("f", "p", "r"),
+    "view": ("m", "v"),
+}
+POSTGRES_PROC_KINDS_BY_INCLUDE_TYPE = {
+    "function": ("f",),
+    "stored_procedure": ("p",),
+}
+POSTGRES_DEFAULT_INCLUDE_OBJECT_TYPES = ("function", "stored_procedure", "table", "view")
 
 
 class DatabaseMetadataAdapter(Protocol):
@@ -211,6 +220,14 @@ class SqlServerMetadataReadResult:
 
 
 @dataclass(frozen=True)
+class PostgresMetadataReadResult:
+    """PostgreSQL metadata rows plus bounded-read warnings."""
+
+    metadata: PostgresMetadata
+    errors: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class DatabaseGraphError:
     """Structured database metadata adapter error."""
 
@@ -319,6 +336,8 @@ def graph_from_database_source(_request: DatabaseSourceRequest) -> DatabaseGraph
     engine = normalize_database_engine(_request.engine)
     if engine == SQLSERVER_ENGINE:
         return graph_from_sqlserver_source(_request)
+    if engine == POSTGRES_ENGINE:
+        return graph_from_postgres_source(_request)
     return DatabaseGraphFacts(errors=[database_connector_unavailable_message(_request.source_name, engine)])
 
 
@@ -328,14 +347,10 @@ def graph_from_sqlserver_source(
 ) -> DatabaseGraphFacts:
     """Read SQL Server catalog metadata and convert it into graph facts."""
 
-    connection_env = request.connection_env.strip()
-    if not connection_env:
-        return DatabaseGraphFacts(errors=[f"Database source '{request.source_name}' connection_env is not configured."])
-    connection_string = os.environ.get(connection_env)
-    if not connection_string:
-        return DatabaseGraphFacts(
-            errors=[f"Database source '{request.source_name}' connection_env is not set in the runtime environment."]
-        )
+    connection_string, connection_error = database_connection_string(request)
+    if connection_error is not None:
+        return connection_error
+    assert connection_string is not None
     if connect is None and not sqlserver_driver_available():
         return DatabaseGraphFacts(
             errors=[
@@ -376,13 +391,92 @@ def graph_from_sqlserver_source(
     return facts
 
 
+def graph_from_postgres_source(
+    request: DatabaseSourceRequest,
+    connect: Callable[[str, int], Any] | None = None,
+) -> DatabaseGraphFacts:
+    """Read PostgreSQL catalog metadata and convert it into graph facts."""
+
+    connection_string, connection_error = database_connection_string(request)
+    if connection_error is not None:
+        return connection_error
+    assert connection_string is not None
+    if connect is None and not postgres_driver_available():
+        return DatabaseGraphFacts(
+            errors=[
+                "PostgreSQL connector requires optional dependency 'psycopg' "
+                f"for database source '{request.source_name}'."
+            ]
+        )
+
+    timeout = request.query_timeout_seconds or DEFAULT_DATABASE_QUERY_TIMEOUT_SECONDS
+    try:
+        connection = (
+            connect(connection_string, timeout)
+            if connect is not None
+            else connect_to_postgres(connection_string, timeout)
+        )
+    except Exception as exc:
+        return DatabaseGraphFacts(
+            errors=[
+                f"PostgreSQL metadata connection failed for '{request.source_name}': "
+                f"{safe_database_error_text(exc, connection_string)}"
+            ]
+        )
+
+    try:
+        metadata_result = read_postgres_metadata(connection, request)
+    except Exception as exc:
+        return DatabaseGraphFacts(
+            errors=[
+                f"PostgreSQL metadata read failed for '{request.source_name}': "
+                f"{safe_database_error_text(exc, connection_string)}"
+            ]
+        )
+    finally:
+        close_database_connection(connection)
+
+    facts = graph_from_postgres_metadata(request.source_name, metadata_result.metadata)
+    facts.errors.extend(metadata_result.errors)
+    return facts
+
+
+def database_connection_string(request: DatabaseSourceRequest) -> tuple[str | None, DatabaseGraphFacts | None]:
+    connection_env = request.connection_env.strip()
+    if not connection_env:
+        return None, DatabaseGraphFacts(
+            errors=[f"Database source '{request.source_name}' connection_env is not configured."]
+        )
+    connection_string = os.environ.get(connection_env)
+    if not connection_string:
+        return None, DatabaseGraphFacts(
+            errors=[f"Database source '{request.source_name}' connection_env is not set in the runtime environment."]
+        )
+    return connection_string, None
+
+
 def sqlserver_driver_available() -> bool:
     return importlib.util.find_spec("pyodbc") is not None
+
+
+def postgres_driver_available() -> bool:
+    return importlib.util.find_spec("psycopg") is not None
 
 
 def connect_to_sqlserver(connection_string: str, timeout: int) -> Any:
     pyodbc = __import__("pyodbc")
     return pyodbc.connect(connection_string, timeout=timeout, autocommit=True)
+
+
+def connect_to_postgres(connection_string: str, timeout: int) -> Any:
+    psycopg = __import__("psycopg")
+    rows = __import__("psycopg.rows", fromlist=["dict_row"])
+    return psycopg.connect(
+        connection_string,
+        connect_timeout=timeout,
+        autocommit=True,
+        row_factory=rows.dict_row,
+    )
 
 
 def safe_database_error_text(exc: Exception, connection_string: str) -> str:
@@ -392,7 +486,10 @@ def safe_database_error_text(exc: Exception, connection_string: str) -> str:
 def read_sqlserver_metadata(connection: Any, request: DatabaseSourceRequest) -> SqlServerMetadataReadResult:
     """Read bounded SQL Server catalog metadata from an open connection."""
 
-    budget = MetadataReadBudget(request.max_metadata_rows or DEFAULT_DATABASE_MAX_METADATA_ROWS)
+    budget = MetadataReadBudget(
+        limit=request.max_metadata_rows or DEFAULT_DATABASE_MAX_METADATA_ROWS,
+        engine_label="SQL Server",
+    )
     cursor = connection.cursor()
     timeout = request.query_timeout_seconds or DEFAULT_DATABASE_QUERY_TIMEOUT_SECONDS
     set_cursor_timeout(cursor, timeout)
@@ -476,11 +573,117 @@ def read_sqlserver_metadata(connection: Any, request: DatabaseSourceRequest) -> 
     )
 
 
+def read_postgres_metadata(connection: Any, request: DatabaseSourceRequest) -> PostgresMetadataReadResult:
+    """Read bounded PostgreSQL catalog metadata from an open connection."""
+
+    budget = MetadataReadBudget(
+        limit=request.max_metadata_rows or DEFAULT_DATABASE_MAX_METADATA_ROWS,
+        engine_label="PostgreSQL",
+    )
+    cursor = connection.cursor()
+    timeout = request.query_timeout_seconds or DEFAULT_DATABASE_QUERY_TIMEOUT_SECONDS
+    set_postgres_statement_timeout(cursor, timeout)
+
+    tables: list[PostgresObjectRow] = []
+    views: list[PostgresObjectRow] = []
+    materialized_views: list[PostgresObjectRow] = []
+    class_relkinds = postgres_class_relkind_filter(request.include_object_types)
+    if class_relkinds and budget.has_remaining:
+        for row in fetch_postgres_rows(
+            cursor,
+            postgres_class_objects_query(budget.remaining, request.schemas, class_relkinds),
+            (*class_relkinds, *request.schemas),
+            budget,
+            "pg_class",
+        ):
+            object_row = PostgresObjectRow(row_text(row, "schema_name"), row_text(row, "object_name"))
+            match normalize_metadata_value(row_text(row, "object_type")):
+                case "table":
+                    tables.append(object_row)
+                case "view":
+                    views.append(object_row)
+                case "materialized_view":
+                    materialized_views.append(object_row)
+
+    functions: list[PostgresObjectRow] = []
+    procedures: list[PostgresObjectRow] = []
+    proc_kinds = postgres_proc_kind_filter(request.include_object_types)
+    if proc_kinds and budget.has_remaining:
+        for row in fetch_postgres_rows(
+            cursor,
+            postgres_proc_objects_query(budget.remaining, request.schemas, proc_kinds),
+            (*proc_kinds, *request.schemas),
+            budget,
+            "pg_proc",
+        ):
+            object_row = PostgresObjectRow(row_text(row, "schema_name"), row_text(row, "object_name"))
+            match normalize_metadata_value(row_text(row, "object_type")):
+                case "function":
+                    functions.append(object_row)
+                case "procedure":
+                    procedures.append(object_row)
+
+    foreign_keys: list[PostgresForeignKeyRow] = []
+    if include_database_object_type(request.include_object_types, "foreign_key") and budget.has_remaining:
+        foreign_keys.extend(
+            PostgresForeignKeyRow(
+                schema=row_text(row, "schema_name"),
+                table=row_text(row, "table_name"),
+                referenced_schema=row_text(row, "referenced_schema_name"),
+                referenced_table=row_text(row, "referenced_table_name"),
+                name=optional_row_text(row, "constraint_name"),
+            )
+            for row in fetch_postgres_rows(
+                cursor,
+                postgres_foreign_keys_query(budget.remaining, request.schemas),
+                request.schemas,
+                budget,
+                "pg_constraint",
+            )
+        )
+
+    dependencies: list[PostgresDependencyRow] = []
+    if include_database_object_type(request.include_object_types, "dependency") and budget.has_remaining:
+        for row in fetch_postgres_rows(
+            cursor,
+            postgres_dependencies_query(budget.remaining, request.schemas),
+            (*request.schemas, *request.schemas),
+            budget,
+            "pg_depend",
+        ):
+            dependencies.append(
+                PostgresDependencyRow(
+                    from_schema=row_text(row, "from_schema_name"),
+                    from_name=row_text(row, "from_object_name"),
+                    from_type=postgres_catalog_object_type(row_text(row, "from_object_type")),
+                    to_schema=row_text(row, "to_schema_name"),
+                    to_name=row_text(row, "to_object_name"),
+                    to_type=postgres_catalog_object_type(row_text(row, "to_object_type")),
+                    dependency_type=optional_row_text(row, "dependency_type") or "object_dependency",
+                    name=optional_row_text(row, "dependency_name"),
+                )
+            )
+
+    return PostgresMetadataReadResult(
+        metadata=PostgresMetadata(
+            tables=tuple(tables),
+            views=tuple(views),
+            materialized_views=tuple(materialized_views),
+            functions=tuple(functions),
+            procedures=tuple(procedures),
+            foreign_keys=tuple(foreign_keys),
+            dependencies=tuple(dependencies),
+        ),
+        errors=budget.errors,
+    )
+
+
 @dataclass
 class MetadataReadBudget:
     """Tracks the configured metadata row cap across catalog queries."""
 
     limit: int
+    engine_label: str
     consumed: int = 0
     errors: list[str] = field(default_factory=list)
 
@@ -497,7 +700,7 @@ class MetadataReadBudget:
         self.consumed += row_count
         if row_count >= remaining_before:
             self.errors.append(
-                f"SQL Server metadata row limit reached while reading {metadata_source}; "
+                f"{self.engine_label} metadata row limit reached while reading {metadata_source}; "
                 "increase max_metadata_rows to inspect more metadata."
             )
 
@@ -510,6 +713,19 @@ def fetch_sqlserver_rows(
     metadata_source: str,
 ) -> list[Any]:
     rows = list(cursor.execute(query, *params).fetchall())
+    budget.record(len(rows), metadata_source)
+    return rows
+
+
+def fetch_postgres_rows(
+    cursor: Any,
+    query: str,
+    params: tuple[Any, ...],
+    budget: MetadataReadBudget,
+    metadata_source: str,
+) -> list[Any]:
+    cursor.execute(query, params)
+    rows = list(cursor.fetchall())
     budget.record(len(rows), metadata_source)
     return rows
 
@@ -575,6 +791,138 @@ ORDER BY referencing_schema.name, referencing_object.name, d.referenced_entity_n
 """
 
 
+def postgres_class_objects_query(limit: int, schemas: tuple[str, ...], relkinds: tuple[str, ...]) -> str:
+    schema_filter = postgres_schema_filter("n", schemas)
+    relkind_filter = postgres_in_filter("c.relkind", len(relkinds))
+    return f"""
+SELECT
+  n.nspname AS schema_name,
+  c.relname AS object_name,
+  CASE c.relkind
+    WHEN 'm' THEN 'materialized_view'
+    WHEN 'v' THEN 'view'
+    ELSE 'table'
+  END AS object_type
+FROM pg_catalog.pg_class AS c
+JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+WHERE {relkind_filter}
+  {schema_filter}
+ORDER BY n.nspname, c.relname
+LIMIT {safe_sql_limit(limit)}
+"""
+
+
+def postgres_proc_objects_query(limit: int, schemas: tuple[str, ...], prokinds: tuple[str, ...]) -> str:
+    schema_filter = postgres_schema_filter("n", schemas)
+    prokind_filter = postgres_in_filter("p.prokind", len(prokinds))
+    return f"""
+SELECT
+  n.nspname AS schema_name,
+  p.proname AS object_name,
+  CASE p.prokind
+    WHEN 'p' THEN 'procedure'
+    ELSE 'function'
+  END AS object_type
+FROM pg_catalog.pg_proc AS p
+JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+WHERE {prokind_filter}
+  {schema_filter}
+ORDER BY n.nspname, p.proname
+LIMIT {safe_sql_limit(limit)}
+"""
+
+
+def postgres_foreign_keys_query(limit: int, schemas: tuple[str, ...]) -> str:
+    schema_filter = postgres_schema_filter("n", schemas)
+    return f"""
+SELECT
+  n.nspname AS schema_name,
+  c.relname AS table_name,
+  rn.nspname AS referenced_schema_name,
+  rc.relname AS referenced_table_name,
+  con.conname AS constraint_name
+FROM pg_catalog.pg_constraint AS con
+JOIN pg_catalog.pg_class AS c ON c.oid = con.conrelid
+JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+JOIN pg_catalog.pg_class AS rc ON rc.oid = con.confrelid
+JOIN pg_catalog.pg_namespace AS rn ON rn.oid = rc.relnamespace
+WHERE con.contype = 'f'
+  {schema_filter}
+ORDER BY n.nspname, c.relname, con.conname
+LIMIT {safe_sql_limit(limit)}
+"""
+
+
+def postgres_dependencies_query(limit: int, schemas: tuple[str, ...]) -> str:
+    view_schema_filter = postgres_schema_filter("n", schemas)
+    routine_schema_filter = postgres_schema_filter("pn", schemas)
+    return f"""
+SELECT *
+FROM (
+  SELECT
+    n.nspname AS from_schema_name,
+    v.relname AS from_object_name,
+    CASE v.relkind
+      WHEN 'm' THEN 'materialized_view'
+      ELSE 'view'
+    END AS from_object_type,
+    rn.nspname AS to_schema_name,
+    rc.relname AS to_object_name,
+    CASE rc.relkind
+      WHEN 'm' THEN 'materialized_view'
+      WHEN 'v' THEN 'view'
+      ELSE 'table'
+    END AS to_object_type,
+    dep.deptype::text AS dependency_name,
+    'object_dependency' AS dependency_type
+  FROM pg_catalog.pg_rewrite AS rw
+  JOIN pg_catalog.pg_class AS v ON v.oid = rw.ev_class
+  JOIN pg_catalog.pg_namespace AS n ON n.oid = v.relnamespace
+  JOIN pg_catalog.pg_depend AS dep ON dep.objid = rw.oid
+  JOIN pg_catalog.pg_class AS rc ON rc.oid = dep.refobjid
+  JOIN pg_catalog.pg_namespace AS rn ON rn.oid = rc.relnamespace
+  WHERE v.relkind IN ('m', 'v')
+    AND dep.classid = 'pg_rewrite'::regclass
+    AND dep.refclassid = 'pg_class'::regclass
+    AND dep.deptype IN ('a', 'n')
+    AND rc.oid <> v.oid
+    {view_schema_filter}
+    {postgres_user_schema_filter("rn")}
+
+  UNION ALL
+
+  SELECT
+    pn.nspname AS from_schema_name,
+    p.proname AS from_object_name,
+    CASE p.prokind
+      WHEN 'p' THEN 'procedure'
+      ELSE 'function'
+    END AS from_object_type,
+    rpn.nspname AS to_schema_name,
+    rp.proname AS to_object_name,
+    CASE rp.prokind
+      WHEN 'p' THEN 'procedure'
+      ELSE 'function'
+    END AS to_object_type,
+    dep.deptype::text AS dependency_name,
+    'object_dependency' AS dependency_type
+  FROM pg_catalog.pg_depend AS dep
+  JOIN pg_catalog.pg_proc AS p ON p.oid = dep.objid
+  JOIN pg_catalog.pg_namespace AS pn ON pn.oid = p.pronamespace
+  JOIN pg_catalog.pg_proc AS rp ON rp.oid = dep.refobjid
+  JOIN pg_catalog.pg_namespace AS rpn ON rpn.oid = rp.pronamespace
+  WHERE dep.classid = 'pg_proc'::regclass
+    AND dep.refclassid = 'pg_proc'::regclass
+    AND dep.deptype IN ('a', 'n')
+    AND rp.oid <> p.oid
+    {routine_schema_filter}
+    {postgres_user_schema_filter("rpn")}
+) AS dependencies
+ORDER BY from_schema_name, from_object_name, to_schema_name, to_object_name
+LIMIT {safe_sql_limit(limit)}
+"""
+
+
 def sqlserver_schema_filter(schema_alias: str, schemas: tuple[str, ...]) -> str:
     if not schemas:
         return ""
@@ -583,6 +931,23 @@ def sqlserver_schema_filter(schema_alias: str, schemas: tuple[str, ...]) -> str:
 
 def sqlserver_in_filter(column_name: str, count: int) -> str:
     return f"{column_name} IN ({', '.join('?' for _index in range(count))})"
+
+
+def postgres_schema_filter(schema_alias: str, schemas: tuple[str, ...]) -> str:
+    if schemas:
+        return f"AND {schema_alias}.nspname IN ({', '.join('%s' for _schema in schemas)})"
+    return postgres_user_schema_filter(schema_alias)
+
+
+def postgres_user_schema_filter(schema_alias: str) -> str:
+    return (
+        f"AND {schema_alias}.nspname NOT IN ('information_schema', 'pg_catalog') "
+        f"AND {schema_alias}.nspname NOT LIKE 'pg_toast%'"
+    )
+
+
+def postgres_in_filter(column_name: str, count: int) -> str:
+    return f"{column_name} IN ({', '.join('%s' for _index in range(count))})"
 
 
 def sqlserver_object_type_filter(include_object_types: tuple[str, ...]) -> tuple[str, ...]:
@@ -599,11 +964,46 @@ def sqlserver_object_type_filter(include_object_types: tuple[str, ...]) -> tuple
     return tuple(dict.fromkeys(object_types))
 
 
+def postgres_class_relkind_filter(include_object_types: tuple[str, ...]) -> tuple[str, ...]:
+    requested = postgres_requested_object_types(include_object_types)
+    relkinds: list[str] = []
+    for include_type in requested:
+        relkinds.extend(POSTGRES_CLASS_RELKINDS_BY_INCLUDE_TYPE.get(include_type, ()))
+    return tuple(dict.fromkeys(relkinds))
+
+
+def postgres_proc_kind_filter(include_object_types: tuple[str, ...]) -> tuple[str, ...]:
+    requested = postgres_requested_object_types(include_object_types)
+    prokinds: list[str] = []
+    for include_type in requested:
+        prokinds.extend(POSTGRES_PROC_KINDS_BY_INCLUDE_TYPE.get(include_type, ()))
+    return tuple(dict.fromkeys(prokinds))
+
+
+def postgres_requested_object_types(include_object_types: tuple[str, ...]) -> list[str]:
+    requested = list(include_object_types or POSTGRES_DEFAULT_INCLUDE_OBJECT_TYPES)
+    if "foreign_key" in requested and "table" not in requested:
+        requested.append("table")
+    if "dependency" in requested:
+        requested.extend(
+            object_type
+            for object_type in (*POSTGRES_CLASS_RELKINDS_BY_INCLUDE_TYPE, *POSTGRES_PROC_KINDS_BY_INCLUDE_TYPE)
+            if object_type not in requested
+        )
+    return requested
+
+
 def include_database_object_type(include_object_types: tuple[str, ...], object_type: str) -> bool:
     return not include_object_types or object_type in include_object_types
 
 
 def sqlserver_catalog_object_type(value: str | None) -> str:
+    if not value:
+        return "sql_object"
+    return DATABASE_OBJECT_TYPE_ALIASES.get(normalize_metadata_value(value), "sql_object")
+
+
+def postgres_catalog_object_type(value: str | None) -> str:
     if not value:
         return "sql_object"
     return DATABASE_OBJECT_TYPE_ALIASES.get(normalize_metadata_value(value), "sql_object")
@@ -618,7 +1018,7 @@ def safe_sql_limit(value: int) -> int:
 def row_text(row: Any, field_name: str) -> str:
     value = optional_row_text(row, field_name)
     if value is None:
-        raise ValueError(f"SQL Server metadata row is missing {field_name}.")
+        raise ValueError(f"Database metadata row is missing {field_name}.")
     return value
 
 
@@ -640,6 +1040,10 @@ def set_cursor_timeout(cursor: Any, timeout: int) -> None:
         cursor.timeout = timeout
     except Exception:
         return
+
+
+def set_postgres_statement_timeout(cursor: Any, timeout: int) -> None:
+    cursor.execute("SET statement_timeout = %s", (timeout * 1000,))
 
 
 def close_database_connection(connection: Any) -> None:

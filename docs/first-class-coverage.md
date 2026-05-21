@@ -46,7 +46,7 @@ shortcuts.
 
 | Priority | Area | Why it matters | Candidate vocabulary |
 | --- | --- | --- | --- |
-| High | Current database introspection | Revision and migration files can describe objects that no longer exist. Read-only introspection can provide the current database shape and reconcile code evidence against reality. | Source type: `database`; schema state: `current_database`; SQL Server metadata from `sys.*` catalogs. |
+| High | Current database introspection | Revision and migration files can describe objects that no longer exist. Read-only introspection can provide the current database shape and reconcile code evidence against reality. | Source type: `database`; schema state: `current_database`; SQL Server metadata from `sys.*` catalogs; PostgreSQL metadata from `pg_catalog` catalogs. |
 | High | Route/function/query context | A table or stored procedure impact path is more useful when it reaches a handler or endpoint, not only a file. | `HANDLES_ROUTE`, `CALLS_SYMBOL`, or narrower call-context edges after design review. |
 | High | Messaging and event streams | Services often depend through queues, topics, and event contracts instead of HTTP. Refactors need publisher and consumer impact. | Entities: `message_topic`, `message_queue`, `message_contract`; edges: `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`. |
 | Medium | Deeper SQL schema dependencies | Schema-bound views, computed columns, constraints, and SQL module dependencies create blast radius beyond simple `REFERENCES` clauses. | Continue using `REFERENCES_SQL_OBJECT` with `sql_operation` evidence such as `SCHEMA_BOUND_VIEW` or catalog-derived dependency type. |
@@ -59,9 +59,9 @@ shortcuts.
 ## Recommended Slice Order
 
 1. Add read-only database introspection as an optional source type.
-   SQL Server has a live metadata connector plus a pure metadata-row adapter
-   for tables, views, procedures, functions, foreign keys, and module
-   dependencies. Do not read table data.
+   SQL Server and PostgreSQL have live metadata connectors plus pure
+   metadata-row adapters for tables, views, procedures, functions, foreign
+   keys, and object dependencies. Do not read table data.
 2. Add reconciliation reports for code-vs-database drift. Done for graph facts.
    Reports flag objects found only in migration history, references missing
    from the current database, and current database objects with no code

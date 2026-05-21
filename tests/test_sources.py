@@ -245,6 +245,33 @@ class SourceSyncTests(unittest.TestCase):
         self.assertEqual(payload[0]["configured"]["connection_env"], "REPO_GRAPH_EXAMPLE_SQLSERVER_URL")
         self.assertNotIn("connection_string", payload[0]["configured"])
 
+    def test_inspect_sources_reports_postgres_database_source_connector_status(self) -> None:
+        root = Path("/repo")
+        config = RepoGraphConfig(
+            name="test",
+            config_path=root / "repo-graph.yaml",
+            cache_dir=root / ".repo-graph/cache/repos",
+            output_dir=root / ".repo-graph/output",
+            sources=(
+                Source(
+                    name="current-pg",
+                    source_type="database",
+                    engine="postgres",
+                    connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
+                    schemas=("public",),
+                ),
+            ),
+        )
+
+        with patch("repo_graph.sources.postgres_driver_available", return_value=False):
+            payload = inspect_sources(config)
+
+        self.assertEqual(payload[0]["name"], "current-pg")
+        self.assertFalse(payload[0]["ready"])
+        self.assertIn("connection_env_missing", payload[0]["problems"])
+        self.assertIn("database_driver_missing", payload[0]["problems"])
+        self.assertNotIn("database_connector_unavailable", payload[0]["problems"])
+
     def test_sync_sources_with_status_skips_database_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

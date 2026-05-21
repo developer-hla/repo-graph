@@ -63,7 +63,8 @@ YAML source `type` values are loaded into the `source_type` field.
 - `connection_env` names the environment variable that contains the connection string. Connection string values are not accepted in config.
 - Supported `include_object_types` values: `dependency`, `foreign_key`, `function`, `stored_procedure`, `table`, `trigger`, `view`.
 - SQL Server live metadata reads require optional `pyodbc` plus a SQL Server ODBC driver.
-- Engines without a live connector emit source errors without blocking repository scans.
+- PostgreSQL live metadata reads require optional `psycopg`.
+- Database source errors do not block repository scans unless strict mode is enabled.
 
 ## Include Rules
 

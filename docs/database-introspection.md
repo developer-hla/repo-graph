@@ -1,9 +1,8 @@
 # Database Introspection Design
 
 RepoGraph supports optional read-only database introspection through a database
-source contract and engine adapter registry. SQL Server has a live metadata
-connector plus a pure metadata-row adapter. PostgreSQL has a pure metadata-row
-adapter; its live connector is still planned.
+source contract and engine adapter registry. SQL Server and PostgreSQL have
+live metadata connectors plus pure metadata-row adapters.
 
 ## Why This Exists
 
@@ -32,9 +31,10 @@ access.
 ## Source Contract
 
 The config parser understands this source type so users and agents can validate
-the contract. Build and refresh workflows read live SQL Server metadata when
-`pyodbc`, a SQL Server ODBC driver, and the configured connection environment
-variable are available in the runtime. Engines without a live connector still
+the contract. Build and refresh workflows read live database metadata when the
+engine's optional driver and the configured connection environment variable are
+available in the runtime. SQL Server uses `pyodbc` plus a SQL Server ODBC
+driver. PostgreSQL uses `psycopg`. Engines without a live connector still
 report a source error without blocking repository sources in the same config.
 
 ```yaml
@@ -55,6 +55,25 @@ sources:
       - dependency
     query_timeout_seconds: 10
     max_metadata_rows: 50000
+```
+
+For PostgreSQL, the shape is the same:
+
+```yaml
+sources:
+  - type: database
+    name: example-current-pg
+    engine: postgres
+    connection_env: REPO_GRAPH_EXAMPLE_POSTGRES_URL
+    schemas:
+      - public
+    include_object_types:
+      - table
+      - view
+      - stored_procedure
+      - function
+      - foreign_key
+      - dependency
 ```
 
 Fields:
@@ -106,27 +125,30 @@ from metadata rows and adds a source error if the connection fails, the driver
 is missing, the connection environment variable is absent, or
 `max_metadata_rows` is reached.
 
-## PostgreSQL Direction
+## PostgreSQL Metadata
 
-PostgreSQL should be added as a separate adapter, not as special cases inside
-the SQL Server adapter. It should use PostgreSQL catalog sources such as
-`pg_catalog`, `information_schema`, and `pg_depend`, then emit the same entity
-and relationship vocabulary used by every database engine.
+The PostgreSQL connector consumes catalog-shaped metadata rows only. It uses
+`psycopg` when available, reads the connection string from `connection_env`,
+and sets `statement_timeout` for the session before reading metadata. The
+package is an optional runtime dependency so public tests and normal repository
+scanning do not require a database driver.
 
-Useful starting points:
+The connector reads these catalog sources:
 
 | Metadata | Candidate source |
 | --- | --- |
-| Tables and columns | `pg_class`, `pg_namespace`, `pg_attribute`, `information_schema.columns` |
-| Views and materialized views | `pg_class`, `pg_views`, `pg_matviews` |
+| Tables | `pg_class`, `pg_namespace` |
+| Views and materialized views | `pg_class`, `pg_namespace` |
 | Functions and procedures | `pg_proc`, `pg_namespace` |
 | Foreign keys | `pg_constraint` |
-| Triggers | `pg_trigger` |
-| Object dependencies | `pg_depend`, `pg_rewrite` |
+| View and routine dependencies | `pg_depend`, `pg_rewrite` |
 
-The adapter should preserve PostgreSQL-specific details in properties, but
-agents and users should still see generic database entities such as tables,
-views, functions, procedures, triggers, and dependency edges.
+It does not read table data or execute application SQL. It emits graph facts
+from metadata rows and adds a source error if the connection fails, the driver
+is missing, the connection environment variable is absent, or
+`max_metadata_rows` is reached. PostgreSQL-specific details such as
+materialized view status are preserved in properties while agents and users
+still see generic database entities and dependency edges.
 
 ## Graph Facts
 
@@ -215,3 +237,4 @@ not a live database query.
 7. Add SQL Server live metadata connector behind the database source contract.
    Done.
 8. Add PostgreSQL live connector behind the same `database` source contract.
+   Done.

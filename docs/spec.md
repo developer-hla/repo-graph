@@ -27,9 +27,9 @@ that developers and agents can use.
 ## Source Model
 
 Sources are declared in a config file. A source may be a local path, a specific
-Git repository, or a GitHub organization query that expands to Git
-repositories. A future optional `database` source type should add read-only
-metadata introspection for current database state; see
+Git repository, a GitHub organization query that expands to Git repositories,
+or an optional `database` source that adds read-only metadata introspection for
+current database state; see
 [database-introspection.md](database-introspection.md).
 
 Each graph build records:
@@ -71,13 +71,12 @@ sources:
     path: ../local-library
 ```
 
-The planned database source shape is defined in
+The database source shape is defined in
 [database-introspection.md](database-introspection.md). This source type is
-parsed and validated for supported engines. Build, sync, and refresh workflows
-should report database sources as having a metadata adapter but no live
-connector until a read-only connector exists for that engine. A database source
-without a live connector should not prevent repository sources in the same
-config from being scanned.
+parsed and validated for supported engines. Build and refresh workflows read
+live SQL Server and PostgreSQL metadata when the optional driver and configured
+environment variable are available. A database source error should not prevent
+repository sources in the same config from being scanned.
 
 ## Graph Model
 
@@ -341,8 +340,7 @@ discarding relationships discovered from the scanned sources.
 
 Future parser slices should add:
 
-- optional read-only database introspection for current schema state
-- triggers and richer SQL object impact paths
+- deeper database metadata such as triggers and computed dependencies
 - route/function/query context so endpoint impact paths do not stop at file
   ownership
 - messaging publish/consume boundaries for queues, topics, and event contracts
@@ -360,13 +358,12 @@ objects that no longer exist, so they should not be treated as authoritative
 current database state by default.
 
 RepoGraph supports an optional `database` source type contract, an engine
-metadata adapter registry, a live SQL Server metadata connector, and pure SQL
-Server and PostgreSQL metadata adapters. The SQL Server connector reads catalog
-metadata through optional `pyodbc` and a SQL Server ODBC driver. PostgreSQL and
-other database engines should use engine-specific catalogs while emitting the
-same normalized graph vocabulary. For PostgreSQL, likely sources are
-`pg_catalog`, `information_schema`, and `pg_depend`. Connectors must not read
-table data.
+metadata adapter registry, and live SQL Server and PostgreSQL metadata
+connectors. The SQL Server connector reads catalog metadata through optional
+`pyodbc` and a SQL Server ODBC driver. The PostgreSQL connector reads catalog
+metadata through optional `psycopg`. Other database engines should use
+engine-specific catalogs while emitting the same normalized graph vocabulary.
+Connectors must not read table data.
 
 Generated facts from source files should include provenance such as
 `schema_state=current_schema`, `schema_state=historical`, or

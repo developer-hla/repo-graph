@@ -22,6 +22,7 @@ from repo_graph.database import (
     graph_from_database_metadata,
     graph_from_database_source,
     graph_from_postgres_metadata,
+    graph_from_postgres_source,
     graph_from_sqlserver_metadata,
     graph_from_sqlserver_source,
     supported_database_engines,
@@ -29,7 +30,7 @@ from repo_graph.database import (
 from repo_graph.graph import Edge, Graph
 
 
-class SqlServerMetadataGraphTests(unittest.TestCase):
+class DatabaseMetadataGraphTests(unittest.TestCase):
     def test_adapter_registry_dispatches_supported_engines(self) -> None:
         self.assertEqual(supported_database_engines(), frozenset({"postgres", "sqlserver"}))
         self.assertEqual(database_metadata_adapter("sqlserver").metadata_parser, SQLSERVER_METADATA_PARSER)
@@ -43,25 +44,32 @@ class SqlServerMetadataGraphTests(unittest.TestCase):
 
         self.assertEqual(facts.entities[0].name, "dbo.Customers")
 
-    def test_live_database_connector_reports_safe_unavailable_error(self) -> None:
+    def test_postgres_live_connector_reports_missing_driver_without_secret_value(self) -> None:
         request = DatabaseSourceRequest(
             source_name="current-db",
             engine="postgres",
             connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
         )
 
-        facts = graph_from_database_source(request)
+        with (
+            patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://user:secret@localhost/db"}),
+            patch("repo_graph.database.postgres_driver_available", return_value=False),
+        ):
+            facts = graph_from_database_source(request)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
-        self.assertIn("current-db", facts.errors[0])
-        self.assertIn("postgres", facts.errors[0])
-        self.assertIn("no live connector enabled yet", facts.errors[0])
-        self.assertNotIn("REPO_GRAPH_EXAMPLE_POSTGRES_URL", facts.errors[0])
         self.assertEqual(
-            database_connector_unavailable_message("current-db", "postgres"),
-            "Database source 'current-db' uses engine 'postgres', which has a metadata adapter "
-            "but no live connector enabled yet.",
+            facts.errors,
+            ["PostgreSQL connector requires optional dependency 'psycopg' for database source 'current-db'."],
+        )
+        self.assertNotIn("REPO_GRAPH_EXAMPLE_POSTGRES_URL", facts.errors[0])
+        self.assertNotIn("secret", facts.errors[0])
+
+    def test_live_database_connector_reports_safe_unavailable_error_for_missing_engine(self) -> None:
+        self.assertEqual(
+            database_connector_unavailable_message("current-db", None),
+            "Database source 'current-db' is missing a database engine.",
         )
 
     def test_sqlserver_live_connector_reads_catalog_metadata(self) -> None:
@@ -135,6 +143,72 @@ class SqlServerMetadataGraphTests(unittest.TestCase):
         self.assertEqual(
             facts.errors,
             ["SQL Server metadata connection failed for 'current-db': RuntimeError: could not open [redacted]"],
+        )
+        self.assertNotIn("secret", facts.errors[0])
+
+    def test_postgres_live_connector_reads_catalog_metadata(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-pg",
+            engine="postgres",
+            connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
+            schemas=("public",),
+            query_timeout_seconds=7,
+            max_metadata_rows=20,
+        )
+        connection = FakePostgresConnection()
+
+        with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://example"}):
+            facts = graph_from_postgres_source(request, connect=lambda _connection_string, _timeout: connection)
+
+        entities_by_name = {entity.name: entity for entity in facts.entities}
+        edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
+
+        self.assertEqual(facts.errors, [])
+        self.assertTrue(connection.closed)
+        self.assertEqual(connection.cursor_instance.statement_timeout_ms, 7000)
+        self.assertEqual(entities_by_name["public.customers"].entity_type, "sql_table")
+        self.assertEqual(entities_by_name["public.active_customers"].entity_type, "sql_view")
+        self.assertEqual(entities_by_name["public.customer_rollup"].properties["postgres_relkind"], "materialized_view")
+        self.assertEqual(entities_by_name["public.refresh_customer"].entity_type, "stored_procedure")
+        self.assertEqual(entities_by_name["public.format_customer"].entity_type, "sql_function")
+        self.assertEqual(edges_by_operation["FOREIGN_KEY"].to_name, "public.customers")
+        self.assertEqual(edges_by_operation["OBJECT_DEPENDENCY"].properties["metadata_source"], "pg_depend")
+
+    def test_postgres_live_connector_reports_missing_env_without_secret_value(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-pg",
+            engine="postgres",
+            connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
+        )
+
+        facts = graph_from_postgres_source(request, connect=lambda _connection_string, _timeout: None)
+
+        self.assertEqual(facts.entities, [])
+        self.assertEqual(facts.edges, [])
+        self.assertEqual(
+            facts.errors,
+            ["Database source 'current-pg' connection_env is not set in the runtime environment."],
+        )
+        self.assertNotIn("REPO_GRAPH_EXAMPLE_POSTGRES_URL", facts.errors[0])
+
+    def test_postgres_live_connector_redacts_connection_string_from_driver_errors(self) -> None:
+        request = DatabaseSourceRequest(
+            source_name="current-pg",
+            engine="postgres",
+            connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
+        )
+
+        def fail_connection(connection_string: str, _timeout: int) -> None:
+            raise RuntimeError(f"could not open {connection_string}")
+
+        with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://user:secret@localhost/db"}):
+            facts = graph_from_postgres_source(request, connect=fail_connection)
+
+        self.assertEqual(facts.entities, [])
+        self.assertEqual(facts.edges, [])
+        self.assertEqual(
+            facts.errors,
+            ["PostgreSQL metadata connection failed for 'current-pg': RuntimeError: could not open [redacted]"],
         )
         self.assertNotIn("secret", facts.errors[0])
 
@@ -486,6 +560,69 @@ class FakeSqlServerCursor:
         else:
             raise AssertionError(f"Unexpected query: {query}")
         return self
+
+    def fetchall(self) -> list[SimpleNamespace]:
+        return self.rows
+
+
+class FakePostgresConnection:
+    def __init__(self) -> None:
+        self.closed = False
+        self.cursor_instance = FakePostgresCursor()
+
+    def cursor(self) -> FakePostgresCursor:
+        return self.cursor_instance
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakePostgresCursor:
+    def __init__(self) -> None:
+        self.statement_timeout_ms: int | None = None
+        self.rows: list[SimpleNamespace] = []
+
+    def execute(self, query: str, params: tuple[object, ...] = ()) -> None:
+        if query == "SET statement_timeout = %s":
+            self.statement_timeout_ms = int(params[0])
+            self.rows = []
+        elif "FROM pg_catalog.pg_class AS c" in query:
+            self.rows = [
+                SimpleNamespace(schema_name="public", object_name="customers", object_type="table"),
+                SimpleNamespace(schema_name="public", object_name="orders", object_type="table"),
+                SimpleNamespace(schema_name="public", object_name="active_customers", object_type="view"),
+                SimpleNamespace(schema_name="public", object_name="customer_rollup", object_type="materialized_view"),
+            ]
+        elif "FROM pg_catalog.pg_proc AS p" in query:
+            self.rows = [
+                SimpleNamespace(schema_name="public", object_name="refresh_customer", object_type="procedure"),
+                SimpleNamespace(schema_name="public", object_name="format_customer", object_type="function"),
+            ]
+        elif "FROM pg_catalog.pg_constraint AS con" in query:
+            self.rows = [
+                SimpleNamespace(
+                    schema_name="public",
+                    table_name="orders",
+                    referenced_schema_name="public",
+                    referenced_table_name="customers",
+                    constraint_name="orders_customer_id_fkey",
+                )
+            ]
+        elif "FROM pg_catalog.pg_rewrite AS rw" in query:
+            self.rows = [
+                SimpleNamespace(
+                    from_schema_name="public",
+                    from_object_name="active_customers",
+                    from_object_type="view",
+                    to_schema_name="public",
+                    to_object_name="customers",
+                    to_object_type="table",
+                    dependency_name="n",
+                    dependency_type="object_dependency",
+                )
+            ]
+        else:
+            raise AssertionError(f"Unexpected query: {query}")
 
     def fetchall(self) -> list[SimpleNamespace]:
         return self.rows
