@@ -28,7 +28,9 @@ that developers and agents can use.
 
 Sources are declared in a config file. A source may be a local path, a specific
 Git repository, or a GitHub organization query that expands to Git
-repositories.
+repositories. A future optional `database` source type should add read-only
+metadata introspection for current database state; see
+[database-introspection.md](database-introspection.md).
 
 Each graph build records:
 
@@ -68,6 +70,23 @@ sources:
     name: local-library
     path: ../local-library
 ```
+
+Planned database source shape:
+
+```yaml
+sources:
+  - type: database
+    name: example-current-db
+    engine: sqlserver
+    connection_env: REPO_GRAPH_EXAMPLE_SQLSERVER_URL
+    schemas:
+      - dbo
+    query_timeout_seconds: 10
+    max_metadata_rows: 50000
+```
+
+This source type is not enabled yet. The implementation should reject or ignore
+it until a read-only connector exists.
 
 ## Graph Model
 

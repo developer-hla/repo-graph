@@ -311,6 +311,7 @@ docs/spec.md            MVP planning spec
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
 docs/extending-parsers.md Parser extension workflow
+docs/database-introspection.md Planned read-only database source design
 docs/first-class-coverage.md First-class graph coverage audit
 docs/generated/         Generated API, config, runtime, and vocabulary docs
 docs/public-release.md  Public release checklist

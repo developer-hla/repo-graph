@@ -97,6 +97,8 @@ file looks like migration or revision history and is evidence that an object
 existed at some point, not proof that it exists now. Historical SQL entities
 are kept in the graph but are not used as normal resolution candidates.
 `schema_state=unknown` means RepoGraph could not classify the SQL file.
+`schema_state=current_database` is reserved for future read-only database
+introspection sources.
 
 Do not model every library or syntax form as a separate edge type. `fetch`,
 `axios`, `requests`, `httpx`, `HttpClient`, and legacy HTTP clients are
