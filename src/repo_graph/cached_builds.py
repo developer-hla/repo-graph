@@ -151,6 +151,7 @@ def edge_from_dict(data: Any) -> Edge:
         source_name=required_str(item, "source_name"),
         file_path=optional_str(item.get("file_path")),
         line_number=optional_int(item.get("line_number")),
+        identity_key=optional_str(item.get("identity_key")),
         confidence=optional_str(item.get("confidence")) or "medium",
         parser=optional_str(item.get("parser")) or "unknown",
         properties=dict_value(item.get("properties")),

@@ -130,6 +130,7 @@ PARSER_IDS = (
     "requirements",
     "sql",
     "sql_reference",
+    "sqlserver_metadata",
     "vb_config_service",
     "vb_contract_route",
     "vb_http",

@@ -71,23 +71,11 @@ sources:
     path: ../local-library
 ```
 
-Planned database source shape:
-
-```yaml
-sources:
-  - type: database
-    name: example-current-db
-    engine: sqlserver
-    connection_env: REPO_GRAPH_EXAMPLE_SQLSERVER_URL
-    schemas:
-      - dbo
-    query_timeout_seconds: 10
-    max_metadata_rows: 50000
-```
-
-This source type is parsed and validated, but it is not connected yet. Build,
-sync, and refresh workflows should report database sources as planned but not
-implemented until a read-only connector exists.
+The planned database source shape is defined in
+[database-introspection.md](database-introspection.md). This source type is
+parsed and validated, but it is not connected yet. Build, sync, and refresh
+workflows should report database sources as planned but not implemented until a
+read-only connector exists.
 
 ## Graph Model
 
@@ -366,11 +354,11 @@ SQL revision and migration files are historical evidence. They can describe
 objects that no longer exist, so they should not be treated as authoritative
 current database state by default.
 
-RepoGraph should support an optional `database` source type for read-only
-metadata introspection. For SQL Server, the first adapter should inspect catalog
-metadata such as `sys.tables`, `sys.views`, `sys.procedures`,
-`sys.foreign_keys`, `sys.sql_expression_dependencies`, `sys.triggers`, and
-`sys.sql_modules`. It must not read table data.
+RepoGraph supports an optional `database` source type contract and a pure SQL
+Server metadata adapter. The live connector is still planned. For SQL Server,
+the connector should inspect catalog metadata such as `sys.tables`, `sys.views`,
+`sys.procedures`, `sys.foreign_keys`, `sys.sql_expression_dependencies`,
+`sys.triggers`, and `sys.sql_modules`. It must not read table data.
 
 Generated facts from source files should include provenance such as
 `schema_state=current_schema`, `schema_state=historical`, or

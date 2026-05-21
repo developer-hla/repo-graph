@@ -54,6 +54,7 @@ class Edge:
     resolved: bool = False
     file_path: str | None = None
     line_number: int | None = None
+    identity_key: str | None = None
     confidence: str = "medium"
     parser: str = "unknown"
     properties: dict[str, Any] = field(default_factory=dict)
@@ -67,6 +68,7 @@ class Edge:
             self.to_name,
             self.file_path or "",
             str(self.line_number or ""),
+            self.identity_key or "",
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -89,6 +91,8 @@ class Edge:
             data["file_path"] = self.file_path
         if self.line_number is not None:
             data["line_number"] = self.line_number
+        if self.identity_key:
+            data["identity_key"] = self.identity_key
         return data
 
 

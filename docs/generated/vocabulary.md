@@ -164,6 +164,7 @@ These edge types represent application-to-application or application-to-database
 - `requirements`
 - `sql`
 - `sql_reference`
+- `sqlserver_metadata`
 - `vb_config_service`
 - `vb_contract_route`
 - `vb_http`

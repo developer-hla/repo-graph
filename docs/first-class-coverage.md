@@ -59,8 +59,9 @@ shortcuts.
 ## Recommended Slice Order
 
 1. Add read-only database introspection as an optional source type.
-   Start with SQL Server metadata for tables, views, procedures, functions,
-   foreign keys, triggers, and module dependencies. Do not read table data.
+   SQL Server has a pure metadata-row adapter for tables, views, procedures,
+   functions, foreign keys, and module dependencies. Next, add the live
+   read-only connector. Do not read table data.
 2. Add reconciliation reports for code-vs-database drift.
    Flag objects found only in migration history, references missing from the
    current database, and current database objects with no code evidence.
@@ -85,12 +86,12 @@ SQL files are useful but not equally authoritative:
   history. Keep the evidence, but do not treat its objects as proof of current
   database state.
 - `schema_state=unknown`: source file could not be classified.
-- `schema_state=current_database`: future read-only database introspection found
-  the object in a live database metadata catalog.
+- `schema_state=current_database`: read-only database metadata found the object
+  in a database catalog.
 
 Database introspection should be opt-in, read-only, timeout-limited, and driven
-by ignored private config. The public project should contain only the generic
-adapter and synthetic examples; connection strings, server names, and database
+by ignored private config. The public project should contain only generic
+adapters and synthetic examples; connection strings, server names, and database
 names belong outside the repo. The planned source contract lives in
 [database-introspection.md](database-introspection.md).
 

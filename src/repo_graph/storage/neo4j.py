@@ -1132,6 +1132,7 @@ def edge_record(edge: Mapping[str, Any]) -> dict[str, Any]:
             "source_name": edge.get("source_name"),
             "file_path": edge.get("file_path"),
             "line_number": edge.get("line_number"),
+            "identity_key": edge.get("identity_key"),
             "confidence": edge.get("confidence"),
             "parser": edge.get("parser"),
             "properties": mapping_value(edge.get("properties")),

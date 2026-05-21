@@ -1,8 +1,9 @@
 # Database Introspection Design
 
-RepoGraph should support optional read-only database introspection so agents can
-compare code evidence with the current database shape. This is a planned source
-type, not an enabled connector yet.
+RepoGraph supports the first pure adapter step for optional read-only database
+introspection. The config contract exists, and SQL Server metadata rows can be
+converted into graph facts. A live database connector is still planned and is
+not enabled yet.
 
 ## Why This Exists
 
@@ -81,7 +82,9 @@ Fields:
 
 ## SQL Server Metadata
 
-The first adapter should inspect catalog metadata only. Useful starting points:
+The SQL Server adapter consumes catalog-shaped metadata rows only. A future
+connector should populate those rows from read-only catalog queries. Useful
+starting points:
 
 | Metadata | Candidate source |
 | --- | --- |
@@ -115,6 +118,12 @@ Every introspected SQL entity should include:
 - `schema`
 - `full_name`
 - source provenance from the database source
+
+The current pure adapter lives in `repo_graph.database` and exposes typed
+metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`, and
+`SqlServerDependencyRow`. `graph_from_sqlserver_metadata()` converts those rows
+into normal `Entity` and `Edge` facts without opening a database connection or
+reading secrets.
 
 Introspected relationships should reuse the same interaction vocabulary:
 
@@ -160,8 +169,9 @@ This should be exposed through an API report before adding UI-specific views.
 
 ## Implementation Order
 
-1. Add a SQL Server metadata adapter behind an isolated module.
-2. Add tests using synthetic metadata rows.
-3. Emit `schema_state=current_database` entities and relationships.
+1. SQL Server metadata adapter behind an isolated module. Done for synthetic
+   rows.
+2. Tests using synthetic metadata rows. Done.
+3. Emit `schema_state=current_database` entities and relationships. Done.
 4. Add reconciliation report APIs.
 5. Add UI/report links after the API output is stable.

@@ -54,6 +54,7 @@ intended shape and meaning of the graph.
   "source_name": "source from config",
   "file_path": "relative/path when known",
   "line_number": 12,
+  "identity_key": "optional source-local edge identity when no file location exists",
   "confidence": "high | medium | low",
   "parser": "stable parser id such as filesystem, package_json, or python_import",
   "properties": {}
@@ -66,6 +67,10 @@ UI to an API should be represented as a generic dependency such as
 fact was discovered, including details such as HTTP client, protocol, method,
 route, raw target, normalized target, config key, file path, and line number
 when known.
+
+`identity_key` is optional. Use it when the source evidence is not tied to a
+file location but can produce multiple facts with the same source and target,
+such as two database constraints between the same tables.
 
 Application-to-application and application-to-database interaction edges should
 use regular evidence fields. The canonical list lives in
@@ -97,8 +102,8 @@ file looks like migration or revision history and is evidence that an object
 existed at some point, not proof that it exists now. Historical SQL entities
 are kept in the graph but are not used as normal resolution candidates.
 `schema_state=unknown` means RepoGraph could not classify the SQL file.
-`schema_state=current_database` is reserved for future read-only database
-introspection sources.
+`schema_state=current_database` means the fact came from read-only database
+metadata rather than a source file.
 
 Do not model every library or syntax form as a separate edge type. `fetch`,
 `axios`, `requests`, `httpx`, `HttpClient`, and legacy HTTP clients are
@@ -127,7 +132,7 @@ agents should expose to users.
 - `function`, `class`, `module`, and `interface`: exported JavaScript,
   TypeScript, Python, C#, or legacy VB symbols.
 - `sql_table`, `sql_view`, `sql_function`, `stored_procedure`: SQL objects
-  declared in SQL files.
+  declared in SQL files or emitted from database metadata.
 
 ## Core Edge Types
 
