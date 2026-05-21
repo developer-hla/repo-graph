@@ -213,8 +213,9 @@ def build_graph(
     max_file_bytes: int = MAX_FILE_BYTES,
     strict: bool = False,
 ) -> Graph:
-    sources = sync_sources(config) if sync_first else resolve_sources(config)
-    graph = Graph(scope_name=config.name, sources=[source_to_dict(source) for source in sources])
+    errors = unsupported_source_errors(config)
+    sources = [] if errors else sync_sources(config) if sync_first else resolve_sources(config)
+    graph = Graph(scope_name=config.name, sources=[source_to_dict(source) for source in sources], errors=errors)
     extractors = default_extractors()
     for source in sources:
         scan_source(config, graph, source, max_file_bytes=max_file_bytes, extractors=extractors)
@@ -224,6 +225,14 @@ def build_graph(
     graph.resolve_edges()
     apply_dependency_filter(graph, config)
     return graph
+
+
+def unsupported_source_errors(config: RepoGraphConfig) -> list[str]:
+    return [
+        "Database sources are planned but not implemented yet."
+        for source in config.sources
+        if source.source_type == "database"
+    ]
 
 
 def apply_dependency_filter(graph: Graph, config: RepoGraphConfig) -> None:

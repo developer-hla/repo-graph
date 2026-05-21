@@ -16,6 +16,8 @@ import yaml
 from repo_graph.api import RuntimeSettings, create_app, manifest_payload
 from repo_graph.cli import build_parser
 from repo_graph.config import (
+    DATABASE_ENGINES,
+    DATABASE_OBJECT_TYPES,
     DEFAULT_CACHE_DIR,
     DEFAULT_EXCLUDED_DIRECTORIES,
     DEFAULT_FILE_EXTENSIONS,
@@ -500,6 +502,9 @@ def config_reference_doc() -> str:
         "| `git` | `type`, `name`, `url` | `ref` | Clone or update one explicit Git repository into `cache_dir`. |",
         "| `github_org` | `type`, `name`, `org` | `ref`, `visibility`, `include`, `exclude`, `limit` | "
         "Expand repositories from a GitHub organization through the GitHub REST API. |",
+        "| `database` | `type`, `name`, `engine`, `connection_env` | `schemas`, `include_object_types`, "
+        "`query_timeout_seconds`, `max_metadata_rows`, `ref` | Planned read-only metadata source. "
+        "Parsed and validated, but build/sync report it as not implemented until a connector exists. |",
         "",
         "## Source Dataclass Fields",
         "",
@@ -515,6 +520,14 @@ def config_reference_doc() -> str:
         "- `include.name_patterns` and `exclude.name_patterns` are regular expression lists matched against "
         "repository names.",
         "- `limit` must be a positive integer when set.",
+        "",
+        "## Database Source",
+        "",
+        f"- Supported `engine` values: {format_inline_values(sorted(DATABASE_ENGINES))}.",
+        "- `connection_env` names the environment variable that contains the connection string. "
+        "Connection string values are not accepted in config.",
+        f"- Supported `include_object_types` values: {format_inline_values(sorted(DATABASE_OBJECT_TYPES))}.",
+        "- Database sources are parsed and validated only; no connector is enabled yet.",
         "",
         "## Include Rules",
         "",

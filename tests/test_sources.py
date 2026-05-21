@@ -212,6 +212,60 @@ class SourceSyncTests(unittest.TestCase):
         self.assertFalse(payload[0]["ready"])
         self.assertIn("path_missing", payload[0]["problems"])
 
+    def test_inspect_sources_reports_database_source_as_planned(self) -> None:
+        root = Path("/repo")
+        config = RepoGraphConfig(
+            name="test",
+            config_path=root / "repo-graph.yaml",
+            cache_dir=root / ".repo-graph/cache/repos",
+            output_dir=root / ".repo-graph/output",
+            sources=(
+                Source(
+                    name="current-db",
+                    source_type="database",
+                    engine="sqlserver",
+                    connection_env="REPO_GRAPH_EXAMPLE_SQLSERVER_URL",
+                    schemas=("dbo",),
+                    include_object_types=("table", "view"),
+                    query_timeout_seconds=10,
+                    max_metadata_rows=50000,
+                ),
+            ),
+        )
+
+        payload = inspect_sources(config)
+
+        self.assertEqual(payload[0]["name"], "current-db")
+        self.assertEqual(payload[0]["type"], "database")
+        self.assertFalse(payload[0]["ready"])
+        self.assertIn("database_source_not_implemented", payload[0]["problems"])
+        self.assertEqual(payload[0]["configured"]["engine"], "sqlserver")
+        self.assertEqual(payload[0]["configured"]["connection_env"], "REPO_GRAPH_EXAMPLE_SQLSERVER_URL")
+        self.assertNotIn("connection_string", payload[0]["configured"])
+
+    def test_sync_sources_with_status_reports_database_source_as_not_implemented(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = RepoGraphConfig(
+                name="test",
+                config_path=root / "repo-graph.yaml",
+                cache_dir=root / ".repo-graph/cache/repos",
+                output_dir=root / ".repo-graph/output",
+                sources=(
+                    Source(
+                        name="current-db",
+                        source_type="database",
+                        engine="sqlserver",
+                        connection_env="REPO_GRAPH_EXAMPLE_SQLSERVER_URL",
+                    ),
+                ),
+            )
+
+            payload = sync_sources_with_status(config)
+
+        self.assertEqual(payload[0]["sync"]["status"], "failed")
+        self.assertIn("planned but not implemented", payload[0]["sync"]["error"])
+
     def test_github_next_link_reads_pagination_header(self) -> None:
         next_url = github_next_link(
             '<https://api.github.com/orgs/example/repos?page=2>; rel="next", '

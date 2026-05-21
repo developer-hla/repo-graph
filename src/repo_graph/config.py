@@ -12,6 +12,17 @@ import yaml
 DEFAULT_CACHE_DIR = ".repo-graph/cache/repos"
 DEFAULT_OUTPUT_DIR = ".repo-graph/output"
 GITHUB_ORG_VISIBILITIES = {"all", "public", "private", "forks", "sources", "member"}
+DATABASE_ENGINES = {"sqlserver"}
+DATABASE_OBJECT_TYPES = {
+    "dependency",
+    "foreign_key",
+    "function",
+    "stored_procedure",
+    "table",
+    "trigger",
+    "view",
+}
+DEFAULT_DATABASE_OBJECT_TYPES = tuple(sorted(DATABASE_OBJECT_TYPES))
 
 DEFAULT_FILE_EXTENSIONS = {
     ".cs",
@@ -69,6 +80,12 @@ class Source:
     include_name_patterns: tuple[str, ...] = ()
     exclude_name_patterns: tuple[str, ...] = ()
     limit: int | None = None
+    engine: str | None = None
+    connection_env: str | None = None
+    schemas: tuple[str, ...] = ()
+    include_object_types: tuple[str, ...] = ()
+    query_timeout_seconds: int | None = None
+    max_metadata_rows: int | None = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +219,8 @@ def parse_sources(raw_sources: Any, config_dir: Path) -> list[Source]:
             sources.append(Source(name=name, source_type=source_type, url=url.strip(), ref=ref.strip()))
         elif source_type == "github_org":
             sources.append(parse_github_org_source(raw_source, name, ref.strip()))
+        elif source_type == "database":
+            sources.append(parse_database_source(raw_source, name, ref.strip()))
         else:
             raise ValueError(f"Unsupported source type '{source_type}' for source '{name}'.")
 
@@ -233,6 +252,42 @@ def parse_github_org_source(raw_source: dict[str, Any], name: str, ref: str) -> 
         include_name_patterns=string_tuple(include.get("name_patterns")),
         exclude_name_patterns=string_tuple(exclude.get("name_patterns")),
         limit=limit,
+    )
+
+
+def parse_database_source(raw_source: dict[str, Any], name: str, ref: str) -> Source:
+    if "connection_string" in raw_source:
+        raise ValueError(f"Database source '{name}' must use 'connection_env', not 'connection_string'.")
+    engine = required_string(raw_source.get("engine"), f"Database source '{name}' engine")
+    if engine not in DATABASE_ENGINES:
+        raise ValueError(f"Database source '{name}' has unsupported engine '{engine}'.")
+    connection_env = required_string(raw_source.get("connection_env"), f"Database source '{name}' connection_env")
+    schemas = string_tuple(raw_source.get("schemas"), field_name=f"Database source '{name}' schemas")
+    include_object_types = string_tuple(
+        raw_source.get("include_object_types", DEFAULT_DATABASE_OBJECT_TYPES),
+        field_name=f"Database source '{name}' include_object_types",
+    )
+    unsupported_object_types = sorted(set(include_object_types) - DATABASE_OBJECT_TYPES)
+    if unsupported_object_types:
+        raise ValueError(
+            f"Database source '{name}' has unsupported include_object_types: {', '.join(unsupported_object_types)}"
+        )
+    return Source(
+        name=name,
+        source_type="database",
+        ref=ref,
+        engine=engine,
+        connection_env=connection_env,
+        schemas=schemas,
+        include_object_types=include_object_types,
+        query_timeout_seconds=optional_positive_int(
+            raw_source.get("query_timeout_seconds"),
+            f"Database source '{name}' query_timeout_seconds",
+        ),
+        max_metadata_rows=optional_positive_int(
+            raw_source.get("max_metadata_rows"),
+            f"Database source '{name}' max_metadata_rows",
+        ),
     )
 
 
@@ -332,6 +387,12 @@ def string_tuple(value: Any, field_name: str = "Name patterns") -> tuple[str, ..
             raise ValueError(f"{field_name} must contain non-empty strings.")
         items.append(item.strip())
     return tuple(items)
+
+
+def required_string(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string.")
+    return value.strip()
 
 
 def bool_value(value: Any, default: bool) -> bool:

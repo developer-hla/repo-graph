@@ -30,9 +30,9 @@ access.
 
 ## Planned Source Contract
 
-The first implementation should add a `database` source type. The public docs
-can describe the shape now, but the config parser should reject it until a
-connector is implemented.
+The config parser understands this source type so users and agents can validate
+the planned contract. Build, sync, and refresh workflows still report database
+sources as not implemented until a connector exists.
 
 ```yaml
 sources:
@@ -160,9 +160,8 @@ This should be exposed through an API report before adding UI-specific views.
 
 ## Implementation Order
 
-1. Add typed config parsing for `database` sources without connecting.
-2. Add a SQL Server metadata adapter behind an isolated module.
-3. Add tests using synthetic metadata rows.
-4. Emit `schema_state=current_database` entities and relationships.
-5. Add reconciliation report APIs.
-6. Add UI/report links after the API output is stable.
+1. Add a SQL Server metadata adapter behind an isolated module.
+2. Add tests using synthetic metadata rows.
+3. Emit `schema_state=current_database` entities and relationships.
+4. Add reconciliation report APIs.
+5. Add UI/report links after the API output is stable.

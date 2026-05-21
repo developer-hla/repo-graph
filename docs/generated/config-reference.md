@@ -22,6 +22,7 @@ This file is generated from `repo_graph.config` defaults and dataclass fields.
 | `local_path` | `type`, `name`, `path` | `ref` | Scan a repository already present on disk. Relative `path` values resolve from the config file directory. |
 | `git` | `type`, `name`, `url` | `ref` | Clone or update one explicit Git repository into `cache_dir`. |
 | `github_org` | `type`, `name`, `org` | `ref`, `visibility`, `include`, `exclude`, `limit` | Expand repositories from a GitHub organization through the GitHub REST API. |
+| `database` | `type`, `name`, `engine`, `connection_env` | `schemas`, `include_object_types`, `query_timeout_seconds`, `max_metadata_rows`, `ref` | Planned read-only metadata source. Parsed and validated, but build/sync report it as not implemented until a connector exists. |
 
 ## Source Dataclass Fields
 
@@ -41,6 +42,12 @@ YAML source `type` values are loaded into the `source_type` field.
 | `include_name_patterns` | `tuple[str, ...]` | `()` |
 | `exclude_name_patterns` | `tuple[str, ...]` | `()` |
 | `limit` | `int | None` | `None` |
+| `engine` | `str | None` | `None` |
+| `connection_env` | `str | None` | `None` |
+| `schemas` | `tuple[str, ...]` | `()` |
+| `include_object_types` | `tuple[str, ...]` | `()` |
+| `query_timeout_seconds` | `int | None` | `None` |
+| `max_metadata_rows` | `int | None` | `None` |
 
 ## GitHub Organization Source
 
@@ -49,6 +56,13 @@ YAML source `type` values are loaded into the `source_type` field.
 - `include.forks` defaults to `false`.
 - `include.name_patterns` and `exclude.name_patterns` are regular expression lists matched against repository names.
 - `limit` must be a positive integer when set.
+
+## Database Source
+
+- Supported `engine` values: `sqlserver`.
+- `connection_env` names the environment variable that contains the connection string. Connection string values are not accepted in config.
+- Supported `include_object_types` values: `dependency`, `foreign_key`, `function`, `stored_procedure`, `table`, `trigger`, `view`.
+- Database sources are parsed and validated only; no connector is enabled yet.
 
 ## Include Rules
 

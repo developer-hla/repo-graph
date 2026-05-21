@@ -86,6 +86,78 @@ sources:
         self.assertEqual(config.sources[0].include_name_patterns, ("^api-",))
         self.assertEqual(config.sources[0].exclude_name_patterns, ("-experiment$",))
 
+    def test_load_config_reads_database_source_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+sources:
+  - type: database
+    name: current-db
+    engine: sqlserver
+    connection_env: REPO_GRAPH_EXAMPLE_SQLSERVER_URL
+    schemas:
+      - dbo
+    include_object_types:
+      - table
+      - view
+      - stored_procedure
+    query_timeout_seconds: 10
+    max_metadata_rows: 50000
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        source = config.sources[0]
+        self.assertEqual(source.source_type, "database")
+        self.assertEqual(source.engine, "sqlserver")
+        self.assertEqual(source.connection_env, "REPO_GRAPH_EXAMPLE_SQLSERVER_URL")
+        self.assertEqual(source.schemas, ("dbo",))
+        self.assertEqual(source.include_object_types, ("table", "view", "stored_procedure"))
+        self.assertEqual(source.query_timeout_seconds, 10)
+        self.assertEqual(source.max_metadata_rows, 50000)
+        self.assertIsNone(source.path)
+        self.assertIsNone(source.url)
+
+    def test_load_config_rejects_database_connection_string_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+sources:
+  - type: database
+    name: current-db
+    engine: sqlserver
+    connection_string: Server=example;Database=example
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "connection_env"):
+                load_config(config_path)
+
+    def test_load_config_rejects_unsupported_database_engine(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "sources.yaml"
+            config_path.write_text(
+                """
+name: test
+sources:
+  - type: database
+    name: current-db
+    engine: postgres
+    connection_env: REPO_GRAPH_EXAMPLE_POSTGRES_URL
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "unsupported engine"):
+                load_config(config_path)
+
     def test_load_config_reads_dependency_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "sources.yaml"

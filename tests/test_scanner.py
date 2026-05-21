@@ -242,6 +242,29 @@ sources:
             )
         )
 
+    def test_build_graph_reports_database_sources_as_not_implemented(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: database
+    name: current-db
+    engine: sqlserver
+    connection_env: REPO_GRAPH_EXAMPLE_SQLSERVER_URL
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            with self.assertRaisesRegex(RuntimeError, "scanner errors"):
+                build_graph(config, strict=True)
+
+        self.assertEqual(graph.errors, ["Database sources are planned but not implemented yet."])
+
     def test_build_graph_resolves_cross_source_code_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -91,6 +91,8 @@ def sync_one_source(config: RepoGraphConfig, source: Source) -> None:
         if source.path is None or not source.path.exists():
             raise FileNotFoundError(f"Local source path does not exist: {source.path}")
         return
+    if source.source_type == "database":
+        raise NotImplementedError("Database sources are planned but not implemented yet.")
     raise ValueError(f"Unsupported source type: {source.source_type}")
 
 
@@ -133,6 +135,17 @@ def configured_source_payload(source: Source) -> dict[str, Any]:
                 "limit": source.limit,
             }
         )
+    if source.source_type == "database":
+        payload.update(
+            {
+                "engine": source.engine,
+                "connection_env": source.connection_env,
+                "schemas": list(source.schemas),
+                "include_object_types": list(source.include_object_types),
+                "query_timeout_seconds": source.query_timeout_seconds,
+                "max_metadata_rows": source.max_metadata_rows,
+            }
+        )
     return payload
 
 
@@ -156,6 +169,8 @@ def safe_git_origin_url(path: Path) -> str | None:
 
 
 def source_ready(status: dict[str, Any], source: Source) -> bool:
+    if source.source_type == "database":
+        return False
     if source.source_type == "local_path":
         return bool(status["exists"])
     if source.source_type == "git":
@@ -165,6 +180,8 @@ def source_ready(status: dict[str, Any], source: Source) -> bool:
 
 def source_problems(status: dict[str, Any], source: Source) -> list[str]:
     problems: list[str] = []
+    if source.source_type == "database":
+        return ["database_source_not_implemented"]
     if not status["exists"]:
         problems.append("path_missing")
     if source.source_type == "git":
@@ -209,6 +226,8 @@ def resolve_expanded_sources(config: RepoGraphConfig, sources: list[Source]) -> 
                     commit=git_commit(path),
                 )
             )
+        elif source.source_type == "database":
+            raise NotImplementedError("Database sources are planned but not implemented yet.")
         else:
             raise ValueError(f"Unsupported source type: {source.source_type}")
     return resolved
@@ -223,6 +242,8 @@ def sync_sources(config: RepoGraphConfig) -> list[ResolvedSource]:
         elif source.source_type == "local_path":
             if source.path is None or not source.path.exists():
                 raise FileNotFoundError(f"Local source path does not exist: {source.path}")
+        elif source.source_type == "database":
+            raise NotImplementedError("Database sources are planned but not implemented yet.")
         else:
             raise ValueError(f"Unsupported source type: {source.source_type}")
     return resolve_expanded_sources(config, expanded_sources)

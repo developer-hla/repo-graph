@@ -85,8 +85,9 @@ sources:
     max_metadata_rows: 50000
 ```
 
-This source type is not enabled yet. The implementation should reject or ignore
-it until a read-only connector exists.
+This source type is parsed and validated, but it is not connected yet. Build,
+sync, and refresh workflows should report database sources as planned but not
+implemented until a read-only connector exists.
 
 ## Graph Model
 
