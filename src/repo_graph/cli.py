@@ -13,7 +13,11 @@ from repo_graph.api import RuntimeSettings, create_app
 from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.refresh import refresh_graph
-from repo_graph.reports import interactions_report_from_graph, unresolved_report_from_graph
+from repo_graph.reports import (
+    database_reconciliation_report_from_graph,
+    interactions_report_from_graph,
+    unresolved_report_from_graph,
+)
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.snapshots import snapshot_status, write_snapshots
 from repo_graph.source_graphs import write_source_graphs
@@ -154,6 +158,19 @@ def cmd_report_interactions(args: argparse.Namespace) -> int:
         source_name=args.source,
         target_source=args.target_source,
         edge_type=args.edge_type,
+        group_limit=args.limit,
+        examples_per_group=args.examples,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_report_database_reconciliation(args: argparse.Namespace) -> int:
+    graph_data = load_graph_json(args.graph)
+    report = database_reconciliation_report_from_graph(
+        graph_data,
+        source_name=args.source,
+        database_source=args.database_source,
         group_limit=args.limit,
         examples_per_group=args.examples,
     )
@@ -370,6 +387,18 @@ def build_parser() -> argparse.ArgumentParser:
     interactions_parser.add_argument("--limit", type=int, default=50, help="Maximum interaction groups to return.")
     interactions_parser.add_argument("--examples", type=int, default=3, help="Examples to include per group.")
     interactions_parser.set_defaults(func=cmd_report_interactions)
+    reconciliation_parser = report_subparsers.add_parser(
+        "database-reconciliation",
+        help="Compare code and SQL evidence with current database metadata.",
+    )
+    reconciliation_parser.add_argument("--graph", type=Path, required=True, help="Graph JSON file to report on.")
+    reconciliation_parser.add_argument("--source", help="Only include code and schema evidence from this source.")
+    reconciliation_parser.add_argument(
+        "--database-source", help="Only include current database metadata from this source."
+    )
+    reconciliation_parser.add_argument("--limit", type=int, default=50, help="Maximum reconciliation groups to return.")
+    reconciliation_parser.add_argument("--examples", type=int, default=3, help="Examples to include per group.")
+    reconciliation_parser.set_defaults(func=cmd_report_database_reconciliation)
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Inspect or write source snapshots.")
     snapshot_subparsers = snapshot_parser.add_subparsers(dest="snapshot", required=True)

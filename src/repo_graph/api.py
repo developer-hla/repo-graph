@@ -18,7 +18,11 @@ from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig, load_config
 from repo_graph.jobs import JobRegistry
 from repo_graph.refresh import refresh_graph
-from repo_graph.reports import interactions_report_from_items, unresolved_report_from_items
+from repo_graph.reports import (
+    database_reconciliation_report_from_items,
+    interactions_report_from_items,
+    unresolved_report_from_items,
+)
 from repo_graph.scanner import MAX_FILE_BYTES, build_graph
 from repo_graph.snapshots import snapshot_status
 from repo_graph.sources import config_summary, inspect_sources, source_path, sync_sources_with_status
@@ -26,6 +30,7 @@ from repo_graph.storage.neo4j import (
     Neo4jSettings,
     get_entity,
     get_entity_neighbors,
+    list_entities_by_types,
     list_unresolved_edges,
     load_graph_path,
     read_graph_overview,
@@ -43,6 +48,8 @@ from repo_graph.vocabulary import (
     IMPACT_EDGE_TYPES,
     IMPACT_PROFILES,
     INTERACTION_EDGE_TYPES,
+    SQL_EDGE_TYPES,
+    SQL_ENTITY_TYPES,
 )
 
 DEFAULT_CONFIG_PATH = Path("config/local-example.yaml")
@@ -50,6 +57,8 @@ DEFAULT_NEO4J_URI = "bolt://neo4j:7687"
 DEFAULT_NEO4J_PASSWORD = "repo-graph-password"
 UNRESOLVED_REPORT_EDGE_LIMIT = 1000
 INTERACTION_REPORT_EDGE_LIMIT = 1000
+DATABASE_RECONCILIATION_EDGE_LIMIT = 1000
+DATABASE_RECONCILIATION_ENTITY_LIMIT = 1000
 SOURCE_SNIPPET_MAX_CONTEXT = 50
 SOURCE_SNIPPET_MAX_BYTES = 1_000_000
 UI_DIR = Path(__file__).with_name("ui")
@@ -200,6 +209,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             {"method": "GET", "path": "/entities/{entity_id}/impact", "available": True},
             {"method": "GET", "path": "/edges/unresolved", "available": True},
             {"method": "GET", "path": "/reports/interactions", "available": True},
+            {"method": "GET", "path": "/reports/database-reconciliation", "available": True},
             {"method": "GET", "path": "/reports/unresolved", "available": True},
         ],
         "agent_guidance": {
@@ -224,6 +234,7 @@ def manifest_payload(settings: RuntimeSettings) -> dict[str, Any]:
             "impact_default_profile": "impact",
             "impact_profiles": sorted(IMPACT_PROFILES),
             "interaction_report_status": "available",
+            "database_reconciliation_report_status": "available",
             "unresolved_report_status": "available",
             "ui_status": "available",
         },
@@ -1264,6 +1275,38 @@ def interactions_report_response(
     return report
 
 
+def database_reconciliation_report_response(
+    settings: RuntimeSettings,
+    source_name: str | None,
+    database_source: str | None,
+    limit: int,
+    examples: int,
+) -> dict[str, Any]:
+    entities = list_entities_by_types(
+        settings.neo4j_settings(),
+        SQL_ENTITY_TYPES,
+        limit=DATABASE_RECONCILIATION_ENTITY_LIMIT,
+    )
+    items = search_relationships_by_edge_types(
+        settings.neo4j_settings(),
+        SQL_EDGE_TYPES,
+        limit=DATABASE_RECONCILIATION_EDGE_LIMIT,
+    )
+    report = database_reconciliation_report_from_items(
+        entities,
+        items,
+        source_name=source_name,
+        database_source=database_source,
+        group_limit=limit,
+        examples_per_group=examples,
+    )
+    report["entity_sample_limit"] = DATABASE_RECONCILIATION_ENTITY_LIMIT
+    report["entity_sample_truncated"] = len(entities) >= DATABASE_RECONCILIATION_ENTITY_LIMIT
+    report["edge_sample_limit"] = DATABASE_RECONCILIATION_EDGE_LIMIT
+    report["edge_sample_truncated"] = len(items) >= DATABASE_RECONCILIATION_EDGE_LIMIT
+    return report
+
+
 def ui_index_path() -> Path:
     return UI_DIR / "index.html"
 
@@ -1597,6 +1640,18 @@ def create_app(settings: RuntimeSettings | None = None, job_registry: JobRegistr
             return interactions_report_response(runtime_settings, source, target_source, edge_type, limit, examples)
         except Exception as exc:
             raise neo4j_http_exception("interactions report lookup", exc) from exc
+
+    @app.get("/reports/database-reconciliation")
+    def get_database_reconciliation_report_endpoint(
+        source: str | None = None,
+        database_source: str | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+        examples: int = Query(default=3, ge=1, le=10),
+    ) -> dict[str, Any]:
+        try:
+            return database_reconciliation_report_response(runtime_settings, source, database_source, limit, examples)
+        except Exception as exc:
+            raise neo4j_http_exception("database reconciliation report lookup", exc) from exc
 
     return app
 

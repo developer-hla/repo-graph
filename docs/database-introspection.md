@@ -155,7 +155,8 @@ safe.
 
 ## Reconciliation Reports
 
-After database sources exist, add a reconciliation report that groups drift:
+The database reconciliation report groups drift between source evidence and
+current database metadata:
 
 | Group | Meaning |
 | --- | --- |
@@ -165,7 +166,9 @@ After database sources exist, add a reconciliation report that groups drift:
 | `schema_drift` | Source schema evidence conflicts with current database metadata. |
 | `unresolved_database_reference` | Database metadata references a target outside the scanned/introspected scope. |
 
-This should be exposed through an API report before adding UI-specific views.
+This is exposed through `GET /reports/database-reconciliation` and
+`repo-graph report database-reconciliation`. It is a report over graph facts,
+not a live database query.
 
 ## Implementation Order
 
@@ -173,5 +176,5 @@ This should be exposed through an API report before adding UI-specific views.
    rows.
 2. Tests using synthetic metadata rows. Done.
 3. Emit `schema_state=current_database` entities and relationships. Done.
-4. Add reconciliation report APIs.
+4. Add reconciliation report APIs. Done.
 5. Add UI/report links after the API output is stable.

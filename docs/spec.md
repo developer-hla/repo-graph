@@ -159,6 +159,7 @@ relationships derived from graph edge types.
 - `GET /entities/neighbors`
 - `GET /entities/{entity_id}/overview`
 - `GET /reports/interactions`
+- `GET /reports/database-reconciliation`
 - `GET /manifest`
 
 The manifest tells agents how to use the running graph and what scope was
@@ -217,6 +218,8 @@ The first public query surface should use purpose-built read endpoints:
 - `GET /sources/{source_name}/overview`
 - `GET /sources/{source_name}/files/snippet`
 - `GET /edges/unresolved`
+- `GET /reports/interactions`
+- `GET /reports/database-reconciliation`
 - `GET /reports/unresolved`
 - `GET /ui`
 
@@ -336,7 +339,6 @@ discarding relationships discovered from the scanned sources.
 Future parser slices should add:
 
 - optional read-only database introspection for current schema state
-- reconciliation reports for code-vs-database drift and migration-only objects
 - triggers and richer SQL object impact paths
 - route/function/query context so endpoint impact paths do not stop at file
   ownership

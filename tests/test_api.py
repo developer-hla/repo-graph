@@ -23,6 +23,7 @@ from repo_graph.api import (
     config_response,
     configured_sources_response,
     create_app,
+    database_reconciliation_report_response,
     entity_overview_response,
     entity_response,
     explore_response,
@@ -124,6 +125,9 @@ class ApiTests(unittest.TestCase):
         )
         self.assertIn({"method": "GET", "path": "/edges/unresolved", "available": True}, payload["endpoints"])
         self.assertIn({"method": "GET", "path": "/reports/interactions", "available": True}, payload["endpoints"])
+        self.assertIn(
+            {"method": "GET", "path": "/reports/database-reconciliation", "available": True}, payload["endpoints"]
+        )
         self.assertIn({"method": "GET", "path": "/reports/unresolved", "available": True}, payload["endpoints"])
         self.assertNotIn("password", str(payload).lower())
 
@@ -166,6 +170,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/entities/{entity_id}/impact", route_paths)
         self.assertIn("/edges/unresolved", route_paths)
         self.assertIn("/reports/interactions", route_paths)
+        self.assertIn("/reports/database-reconciliation", route_paths)
         self.assertIn("/reports/unresolved", route_paths)
 
     def test_ui_shell_and_static_assets_are_served(self) -> None:
@@ -1064,6 +1069,45 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["target_source"], "inventory-service")
         self.assertEqual(payload["edge_sample_limit"], 1000)
         self.assertFalse(payload["edge_sample_truncated"])
+        search.assert_called_once()
+
+    def test_database_reconciliation_report_response_groups_drift(self) -> None:
+        settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
+        entities = [
+            {
+                "entity_id": "entity-db",
+                "entity_type": "sql_table",
+                "name": "dbo.Customers",
+                "source_name": "current-db",
+                "properties": {"full_name": "dbo.Customers", "schema_state": "current_database"},
+            }
+        ]
+        items = [
+            {
+                "edge": {
+                    "edge_id": "edge-1",
+                    "edge_type": "CALLS_SQL",
+                    "to_type": "stored_procedure",
+                    "to_name": "dbo.LoadCustomer",
+                    "source_name": "api-service",
+                    "resolved": False,
+                    "properties": {},
+                }
+            }
+        ]
+        with (
+            patch("repo_graph.api.list_entities_by_types", return_value=entities) as list_entities,
+            patch("repo_graph.api.search_relationships_by_edge_types", return_value=items) as search,
+        ):
+            payload = database_reconciliation_report_response(settings, "api-service", "current-db", 10, 2)
+
+        self.assertEqual(payload["summary"]["current_database_entity_count"], 1)
+        self.assertEqual(payload["items"][0]["classification"], "code_only_reference")
+        self.assertEqual(payload["entity_sample_limit"], 1000)
+        self.assertFalse(payload["entity_sample_truncated"])
+        self.assertEqual(payload["edge_sample_limit"], 1000)
+        self.assertFalse(payload["edge_sample_truncated"])
+        list_entities.assert_called_once()
         search.assert_called_once()
 
 

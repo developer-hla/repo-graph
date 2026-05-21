@@ -133,6 +133,49 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["from_source"], "api-service")
         self.assertEqual(payload["items"][0]["target_source"], "inventory-service")
 
+    def test_database_reconciliation_report_command_prints_grouped_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            graph_path = Path(tmpdir) / "graph.json"
+            graph_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {"scope_name": "test-scope"},
+                        "entities": [
+                            {
+                                "entity_id": "entity-db",
+                                "entity_type": "sql_table",
+                                "name": "dbo.Customers",
+                                "source_name": "current-db",
+                                "properties": {"full_name": "dbo.Customers", "schema_state": "current_database"},
+                            }
+                        ],
+                        "edges": [
+                            {
+                                "edge_id": "edge-1",
+                                "edge_type": "CALLS_SQL",
+                                "to_type": "stored_procedure",
+                                "to_name": "dbo.LoadCustomer",
+                                "source_name": "api-service",
+                                "resolved": False,
+                                "properties": {},
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["report", "database-reconciliation", "--graph", str(graph_path)])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual(payload["scope_name"], "test-scope")
+        self.assertEqual(payload["items"][0]["classification"], "code_only_reference")
+
     def test_snapshot_status_command_reports_changed_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

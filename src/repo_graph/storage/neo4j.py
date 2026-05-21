@@ -569,6 +569,37 @@ def search_entities(
             return [entity_payload(record["entity"]) for record in records]
 
 
+def list_entities_by_types(
+    settings: Neo4jSettings,
+    entity_types: Iterable[str],
+    source_name: str | None = None,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
+    normalized_types = sorted({entity_type for entity_type in entity_types if entity_type})
+    if not normalized_types:
+        return []
+    params = {
+        "entity_types": normalized_types,
+        "source_name": optional_filter(source_name),
+        "limit": normalize_limit(limit, maximum=1000),
+    }
+    with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
+        driver.verify_connectivity()
+        with driver.session(database=settings.database) as session:
+            records = session.run(
+                """
+                MATCH (entity:RepoGraphEntity)
+                WHERE entity.entity_type IN $entity_types
+                  AND ($source_name IS NULL OR entity.source_name = $source_name)
+                RETURN entity
+                ORDER BY entity.entity_type, entity.source_name, entity.name
+                LIMIT $limit
+                """,
+                **params,
+            )
+            return [entity_payload(record["entity"]) for record in records]
+
+
 def search_relationships(
     settings: Neo4jSettings,
     from_source: str | None = None,

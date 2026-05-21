@@ -29,6 +29,7 @@ ENTITY_TYPES = (
     "workspace",
 )
 EDGE_TARGET_TYPES = tuple(sorted({*ENTITY_TYPES, "sql_object"}))
+SQL_ENTITY_TYPES = frozenset({"sql_function", "sql_table", "sql_view", "stored_procedure"})
 
 EDGE_TYPES = (
     "CALLS_HTTP",
@@ -60,6 +61,7 @@ EDGE_TYPES = (
     "SELECTS_DEPLOYMENT",
     "WRITES_SQL_OBJECT",
 )
+SQL_EDGE_TYPES = frozenset({"CALLS_SQL", "READS_SQL_OBJECT", "REFERENCES_SQL_OBJECT", "WRITES_SQL_OBJECT"})
 INTERACTION_EDGE_TYPES = frozenset(
     {
         "CALLS_HTTP",

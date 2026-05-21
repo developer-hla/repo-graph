@@ -25,6 +25,7 @@ repo-graph [-h]
 | `repo-graph report` | Generate reports from a graph JSON export. |
 | `repo-graph report unresolved` | Group unresolved graph edges. |
 | `repo-graph report interactions` | Group application and database interaction edges. |
+| `repo-graph report database-reconciliation` | Compare code and SQL evidence with current database metadata. |
 | `repo-graph snapshot` | Inspect or write source snapshots. |
 | `repo-graph snapshot status` | Compare current sources to snapshots. |
 | `repo-graph snapshot write` | Write current source snapshots. |
@@ -145,13 +146,14 @@ repo-graph agent-instructions [-h] [--api-url API_URL] [--config CONFIG]
 Generate reports from a graph JSON export.
 
 ```text
-repo-graph report [-h] {unresolved,interactions} ...
+repo-graph report [-h] {unresolved,interactions,database-reconciliation} ...
 ```
 
 | Subcommand | Help |
 | --- | --- |
 | `unresolved` | Group unresolved graph edges. |
 | `interactions` | Group application and database interaction edges. |
+| `database-reconciliation` | Compare code and SQL evidence with current database metadata. |
 
 ## `repo-graph report unresolved`
 
@@ -186,6 +188,24 @@ repo-graph report interactions [-h] --graph GRAPH [--source SOURCE] [--target-so
 | `--target-source` | no |  | Only include interactions targeting this source. |
 | `--edge-type` | no |  | Only include interactions of this type. |
 | `--limit` | no | `50` | Maximum interaction groups to return. |
+| `--examples` | no | `3` | Examples to include per group. |
+
+## `repo-graph report database-reconciliation`
+
+Compare code and SQL evidence with current database metadata.
+
+```text
+repo-graph report database-reconciliation [-h] --graph GRAPH [--source SOURCE]
+                                                 [--database-source DATABASE_SOURCE] [--limit LIMIT]
+                                                 [--examples EXAMPLES]
+```
+
+| Option | Required | Default | Help |
+| --- | --- | --- | --- |
+| `--graph` | yes |  | Graph JSON file to report on. |
+| `--source` | no |  | Only include code and schema evidence from this source. |
+| `--database-source` | no |  | Only include current database metadata from this source. |
+| `--limit` | no | `50` | Maximum reconciliation groups to return. |
 | `--examples` | no | `3` | Examples to include per group. |
 
 ## `repo-graph snapshot`

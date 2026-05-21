@@ -5,7 +5,7 @@ This file is generated from `repo_graph.api.manifest_payload` and the FastAPI Op
 
 - Service: `repo-graph`
 - Runtime schema version: `1`
-- Endpoint count: `35`
+- Endpoint count: `36`
 
 ## Endpoints
 
@@ -45,6 +45,7 @@ This file is generated from `repo_graph.api.manifest_payload` and the FastAPI Op
 | `GET` | `/entities/{entity_id}/impact` | available |
 | `GET` | `/edges/unresolved` | available |
 | `GET` | `/reports/interactions` | available |
+| `GET` | `/reports/database-reconciliation` | available |
 | `GET` | `/reports/unresolved` | available |
 
 ## FastAPI Route Details
@@ -76,6 +77,7 @@ Routes marked `planned` in the manifest are omitted until they exist in the Fast
 | `GET` | `/manifest` |  |  |  |
 | `POST` | `/refresh` |  |  | `RefreshRequest` required |
 | `GET` | `/relationships/search` |  | `from_source` `string` or `null`<br>`to_source` `string` or `null`<br>`type` `string` or `null`<br>`from_type` `string` or `null`<br>`to_type` `string` or `null`<br>`resolved` `boolean` or `null`<br>`limit` `integer` default `100` min `1`, max `200` |  |
+| `GET` | `/reports/database-reconciliation` |  | `source` `string` or `null`<br>`database_source` `string` or `null`<br>`limit` `integer` default `50` min `1`, max `200`<br>`examples` `integer` default `3` min `1`, max `10` |  |
 | `GET` | `/reports/interactions` |  | `source` `string` or `null`<br>`target_source` `string` or `null`<br>`type` `string` or `null`<br>`limit` `integer` default `50` min `1`, max `200`<br>`examples` `integer` default `3` min `1`, max `10` |  |
 | `GET` | `/reports/unresolved` |  | `source` `string` or `null`<br>`type` `string` or `null`<br>`limit` `integer` default `50` min `1`, max `200`<br>`examples` `integer` default `3` min `1`, max `10` |  |
 | `GET` | `/scope` |  |  |  |
@@ -92,6 +94,7 @@ Routes marked `planned` in the manifest are omitted until they exist in the Fast
 | Field | Value |
 | --- | --- |
 | `build_api_status` | `available` |
+| `database_reconciliation_report_status` | `available` |
 | `entity_overview_status` | `available` |
 | `explore_status` | `available` |
 | `graph_loader_status` | `available` |

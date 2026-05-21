@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 
 from repo_graph.reports import (
+    database_reconciliation_report_from_graph,
+    database_reconciliation_report_from_items,
     interactions_report_from_graph,
     interactions_report_from_items,
     unresolved_report_from_graph,
@@ -212,6 +214,94 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["unresolved_edge_count"], 1)
         self.assertEqual(report["items"][0]["to_name"], "dbo.load")
 
+    def test_database_reconciliation_report_groups_drift(self) -> None:
+        graph_data = {
+            "metadata": {"scope_name": "test-scope", "generated_at": "2026-05-14T00:00:00+00:00"},
+            "entities": [
+                sql_entity("db-customers", "sql_table", "dbo.Customers", "current-db", "current_database"),
+                sql_entity("db-orders", "sql_table", "dbo.Orders", "current-db", "current_database"),
+                sql_entity("db-summary", "sql_table", "dbo.CustomerSummary", "current-db", "current_database"),
+                sql_entity("schema-summary", "sql_view", "dbo.CustomerSummary", "database-project", "current_schema"),
+                sql_entity("history-legacy", "sql_table", "dbo.LegacyCustomer", "database-project", "historical"),
+            ],
+            "edges": [
+                interaction_edge(
+                    "edge-1",
+                    "api-service",
+                    "READS_SQL_OBJECT",
+                    "sql_table",
+                    "dbo.Customers",
+                    to_entity_id="db-customers",
+                ),
+                interaction_edge(
+                    "edge-2",
+                    "api-service",
+                    "CALLS_SQL",
+                    "stored_procedure",
+                    "dbo.LoadMissing",
+                    properties=sql_edge_properties("dbo.LoadMissing", "EXECUTE", "stored_procedure"),
+                ),
+                interaction_edge(
+                    "edge-3",
+                    "current-db",
+                    "REFERENCES_SQL_OBJECT",
+                    "sql_table",
+                    "dbo.MissingParent",
+                    properties={
+                        **sql_edge_properties("dbo.MissingParent", "FOREIGN_KEY", "sql_object"),
+                        "schema_state": "current_database",
+                    },
+                )
+                | {"parser": "sqlserver_metadata"},
+            ],
+        }
+
+        report = database_reconciliation_report_from_graph(graph_data)
+
+        self.assertEqual(report["scope_name"], "test-scope")
+        self.assertTrue(report["summary"]["database_evidence_present"])
+        self.assertEqual(report["summary"]["classification_group_counts"]["code_only_reference"], 1)
+        self.assertEqual(report["summary"]["classification_group_counts"]["unresolved_database_reference"], 1)
+        self.assertEqual(report["summary"]["classification_group_counts"]["schema_drift"], 1)
+        self.assertEqual(report["summary"]["classification_group_counts"]["migration_only_object"], 1)
+        self.assertEqual(report["summary"]["classification_group_counts"]["database_only_object"], 1)
+        classifications = {item["classification"]: item for item in report["items"]}
+        self.assertEqual(classifications["code_only_reference"]["target_name"], "dbo.LoadMissing")
+        self.assertEqual(classifications["unresolved_database_reference"]["database_sources"], ["current-db"])
+        self.assertEqual(classifications["schema_drift"]["target_name"], "dbo.CustomerSummary")
+        self.assertEqual(classifications["migration_only_object"]["target_name"], "dbo.LegacyCustomer")
+        self.assertEqual(classifications["database_only_object"]["target_name"], "dbo.Orders")
+
+    def test_database_reconciliation_report_filters_items_from_api_payloads(self) -> None:
+        entities = [
+            sql_entity("db-customers", "sql_table", "dbo.Customers", "current-db", "current_database"),
+            sql_entity("db-orders", "sql_table", "dbo.Orders", "current-db", "current_database"),
+        ]
+        items = [
+            {
+                "edge": interaction_edge(
+                    "edge-1",
+                    "api-service",
+                    "READS_SQL_OBJECT",
+                    "sql_table",
+                    "dbo.Customers",
+                    to_entity_id="db-customers",
+                )
+            }
+        ]
+
+        report = database_reconciliation_report_from_items(
+            entities,
+            items,
+            source_name="api-service",
+            database_source="current-db",
+        )
+
+        self.assertEqual(report["filters"], {"source": "api-service", "database_source": "current-db"})
+        self.assertEqual(report["summary"]["current_database_entity_count"], 2)
+        self.assertEqual(report["items"][0]["classification"], "database_only_object")
+        self.assertEqual(report["items"][0]["target_name"], "dbo.Orders")
+
 
 def edge(
     edge_id: str,
@@ -282,6 +372,40 @@ def interaction_edge(
         "confidence": "medium",
         "parser": "test_parser",
         "properties": edge_properties,
+    }
+
+
+def sql_entity(
+    entity_id: str,
+    entity_type: str,
+    name: str,
+    source_name: str,
+    schema_state: str,
+) -> dict[str, object]:
+    schema, _short_name = name.split(".", 1)
+    return {
+        "entity_id": entity_id,
+        "entity_type": entity_type,
+        "name": name,
+        "source_name": source_name,
+        "properties": {
+            "schema": schema,
+            "full_name": name,
+            "schema_state": schema_state,
+        },
+    }
+
+
+def sql_edge_properties(raw_target: str, operation: str, database_object_type: str) -> dict[str, object]:
+    return {
+        "target_boundary": "database",
+        "dependency_scope": "runtime",
+        "interaction_kind": "sql_reference",
+        "protocol": "sql",
+        "raw_target": raw_target,
+        "normalized_target": raw_target,
+        "sql_operation": operation,
+        "database_object_type": database_object_type,
     }
 
 

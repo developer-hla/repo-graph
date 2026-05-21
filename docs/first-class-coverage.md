@@ -62,9 +62,10 @@ shortcuts.
    SQL Server has a pure metadata-row adapter for tables, views, procedures,
    functions, foreign keys, and module dependencies. Next, add the live
    read-only connector. Do not read table data.
-2. Add reconciliation reports for code-vs-database drift.
-   Flag objects found only in migration history, references missing from the
-   current database, and current database objects with no code evidence.
+2. Add reconciliation reports for code-vs-database drift. Done for graph facts.
+   Reports flag objects found only in migration history, references missing
+   from the current database, and current database objects with no code
+   evidence.
 3. Improve execution context.
    Attach SQL and service calls to functions or route handlers where parsers
    can do this safely, then expose route-to-query impact paths.

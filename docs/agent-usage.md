@@ -531,6 +531,28 @@ or writing a table. SQL schema references include provenance such as
 `schema_state=current_schema`, `historical`, or `unknown`; do not treat
 historical migration evidence as proof of the current database shape.
 
+## Database Reconciliation Report
+
+Use the database reconciliation report when current database metadata is loaded
+and the user asks about schema drift, stale SQL references, or database objects
+with no code evidence:
+
+```bash
+curl "http://localhost:8000/reports/database-reconciliation"
+```
+
+Filter by code/schema source or current database metadata source:
+
+```bash
+curl "http://localhost:8000/reports/database-reconciliation?source=api-service"
+curl "http://localhost:8000/reports/database-reconciliation?database_source=current-db"
+```
+
+Report classifications include `code_only_reference`,
+`unresolved_database_reference`, `schema_drift`, `migration_only_object`, and
+`database_only_object`. Treat them as drift triage, not proof that an object is
+unused.
+
 ## List Unresolved Edges
 
 Unresolved edges show references that were found but not safely linked to an

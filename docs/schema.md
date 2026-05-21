@@ -300,6 +300,25 @@ Classification values are triage hints:
   deeper parser support.
 - `needs_review`: no heuristic matched.
 
+## Database Reconciliation Report
+
+The database reconciliation report compares SQL code/schema evidence with
+entities marked `schema_state=current_database`. It is available from graph JSON
+through the CLI and from the loaded graph through the API.
+
+Classification values are drift triage hints:
+
+- `code_only_reference`: code or source SQL references an object not found in
+  current database metadata.
+- `unresolved_database_reference`: current database metadata references a
+  target outside the loaded metadata scope.
+- `schema_drift`: source schema evidence and current database metadata disagree
+  on object type.
+- `migration_only_object`: historical migration evidence exists, but current
+  database metadata does not show the object.
+- `database_only_object`: current database metadata shows the object, but code
+  and source schema evidence did not reference it.
+
 ## Neo4j Mapping
 
 The Neo4j loader stores graph exports with a small public-safe model:
