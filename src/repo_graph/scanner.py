@@ -95,6 +95,7 @@ VB_METHOD_RE = re.compile(
     r"(Function|Sub)\s+([A-Za-z_]\w*)",
     re.IGNORECASE,
 )
+VB_END_METHOD_RE = re.compile(r"^\s*End\s+(Function|Sub)\b", re.IGNORECASE)
 VB_CONFIG_SETTING_RE = re.compile(r"ConfigurationManager\.AppSettings\s*\(\s*\"([^\"]+)\"\s*\)", re.IGNORECASE)
 VB_COMMAND_TEXT_RE = re.compile(r"\.CommandText\s*=\s*\"([^\"]+)\"", re.IGNORECASE)
 VB_SQL_COMMAND_RE = re.compile(r"New\s+SqlCommand\s*\(\s*\"([^\"]+)\"", re.IGNORECASE)
@@ -157,6 +158,10 @@ class ScanResult:
         self.entities.extend(other.entities)
         self.edges.extend(other.edges)
         self.errors.extend(other.errors)
+
+
+def first_entity(result: ScanResult) -> Entity | None:
+    return result.entities[0] if result.entities else None
 
 
 @dataclass(frozen=True)
@@ -822,6 +827,7 @@ class PythonAstVisitor(ast.NodeVisitor):
         self.context = context
         self.result = ScanResult()
         self.class_stack: list[str] = []
+        self.function_stack: list[Entity] = []
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -846,13 +852,25 @@ class PythonAstVisitor(ast.NodeVisitor):
         self.visit_python_function(node, "async_function")
 
     def visit_python_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef, symbol_kind: str) -> None:
-        self.result.extend(python_symbol_result(self.context, symbol_kind, node.name, node.lineno, self.class_stack))
-        self.result.extend(python_route_result(self.context, node.name, node.decorator_list, node.lineno))
+        symbol_result = python_symbol_result(self.context, symbol_kind, node.name, node.lineno, self.class_stack)
+        function_entity = first_entity(symbol_result)
+        self.result.extend(symbol_result)
+        self.result.extend(
+            python_route_result(self.context, node.name, node.decorator_list, node.lineno, function_entity)
+        )
+        if function_entity:
+            self.function_stack.append(function_entity)
         self.generic_visit(node)
+        if function_entity:
+            self.function_stack.pop()
 
     def visit_Call(self, node: ast.Call) -> None:
         self.result.edges.extend(python_http_call_edges(self.context, node))
         self.result.edges.extend(python_sql_call_edges(self.context, node))
+        if self.function_stack:
+            function_entity = self.function_stack[-1]
+            self.result.edges.extend(python_http_call_edges(self.context, node, from_entity=function_entity))
+            self.result.edges.extend(python_sql_call_edges(self.context, node, from_entity=function_entity))
         self.generic_visit(node)
 
 
@@ -1232,14 +1250,27 @@ class CSharpCodeExtractor:
         namespace: str | None = None
         current_type: str | None = None
         current_route_prefix: str | None = None
+        current_function: Entity | None = None
+        current_function_brace_depth = 0
+        current_function_seen_body = False
         pending_attributes: list[CSharpAttribute] = []
         for line_number, line in enumerate(content.splitlines(), start=1):
             result.extend(csharp_minimal_route_result(context, line, line_number))
             result.edges.extend(csharp_http_call_edges(context, line, line_number))
+            if current_function:
+                result.edges.extend(csharp_http_call_edges(context, line, line_number, from_entity=current_function))
+                result.edges.extend(
+                    sql_reference_edges_for_line(context, line, line_number, from_entity=current_function)
+                )
 
             attributes = csharp_attributes(line, line_number)
             if attributes:
                 pending_attributes.extend(attributes)
+                current_function_brace_depth, current_function_seen_body = csharp_function_scope_state(
+                    line,
+                    current_function_brace_depth,
+                    current_function_seen_body,
+                )
                 continue
 
             namespace_match = CS_NAMESPACE_RE.match(line)
@@ -1248,6 +1279,9 @@ class CSharpCodeExtractor:
 
             type_match = CS_TYPE_RE.match(line)
             if type_match:
+                current_function = None
+                current_function_brace_depth = 0
+                current_function_seen_body = False
                 current_type = type_match.group(2)
                 current_route_prefix = csharp_route_prefix(pending_attributes, current_type, None)
                 result.extend(
@@ -1265,16 +1299,16 @@ class CSharpCodeExtractor:
             method_match = CS_METHOD_RE.match(line)
             if method_match:
                 method_name = method_match.group(1)
-                result.extend(
-                    csharp_symbol_result(
-                        context,
-                        "method",
-                        method_name,
-                        namespace,
-                        line_number,
-                        parent_name=current_type,
-                    )
+                symbol_result = csharp_symbol_result(
+                    context,
+                    "method",
+                    method_name,
+                    namespace,
+                    line_number,
+                    parent_name=current_type,
                 )
+                current_function = first_entity(symbol_result)
+                result.extend(symbol_result)
                 result.extend(
                     csharp_controller_route_result(
                         context,
@@ -1283,13 +1317,25 @@ class CSharpCodeExtractor:
                         current_route_prefix,
                         current_type,
                         line_number,
+                        current_function,
                     )
                 )
+                current_function_brace_depth, current_function_seen_body = csharp_function_scope_state(line, 0, False)
                 pending_attributes = []
                 continue
 
             if csharp_should_clear_attributes(line):
                 pending_attributes = []
+            if current_function:
+                current_function_brace_depth, current_function_seen_body = csharp_function_scope_state(
+                    line,
+                    current_function_brace_depth,
+                    current_function_seen_body,
+                )
+                if current_function_seen_body and current_function_brace_depth <= 0 and "}" in line:
+                    current_function = None
+                    current_function_brace_depth = 0
+                    current_function_seen_body = False
 
         return result
 
@@ -1304,6 +1350,7 @@ class VbCodeExtractor:
         result = ScanResult()
         namespace: str | None = None
         current_type: str | None = None
+        current_function: Entity | None = None
         pending_attributes: list[str] = []
         for line_number, line in enumerate(content.splitlines(), start=1):
             attribute_match = VB_ATTRIBUTE_RE.match(line)
@@ -1318,6 +1365,7 @@ class VbCodeExtractor:
             type_match = VB_TYPE_RE.match(line)
             if type_match:
                 current_type = type_match.group(2)
+                current_function = None
                 result.extend(
                     vb_symbol_result(context, type_match.group(1).lower(), current_type, namespace, line_number)
                 )
@@ -1327,24 +1375,31 @@ class VbCodeExtractor:
             method_match = VB_METHOD_RE.match(line)
             if method_match:
                 method_name = method_match.group(2)
-                result.extend(
-                    vb_symbol_result(
-                        context,
-                        method_match.group(1).lower(),
-                        method_name,
-                        namespace,
-                        line_number,
-                        parent_name=current_type,
-                    )
+                symbol_result = vb_symbol_result(
+                    context,
+                    method_match.group(1).lower(),
+                    method_name,
+                    namespace,
+                    line_number,
+                    parent_name=current_type,
                 )
-                result.extend(vb_contract_route_result(context, method_name, pending_attributes, line_number))
+                current_function = first_entity(symbol_result)
+                result.extend(symbol_result)
+                result.extend(
+                    vb_contract_route_result(context, method_name, pending_attributes, line_number, current_function)
+                )
                 pending_attributes = []
 
             result.edges.extend(vb_service_call_edges(context, line, line_number))
             result.edges.extend(vb_sql_command_edges(context, line, line_number))
+            if current_function:
+                result.edges.extend(vb_service_call_edges(context, line, line_number, from_entity=current_function))
+                result.edges.extend(vb_sql_command_edges(context, line, line_number, from_entity=current_function))
 
             if not attribute_match and line.strip():
                 pending_attributes = []
+            if VB_END_METHOD_RE.match(line):
+                current_function = None
         return result
 
 
@@ -1479,6 +1534,37 @@ def add_route(context: FileScanContext, method: str, path: str, line_number: int
     return result
 
 
+def route_handler_edge(
+    context: FileScanContext,
+    route: Entity,
+    handler: Entity,
+    parser: str,
+    line_number: int,
+) -> Edge:
+    return resolved_edge(
+        route,
+        handler,
+        "HANDLES_ROUTE",
+        context.source.name,
+        context.rel_path,
+        parser,
+        line_number,
+        properties={
+            key: value
+            for key, value in {
+                "route_method": route.properties.get("method"),
+                "route_path": route.properties.get("path"),
+                "normalized_route_path": route.properties.get("normalized_path"),
+                "operation_name": route.properties.get("operation_name"),
+                "handler_name": handler.name,
+                "handler_type": handler.entity_type,
+                "project": route.properties.get("project"),
+            }.items()
+            if value is not None
+        },
+    )
+
+
 def route_entity(
     context: FileScanContext,
     method: str,
@@ -1572,14 +1658,19 @@ def http_edges_for_target(
     line_number: int,
     parser: str,
     client: str | None = None,
+    from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
 ) -> list[Edge]:
+    source_entity = from_entity or context.file_entity
     target = http_target(raw_target, method)
     if client:
         target["client"] = client
+    if extra_properties:
+        target.update(extra_properties)
     if target.get("service_name"):
         return [
             unresolved_edge(
-                context.file_entity,
+                source_entity,
                 target["service_name"],
                 "CALLS_SERVICE",
                 context.source.name,
@@ -1592,7 +1683,7 @@ def http_edges_for_target(
         ]
     return [
         unresolved_edge(
-            context.file_entity,
+            source_entity,
             target["route_name"],
             "CALLS_HTTP",
             context.source.name,
@@ -1678,11 +1769,29 @@ def service_name_from_env(env_var: str) -> str:
 def scan_sql_references(context: FileScanContext, content: str, from_entity: Entity | None = None) -> ScanResult:
     result = ScanResult()
     for line_number, line in enumerate(content.splitlines(), start=1):
-        result.edges.extend(sql_call_edges(context, line, line_number, from_entity=from_entity))
-        result.edges.extend(sql_object_read_edges(context, line, line_number, from_entity=from_entity))
-        result.edges.extend(sql_object_write_edges(context, line, line_number, from_entity=from_entity))
-        result.edges.extend(sql_object_schema_reference_edges(context, line, line_number, from_entity=from_entity))
+        result.edges.extend(sql_reference_edges_for_line(context, line, line_number, from_entity=from_entity))
     return result
+
+
+def sql_reference_edges_for_line(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
+    extra_properties = source_context_properties(from_entity)
+    return [
+        *sql_call_edges(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_read_edges(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_write_edges(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_schema_reference_edges(
+            context,
+            line,
+            line_number,
+            from_entity=from_entity,
+            extra_properties=extra_properties,
+        ),
+    ]
 
 
 def sql_definition_entities_and_edges(context: FileScanContext, line: str, line_number: int) -> ScanResult:
@@ -1729,6 +1838,7 @@ def sql_call_edges(
     line: str,
     line_number: int,
     from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
 ) -> list[Edge]:
     source_entity = from_entity or context.file_entity
     return [
@@ -1745,7 +1855,7 @@ def sql_call_edges(
                 match.group(1),
                 "EXECUTE",
                 "stored_procedure",
-                extra_properties=sql_reference_extra_properties(context),
+                extra_properties=sql_reference_properties(context, extra_properties),
             ),
         )
         for match in SQL_EXEC_RE.finditer(line)
@@ -1757,6 +1867,7 @@ def sql_object_read_edges(
     line: str,
     line_number: int,
     from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
 ) -> list[Edge]:
     source_entity = from_entity or context.file_entity
     return [
@@ -1773,7 +1884,7 @@ def sql_object_read_edges(
                 match.group("target"),
                 match.group("operation"),
                 "sql_object",
-                extra_properties=sql_reference_extra_properties(context),
+                extra_properties=sql_reference_properties(context, extra_properties),
             ),
         )
         for match in SQL_READ_REF_RE.finditer(line)
@@ -1785,6 +1896,7 @@ def sql_object_write_edges(
     line: str,
     line_number: int,
     from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
 ) -> list[Edge]:
     source_entity = from_entity or context.file_entity
     return [
@@ -1801,7 +1913,7 @@ def sql_object_write_edges(
                 match.group("target"),
                 operation,
                 "sql_object",
-                extra_properties=sql_reference_extra_properties(context),
+                extra_properties=sql_reference_properties(context, extra_properties),
             ),
         )
         for operation, match in sql_write_reference_matches(line)
@@ -1813,6 +1925,7 @@ def sql_object_schema_reference_edges(
     line: str,
     line_number: int,
     from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
 ) -> list[Edge]:
     source_entity = from_entity or context.file_entity
     return [
@@ -1831,7 +1944,7 @@ def sql_object_schema_reference_edges(
                 "sql_object",
                 dependency_scope="schema",
                 interaction_kind="sql_schema_reference",
-                extra_properties=sql_reference_extra_properties(context),
+                extra_properties=sql_reference_properties(context, extra_properties),
             ),
         )
         for match in SQL_SCHEMA_REF_RE.finditer(line)
@@ -1892,6 +2005,25 @@ def sql_reference_extra_properties(context: FileScanContext) -> dict[str, str]:
     return {}
 
 
+def sql_reference_properties(
+    context: FileScanContext,
+    extra_properties: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    properties: dict[str, Any] = sql_reference_extra_properties(context)
+    if extra_properties:
+        properties.update(extra_properties)
+    return properties
+
+
+def source_context_properties(from_entity: Entity | None) -> dict[str, str]:
+    if not from_entity or from_entity.entity_type == "file":
+        return {}
+    return {
+        "source_context_type": from_entity.entity_type,
+        "source_context_name": from_entity.name,
+    }
+
+
 def resolved_edge(
     from_entity: Entity,
     to_entity: Entity,
@@ -1900,6 +2032,7 @@ def resolved_edge(
     file_path: str | None = None,
     parser: str = "unknown",
     line_number: int | None = None,
+    properties: dict[str, Any] | None = None,
 ) -> Edge:
     return Edge(
         from_entity_id=from_entity.entity_id,
@@ -1915,6 +2048,7 @@ def resolved_edge(
         line_number=line_number,
         parser=parser,
         confidence="high",
+        properties=properties or {},
     )
 
 
@@ -2226,6 +2360,7 @@ def python_route_result(
     operation_name: str,
     decorators: Sequence[ast.expr],
     line_number: int,
+    handler: Entity | None = None,
 ) -> ScanResult:
     result = ScanResult()
     for decorator in decorators:
@@ -2235,7 +2370,7 @@ def python_route_result(
         if not path:
             continue
         for method in python_route_methods(decorator):
-            result.extend(python_add_route(context, method, path, line_number, operation_name))
+            result.extend(python_add_route(context, method, path, line_number, operation_name, handler))
     return result
 
 
@@ -2255,6 +2390,7 @@ def python_add_route(
     path: str,
     line_number: int,
     operation_name: str,
+    handler: Entity | None = None,
 ) -> ScanResult:
     result = ScanResult()
     route = route_entity(context, method, path, line_number, "python_route", operation_name)
@@ -2282,21 +2418,27 @@ def python_add_route(
                 line_number,
             )
         )
+    if handler:
+        result.edges.append(route_handler_edge(context, route, handler, "python_route", line_number))
     return result
 
 
-def python_http_call_edges(context: FileScanContext, call: ast.Call) -> list[Edge]:
+def python_http_call_edges(
+    context: FileScanContext,
+    call: ast.Call,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
     callee = python_attribute_name(call.func)
     root_name = python_call_root_name(call.func)
     if root_name not in {"httpx", "requests"}:
         return []
     if callee in HTTP_METHODS:
         raw_target = python_string_arg(call, 0) or python_keyword_string(call, "url")
-        return python_http_edges_for_target(context, callee.upper(), raw_target, call.lineno, root_name)
+        return python_http_edges_for_target(context, callee.upper(), raw_target, call.lineno, root_name, from_entity)
     if callee == "request":
         method = python_string_arg(call, 0) or python_keyword_string(call, "method") or "GET"
         raw_target = python_string_arg(call, 1) or python_keyword_string(call, "url")
-        return python_http_edges_for_target(context, method.upper(), raw_target, call.lineno, root_name)
+        return python_http_edges_for_target(context, method.upper(), raw_target, call.lineno, root_name, from_entity)
     return []
 
 
@@ -2306,17 +2448,21 @@ def python_http_edges_for_target(
     raw_target: str | None,
     line_number: int,
     client: str,
+    from_entity: Entity | None = None,
 ) -> list[Edge]:
     if not raw_target:
         return []
+    source_entity = from_entity or context.file_entity
+    extra_properties = source_context_properties(from_entity)
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         target = http_target(raw_target, method)
         target["service_name"] = service_name_from_url(raw_target)
         target["client"] = client
+        target.update(extra_properties)
         return [
             unresolved_edge(
-                context.file_entity,
+                source_entity,
                 target["service_name"],
                 "CALLS_SERVICE",
                 context.source.name,
@@ -2327,21 +2473,45 @@ def python_http_edges_for_target(
                 properties=target,
             )
         ]
-    return http_edges_for_target(context, method, raw_target, line_number, "python_http", client=client)
+    return http_edges_for_target(
+        context,
+        method,
+        raw_target,
+        line_number,
+        "python_http",
+        client=client,
+        from_entity=from_entity,
+        extra_properties=extra_properties,
+    )
 
 
-def python_sql_call_edges(context: FileScanContext, call: ast.Call) -> list[Edge]:
+def python_sql_call_edges(
+    context: FileScanContext,
+    call: ast.Call,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
     callee = python_attribute_name(call.func)
     if callee not in {"execute", "executemany", "exec_driver_sql", "text"}:
         return []
     raw_sql = python_string_arg(call, 0)
     if not raw_sql:
         return []
+    extra_properties = source_context_properties(from_entity)
     return [
-        *sql_call_edges(context, raw_sql, call.lineno),
-        *sql_object_read_edges(context, raw_sql, call.lineno),
-        *sql_object_write_edges(context, raw_sql, call.lineno),
-        *sql_object_schema_reference_edges(context, raw_sql, call.lineno),
+        *sql_call_edges(context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_read_edges(
+            context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties
+        ),
+        *sql_object_write_edges(
+            context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties
+        ),
+        *sql_object_schema_reference_edges(
+            context,
+            raw_sql,
+            call.lineno,
+            from_entity=from_entity,
+            extra_properties=extra_properties,
+        ),
     ]
 
 
@@ -3008,6 +3178,7 @@ def csharp_controller_route_result(
     route_prefix: str | None,
     type_name: str | None,
     line_number: int,
+    handler: Entity | None = None,
 ) -> ScanResult:
     result = ScanResult()
     route_path = csharp_route_prefix(attributes, type_name, method_name)
@@ -3044,6 +3215,8 @@ def csharp_controller_route_result(
                     line_number,
                 )
             )
+        if handler:
+            result.edges.append(route_handler_edge(context, route, handler, "dotnet_controller_route", line_number))
     return result
 
 
@@ -3075,8 +3248,15 @@ def csharp_minimal_route_result(context: FileScanContext, line: str, line_number
     return result
 
 
-def csharp_http_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+def csharp_http_call_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
     edges: list[Edge] = []
+    source_entity = from_entity or context.file_entity
+    extra_properties = source_context_properties(from_entity)
     for match in CS_HTTP_CALL_RE.finditer(line):
         method = match.group(1).upper()
         raw_target = csharp_unescape_string(match.group(2))
@@ -3085,9 +3265,10 @@ def csharp_http_call_edges(context: FileScanContext, line: str, line_number: int
             target = http_target(raw_target, method)
             target["service_name"] = service_name_from_url(raw_target)
             target["client"] = "HttpClient"
+            target.update(extra_properties)
             edges.append(
                 unresolved_edge(
-                    context.file_entity,
+                    source_entity,
                     target["service_name"],
                     "CALLS_SERVICE",
                     context.source.name,
@@ -3100,7 +3281,16 @@ def csharp_http_call_edges(context: FileScanContext, line: str, line_number: int
             )
         else:
             edges.extend(
-                http_edges_for_target(context, method, raw_target, line_number, "dotnet_http", client="HttpClient")
+                http_edges_for_target(
+                    context,
+                    method,
+                    raw_target,
+                    line_number,
+                    "dotnet_http",
+                    client="HttpClient",
+                    from_entity=from_entity,
+                    extra_properties=extra_properties,
+                )
             )
     return edges
 
@@ -3134,6 +3324,17 @@ def csharp_join_route_paths(prefix: str | None, path: str) -> str:
 def csharp_should_clear_attributes(line: str) -> bool:
     stripped = line.strip()
     return bool(stripped and not stripped.startswith("//"))
+
+
+def csharp_function_scope_state(line: str, brace_depth: int, seen_body: bool) -> tuple[int, bool]:
+    code = csharp_scope_code(line)
+    seen_body = seen_body or "{" in code
+    brace_depth += code.count("{") - code.count("}")
+    return brace_depth, seen_body
+
+
+def csharp_scope_code(line: str) -> str:
+    return re.sub(r'"(?:\\.|[^"\\])*"', '""', line)
 
 
 def config_file_entity(context: FileScanContext, config_kind: str) -> Entity:
@@ -3321,6 +3522,7 @@ def vb_contract_route_result(
     method_name: str,
     attributes: Sequence[str],
     line_number: int,
+    handler: Entity | None = None,
 ) -> ScanResult:
     result = ScanResult()
     framework = legacy_contract_framework(attributes)
@@ -3359,6 +3561,8 @@ def vb_contract_route_result(
                 line_number,
             )
         )
+    if handler:
+        result.edges.append(route_handler_edge(context, route, handler, "vb_contract_route", line_number))
     return result
 
 
@@ -3384,8 +3588,15 @@ def legacy_dotnet_service_path(rel_path: str, framework: str) -> str:
     return "/" + path
 
 
-def vb_service_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+def vb_service_call_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
     edges: list[Edge] = []
+    source_entity = from_entity or context.file_entity
+    extra_properties = source_context_properties(from_entity)
     for match in VB_HTTP_LITERAL_RE.finditer(line):
         edges.extend(
             legacy_http_edges_for_target(
@@ -3394,14 +3605,26 @@ def vb_service_call_edges(context: FileScanContext, line: str, line_number: int)
                 line_number,
                 "vb_http",
                 client=legacy_http_client(match.group(0)),
+                from_entity=from_entity,
+                extra_properties=extra_properties,
             )
         )
     for match in VB_CONFIG_SETTING_RE.finditer(line):
         key = match.group(1)
         service_name = service_name_from_identifier(key)
+        properties = interaction_properties(
+            "application",
+            "runtime",
+            "service_call",
+            raw_target=key,
+            normalized_target=service_name,
+            config_key=key,
+            service_name=service_name,
+        )
+        properties.update(extra_properties)
         edges.append(
             unresolved_edge(
-                context.file_entity,
+                source_entity,
                 service_name,
                 "CALLS_SERVICE",
                 context.source.name,
@@ -3409,15 +3632,7 @@ def vb_service_call_edges(context: FileScanContext, line: str, line_number: int)
                 "vb_config_service",
                 to_type="service",
                 line_number=line_number,
-                properties=interaction_properties(
-                    "application",
-                    "runtime",
-                    "service_call",
-                    raw_target=key,
-                    normalized_target=service_name,
-                    config_key=key,
-                    service_name=service_name,
-                ),
+                properties=properties,
             )
         )
     return edges
@@ -3429,15 +3644,20 @@ def legacy_http_edges_for_target(
     line_number: int,
     parser: str,
     client: str,
+    from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
 ) -> list[Edge]:
+    source_entity = from_entity or context.file_entity
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         target = http_target(raw_target, "GET")
         target["service_name"] = service_name_from_url(raw_target)
         target["client"] = client
+        if extra_properties:
+            target.update(extra_properties)
         return [
             unresolved_edge(
-                context.file_entity,
+                source_entity,
                 target["service_name"],
                 "CALLS_SERVICE",
                 context.source.name,
@@ -3448,7 +3668,16 @@ def legacy_http_edges_for_target(
                 properties=target,
             )
         ]
-    return http_edges_for_target(context, "GET", raw_target, line_number, parser, client=client)
+    return http_edges_for_target(
+        context,
+        "GET",
+        raw_target,
+        line_number,
+        parser,
+        client=client,
+        from_entity=from_entity,
+        extra_properties=extra_properties,
+    )
 
 
 def legacy_http_client(evidence: str) -> str:
@@ -3459,17 +3688,24 @@ def legacy_http_client(evidence: str) -> str:
     return "legacy_http_client"
 
 
-def vb_sql_command_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
+def vb_sql_command_edges(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | None = None,
+) -> list[Edge]:
     targets = [match.group(1) for match in VB_COMMAND_TEXT_RE.finditer(line)]
     targets.extend(match.group(1) for match in VB_SQL_COMMAND_RE.finditer(line))
     edges: list[Edge] = []
+    source_entity = from_entity or context.file_entity
+    extra_properties = source_context_properties(from_entity)
     for target in targets:
         normalized = stored_procedure_target(target)
         if not normalized:
             continue
         edges.append(
             unresolved_edge(
-                context.file_entity,
+                source_entity,
                 normalized,
                 "CALLS_SQL",
                 context.source.name,
@@ -3477,7 +3713,12 @@ def vb_sql_command_edges(context: FileScanContext, line: str, line_number: int) 
                 "vb_sql_command",
                 to_type="stored_procedure",
                 line_number=line_number,
-                properties=sql_interaction_properties(target, "EXECUTE", "stored_procedure"),
+                properties=sql_interaction_properties(
+                    target,
+                    "EXECUTE",
+                    "stored_procedure",
+                    extra_properties=extra_properties,
+                ),
             )
         )
     return edges

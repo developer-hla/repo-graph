@@ -111,6 +111,15 @@ normalized target, config key, client library, parser, file path, and line
 number. Agents should summarize these as app-boundary dependencies and use the
 evidence for proof and drill-down.
 
+When a parser can identify the handler for an endpoint, the graph should link
+the route to that function with `HANDLES_ROUTE`. Runtime and database calls
+inside that function should use the function as the edge source while keeping
+file and line evidence. This lets blast-radius queries follow paths such as:
+
+```text
+endpoint -> handler function -> database table or stored procedure
+```
+
 Unresolved edges are expected. They mean a reference was found but the scanner
 could not map it to a known entity in the current graph scope.
 

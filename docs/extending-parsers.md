@@ -29,6 +29,10 @@ complete until code, examples, tests, and generated references all agree.
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
    such as `fetch`, `axios`, `requests`, `httpx`, or `HttpClient` in edge
    properties. Do not add one edge type or parser ID per client library.
+   If a parser can identify that an API route is handled by a specific
+   function, emit `HANDLES_ROUTE` from the route to that function. When HTTP
+   or database calls are inside a known function, use that function as the
+   source entity and keep the file path and line number as evidence.
    If the parser discovers a new boundary type, evaluate it against
    [first-class coverage](first-class-coverage.md) before deciding whether to
    add graph vocabulary or reuse an existing edge type.

@@ -6,8 +6,8 @@ It documents the graph types exercised by the synthetic examples, not a private 
 
 - Graph schema version: `0.1`
 - Entity count: `88`
-- Edge count: `163`
-- Resolved edge count: `146`
+- Edge count: `173`
+- Resolved edge count: `156`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -37,8 +37,8 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Edge Type | Example Count |
 | --- | ---: |
 | `CALLS_HTTP` | 1 |
-| `CALLS_SERVICE` | 5 |
-| `CALLS_SQL` | 4 |
+| `CALLS_SERVICE` | 9 |
+| `CALLS_SQL` | 7 |
 | `CONFIGURES_SERVICE` | 3 |
 | `CONTAINS_FILE` | 51 |
 | `CONTAINS_PROJECT` | 11 |
@@ -56,6 +56,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `DEPENDS_ON_PACKAGE` | 12 |
 | `DEPENDS_ON_PROJECT` | 1 |
 | `EXPOSES_ROUTE` | 8 |
+| `HANDLES_ROUTE` | 3 |
 | `IMPORTS` | 9 |
 | `READS_SQL_OBJECT` | 1 |
 | `REFERENCES_SQL_OBJECT` | 1 |
@@ -69,9 +70,9 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Parser | Example Edge Count |
 | --- | ---: |
 | `dotnet_build_config` | 2 |
-| `dotnet_controller_route` | 2 |
+| `dotnet_controller_route` | 3 |
 | `dotnet_framework_config` | 6 |
-| `dotnet_http` | 1 |
+| `dotnet_http` | 2 |
 | `dotnet_minimal_route` | 2 |
 | `dotnet_project` | 8 |
 | `dotnet_solution` | 3 |
@@ -93,22 +94,22 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `packages_config` | 2 |
 | `project_discovery` | 9 |
 | `pyproject` | 9 |
-| `python_http` | 1 |
+| `python_http` | 2 |
 | `python_import` | 6 |
-| `python_route` | 2 |
+| `python_route` | 3 |
 | `python_symbol` | 6 |
 | `requirements` | 1 |
 | `sql` | 5 |
-| `sql_reference` | 6 |
-| `vb_config_service` | 1 |
-| `vb_contract_route` | 2 |
-| `vb_http` | 1 |
-| `vb_sql_command` | 1 |
+| `sql_reference` | 8 |
+| `vb_config_service` | 2 |
+| `vb_contract_route` | 3 |
+| `vb_http` | 2 |
+| `vb_sql_command` | 2 |
 | `vb_symbol` | 2 |
 
 ## Confidence Values
 
 | Confidence | Example Edge Count |
 | --- | ---: |
-| `high` | 122 |
-| `medium` | 41 |
+| `high` | 125 |
+| `medium` | 48 |

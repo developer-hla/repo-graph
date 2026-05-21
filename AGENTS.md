@@ -78,6 +78,10 @@ logic in the CLI, or graph-resolution policy in storage code.
   calls, SQL usage, package dependencies, project references, deployment
   topology, declarations, and ownership. Do not create graph vocabulary around
   low-level implementation details such as a specific HTTP client library.
+- When a parser can identify an endpoint handler, emit `HANDLES_ROUTE` from
+  the `api_route` to the handler `function`. Runtime or database calls inside
+  that function should use the function as the edge source and keep file and
+  line evidence.
 - Important integration boundaries should become first-class graph facts when
   they are stable, discoverable, and useful for impact analysis. Examples
   include SQL reads and writes, SQL schema dependencies, message publish/consume

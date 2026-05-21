@@ -5,7 +5,7 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
 - Parser count: `37`
-- Edge count: `163`
+- Edge count: `173`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -13,9 +13,9 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | Parser | Edge Count | Unresolved | Edge Types | From Types | To Types | Sources |
 | --- | ---: | ---: | --- | --- | --- | --- |
 | `dotnet_build_config` | 2 | 1 | `DECLARES_BUILD_CONFIG`, `DEPENDS_ON_PACKAGE` | `build_config`, `file` | `build_config`, `package` | `dotnet-service` |
-| `dotnet_controller_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `dotnet-service` |
+| `dotnet_controller_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `dotnet-service` |
 | `dotnet_framework_config` | 6 | 0 | `CONFIGURES_SERVICE`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE` | `config_file`, `config_value`, `file` | `config_file`, `config_value`, `service` | `legacy-vb-service` |
-| `dotnet_http` | 1 | 0 | `CALLS_SERVICE` | `file` | `service` | `dotnet-service` |
+| `dotnet_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `dotnet-service` |
 | `dotnet_minimal_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `dotnet-service` |
 | `dotnet_project` | 8 | 0 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT` | `file`, `package`, `project` | `package`, `project` | `dotnet-service`, `legacy-vb-service` |
 | `dotnet_solution` | 3 | 2 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
@@ -37,17 +37,17 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `packages_config` | 2 | 1 | `DECLARES_CONFIG_FILE`, `DEPENDS_ON_PACKAGE` | `file`, `project` | `config_file`, `package` | `legacy-vb-service` |
 | `project_discovery` | 9 | 0 | `CONTAINS_PROJECT` | `repository` | `project` | `api-service`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
 | `pyproject` | 9 | 4 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE` | `file`, `package`, `project` | `package` | `python-shared`, `python-worker` |
-| `python_http` | 1 | 0 | `CALLS_SERVICE` | `file` | `service` | `python-worker` |
+| `python_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `python-worker` |
 | `python_import` | 6 | 4 | `IMPORTS` | `file` | `package` | `python-shared`, `python-worker` |
-| `python_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `python-worker` |
+| `python_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `python-worker` |
 | `python_symbol` | 6 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
 | `sql` | 5 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
-| `sql_reference` | 6 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
-| `vb_config_service` | 1 | 0 | `CALLS_SERVICE` | `file` | `service` | `legacy-vb-service` |
-| `vb_contract_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `legacy-vb-service` |
-| `vb_http` | 1 | 0 | `CALLS_SERVICE` | `file` | `service` | `legacy-vb-service` |
-| `vb_sql_command` | 1 | 0 | `CALLS_SQL` | `file` | `stored_procedure` | `legacy-vb-service` |
+| `sql_reference` | 8 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `function`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
+| `vb_config_service` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
+| `vb_contract_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `legacy-vb-service` |
+| `vb_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
+| `vb_sql_command` | 2 | 0 | `CALLS_SQL` | `file`, `function` | `stored_procedure` | `legacy-vb-service` |
 | `vb_symbol` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `legacy-vb-service` |
 
 ## Notes

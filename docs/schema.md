@@ -49,7 +49,7 @@ intended shape and meaning of the graph.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -87,6 +87,12 @@ analysis can distinguish readers from writers.
 Schema-time relationships such as foreign keys should emit
 `REFERENCES_SQL_OBJECT`. Trigger metadata should emit
 `TRIGGERS_ON_SQL_OBJECT` from the trigger entity to the table it fires on.
+
+Route handlers are modeled with `HANDLES_ROUTE` from an `api_route` entity to
+the function that handles that route when the parser can identify it. Function
+context should then be preserved on runtime and database interaction edges, so
+an endpoint impact path can look like:
+`api_route -HANDLES_ROUTE-> function -CALLS_SQL-> sql_table`.
 
 - `target_boundary`: `application` or `database`
 - `dependency_scope`: `runtime`, `configuration`, `deployment`, or `schema`
@@ -156,6 +162,7 @@ agents should expose to users.
 - `IMPORTS`: file to imported package or relative module target.
 - `DECLARES_ROUTE`: file to route.
 - `EXPOSES_ROUTE`: project to route.
+- `HANDLES_ROUTE`: API route to the function that handles that route.
 - `DECLARES_SYMBOL`: file to exported function or class.
 - `RUNS_CONTAINER`: Kubernetes deployment to container.
 - `SELECTS_DEPLOYMENT`: Kubernetes service to deployment selected by labels.
@@ -167,12 +174,12 @@ agents should expose to users.
 - `CONFIGURES_SERVICE`: config value to a service-like target inferred from
   URL settings or WCF endpoints.
 - `DEFINES`: SQL file to SQL object declaration.
-- `CALLS_SQL`: file to stored procedure target.
-- `READS_SQL_OBJECT`: file or SQL object to table, view, function, or
+- `CALLS_SQL`: file, function, or SQL object to stored procedure target.
+- `READS_SQL_OBJECT`: file, function, or SQL object to table, view, function, or
   procedure target being read.
-- `WRITES_SQL_OBJECT`: file or SQL object to table, view, function, or
+- `WRITES_SQL_OBJECT`: file, function, or SQL object to table, view, function, or
   procedure target being inserted, updated, deleted, merged, or truncated.
-- `REFERENCES_SQL_OBJECT`: file or SQL object to table, view, function, or
+- `REFERENCES_SQL_OBJECT`: file, function, or SQL object to table, view, function, or
   procedure target referenced by a schema-time dependency such as a foreign key.
 - `TRIGGERS_ON_SQL_OBJECT`: trigger entity to the table that fires it.
 

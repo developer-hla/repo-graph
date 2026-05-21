@@ -747,6 +747,7 @@ sources:
         self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
         self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
         self.assertIn("EXPOSES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertTrue(
@@ -789,6 +790,26 @@ sources:
         self.assertTrue(
             any(
                 edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.get_thing_by_id" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "HANDLES_ROUTE"
+                and edge["from_name"] == "GET /things/{thing_id}"
+                and edge["to_name"] == "example_python_worker.app.read_thing"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["from_type"] == "function"
+                and edge["from_name"] == "example_python_worker.app.read_thing"
+                and edge["to_name"] == "dbo.get_thing_by_id"
+                and edge["resolved"]
+                and edge["properties"].get("source_context_type") == "function"
                 for edge in graph_data["edges"]
             )
         )
@@ -931,6 +952,7 @@ sources:
         self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
         self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
         self.assertIn("EXPOSES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertTrue(
@@ -980,6 +1002,26 @@ sources:
         self.assertTrue(
             any(
                 edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.get_thing_by_id" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "HANDLES_ROUTE"
+                and edge["from_name"] == "GET /api/Things/{id}"
+                and edge["to_name"] == "Example.Service.Controllers.ThingsController.GetThing"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["from_type"] == "function"
+                and edge["from_name"] == "Example.Service.Controllers.ThingsController.GetThing"
+                and edge["to_name"] == "dbo.get_thing_by_id"
+                and edge["resolved"]
+                and edge["properties"].get("source_context_type") == "function"
                 for edge in graph_data["edges"]
             )
         )
@@ -1313,6 +1355,7 @@ sources:
         self.assertIn("CONFIGURES_SERVICE", graph_data["edge_counts"])
         self.assertIn("DECLARES_ROUTE", graph_data["edge_counts"])
         self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
+        self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
         self.assertIn("CALLS_SQL", graph_data["edge_counts"])
         self.assertIn("DEPENDS_ON_PACKAGE", graph_data["edge_counts"])
@@ -1331,6 +1374,26 @@ sources:
         self.assertTrue(
             any(
                 edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.GetOrder" and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "HANDLES_ROUTE"
+                and edge["from_name"] == "POST /LegacyOrderService.asmx/GetOrder"
+                and edge["to_name"] == "Example.Legacy.LegacyOrderService.GetOrder"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["from_type"] == "function"
+                and edge["from_name"] == "Example.Legacy.LegacyOrderService.GetOrder"
+                and edge["to_name"] == "dbo.GetOrder"
+                and edge["resolved"]
+                and edge["properties"].get("source_context_type") == "function"
                 for edge in graph_data["edges"]
             )
         )
