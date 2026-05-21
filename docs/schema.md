@@ -49,7 +49,7 @@ intended shape and meaning of the graph.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | DECLARES_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -71,20 +71,32 @@ Application-to-application and application-to-database interaction edges should
 use regular evidence fields. The canonical list lives in
 `repo_graph.vocabulary.INTERACTION_EDGE_TYPES` and currently includes
 `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
-`CALLS_SQL`, `READS_SQL_OBJECT`, and `WRITES_SQL_OBJECT`.
+`CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, and
+`REFERENCES_SQL_OBJECT`.
 
 Database-to-database dependencies use the same interaction contract. For
 example, a stored procedure or view that reads a table should emit
 `READS_SQL_OBJECT` from the SQL object entity to the referenced SQL object.
 SQL statements that mutate tables should emit `WRITES_SQL_OBJECT` so impact
 analysis can distinguish readers from writers.
+Schema-time relationships such as foreign keys should emit
+`REFERENCES_SQL_OBJECT`.
 
 - `target_boundary`: `application` or `database`
-- `dependency_scope`: `runtime`, `configuration`, or `deployment`
+- `dependency_scope`: `runtime`, `configuration`, `deployment`, or `schema`
 - `interaction_kind`: a stable evidence category such as `http_call`,
-  `service_call`, `service_configuration`, `ingress_route`, or `sql_reference`
+  `service_call`, `service_configuration`, `ingress_route`, `sql_reference`,
+  or `sql_schema_reference`
 - protocol-specific evidence such as `client`, `protocol`, `http_method`,
-  `target_path`, `sql_operation`, or `database_object_type`
+  `target_path`, `sql_operation`, `database_object_type`, `schema_state`, or
+  `sql_source_kind`
+
+SQL files also include schema provenance. `schema_state=current_schema` means a
+file looks like a current schema definition. `schema_state=historical` means a
+file looks like migration or revision history and is evidence that an object
+existed at some point, not proof that it exists now. Historical SQL entities
+are kept in the graph but are not used as normal resolution candidates.
+`schema_state=unknown` means RepoGraph could not classify the SQL file.
 
 Do not model every library or syntax form as a separate edge type. `fetch`,
 `axios`, `requests`, `httpx`, `HttpClient`, and legacy HTTP clients are
@@ -151,6 +163,8 @@ agents should expose to users.
   procedure target being read.
 - `WRITES_SQL_OBJECT`: file or SQL object to table, view, function, or
   procedure target being inserted, updated, deleted, merged, or truncated.
+- `REFERENCES_SQL_OBJECT`: file or SQL object to table, view, function, or
+  procedure target referenced by a schema-time dependency such as a foreign key.
 
 Scanner-derived reference edges include evidence in `properties`, such as
 `raw_target`, `normalized_target`, dependency type, ecosystem, package version,
@@ -291,7 +305,7 @@ The Neo4j loader stores graph exports with a small public-safe model:
 - `(:RepoGraphGraph)-[:INCLUDES_SOURCE]->(:RepoGraphSource)` records the
   source set used by the loaded graph.
 - Relationships use sanitized edge types such as `IMPORTS`, `CALLS_SQL`,
-  `READS_SQL_OBJECT`, and `WRITES_SQL_OBJECT`.
+  `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, and `REFERENCES_SQL_OBJECT`.
 
 Each loaded node and relationship keeps the original graph fields as
 properties. Nested `properties` maps are preserved as `properties_json` and

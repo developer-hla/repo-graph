@@ -327,7 +327,9 @@ discarding relationships discovered from the scanned sources.
 
 Future parser slices should add:
 
-- SQL schema dependencies, triggers, and richer SQL object impact paths
+- optional read-only database introspection for current schema state
+- reconciliation reports for code-vs-database drift and migration-only objects
+- triggers and richer SQL object impact paths
 - route/function/query context so endpoint impact paths do not stop at file
   ownership
 - messaging publish/consume boundaries for queues, topics, and event contracts
@@ -337,6 +339,31 @@ Future parser slices should add:
 - deeper MSBuild metadata
 - optional LLM-assisted documentation discovery that emits evidence-backed
   candidate entities and edges
+
+## Database Introspection Direction
+
+SQL revision and migration files are historical evidence. They can describe
+objects that no longer exist, so they should not be treated as authoritative
+current database state by default.
+
+RepoGraph should support an optional `database` source type for read-only
+metadata introspection. For SQL Server, the first adapter should inspect catalog
+metadata such as `sys.tables`, `sys.views`, `sys.procedures`,
+`sys.foreign_keys`, `sys.sql_expression_dependencies`, `sys.triggers`, and
+`sys.sql_modules`. It must not read table data.
+
+Generated facts from source files should include provenance such as
+`schema_state=current_schema`, `schema_state=historical`, or
+`schema_state=unknown`. Introspected facts should use
+`schema_state=current_database`. Agents should prefer current-database facts
+when answering current-state schema questions, while still using code and
+history evidence to explain drift, stale references, and migration-only
+objects.
+
+Database connections must be opt-in, read-only, timeout-limited, and configured
+through ignored private config or environment variables. Public examples should
+stay synthetic and must not include real server names, database names, or
+connection strings.
 
 ## Public/Private Boundary
 

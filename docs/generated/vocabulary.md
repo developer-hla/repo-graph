@@ -81,6 +81,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `EXPOSES_ROUTE`
 - `IMPORTS`
 - `READS_SQL_OBJECT`
+- `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
 - `RUNS_CONTAINER`
 - `SELECTS_DEPLOYMENT`
@@ -97,6 +98,7 @@ These edge types represent application-to-application or application-to-database
 - `CALLS_SQL`
 - `CONFIGURES_SERVICE`
 - `READS_SQL_OBJECT`
+- `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
 - `WRITES_SQL_OBJECT`
 
@@ -116,6 +118,7 @@ These edge types represent application-to-application or application-to-database
 - `configuration`
 - `deployment`
 - `runtime`
+- `schema`
 
 ### Interaction Kinds
 
@@ -124,6 +127,7 @@ These edge types represent application-to-application or application-to-database
 - `service_call`
 - `service_configuration`
 - `sql_reference`
+- `sql_schema_reference`
 
 ## Parser IDs
 
@@ -171,7 +175,7 @@ These edge types represent application-to-application or application-to-database
 | Profile | Edge Types | Description |
 | --- | --- | --- |
 | `all` | `all` | Traverse all edge types. |
-| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, `READS_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
+| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
 | `structural` | `CONTAINS_FILE`, `CONTAINS_PROJECT`, `DECLARES_BUILD_CONFIG`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `DECLARES_PACKAGE`, `DECLARES_ROUTE`, `DECLARES_SERVICE`, `DECLARES_SOLUTION`, `DECLARES_SYMBOL`, `DECLARES_WORKSPACE`, `DEFINES`, `EXPOSES_ROUTE`, `RUNS_CONTAINER` | Traverse containment and declaration edges. |
 
 ## Unresolved Classifications
@@ -190,6 +194,7 @@ These edge types represent application-to-application or application-to-database
 | `edge_type` | `CALLS_SQL` | `unresolved_sql_calls` | `warning` | This source has unresolved SQL calls. |
 | `edge_type` | `READS_SQL_OBJECT` | `unresolved_sql_reads` | `warning` | This source has unresolved SQL object reads. |
 | `edge_type` | `WRITES_SQL_OBJECT` | `unresolved_sql_writes` | `warning` | This source has unresolved SQL object writes. |
+| `edge_type` | `REFERENCES_SQL_OBJECT` | `unresolved_sql_schema_references` | `warning` | This source has unresolved SQL schema references. |
 | `edge_type` | `CALLS_SERVICE` | `unresolved_service_calls` | `warning` | This source has unresolved service calls. |
 | `edge_type` | `CALLS_HTTP` | `unresolved_http_calls` | `warning` | This source has unresolved HTTP calls. |
 | `edge_type` | `IMPORTS` | `unresolved_imports` | `info` | This source has unresolved imports. |

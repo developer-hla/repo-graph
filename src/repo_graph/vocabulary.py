@@ -54,6 +54,7 @@ EDGE_TYPES = (
     "EXPOSES_ROUTE",
     "IMPORTS",
     "READS_SQL_OBJECT",
+    "REFERENCES_SQL_OBJECT",
     "ROUTES_TO_SERVICE",
     "RUNS_CONTAINER",
     "SELECTS_DEPLOYMENT",
@@ -66,6 +67,7 @@ INTERACTION_EDGE_TYPES = frozenset(
         "CALLS_SQL",
         "CONFIGURES_SERVICE",
         "READS_SQL_OBJECT",
+        "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "WRITES_SQL_OBJECT",
     }
@@ -83,6 +85,7 @@ INTERACTION_DEPENDENCY_SCOPES = (
     "configuration",
     "deployment",
     "runtime",
+    "schema",
 )
 INTERACTION_KINDS = (
     "http_call",
@@ -90,6 +93,7 @@ INTERACTION_KINDS = (
     "service_call",
     "service_configuration",
     "sql_reference",
+    "sql_schema_reference",
 )
 
 PARSER_IDS = (
@@ -143,6 +147,7 @@ IMPACT_EDGE_TYPES = frozenset(
         "DEPENDS_ON_PROJECT",
         "IMPORTS",
         "READS_SQL_OBJECT",
+        "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "SELECTS_DEPLOYMENT",
         "WRITES_SQL_OBJECT",
@@ -187,6 +192,7 @@ MISSING_SOURCE_EDGE_TYPES = frozenset(
         "DEPENDS_ON_PACKAGE",
         "DEPENDS_ON_PROJECT",
         "READS_SQL_OBJECT",
+        "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "WRITES_SQL_OBJECT",
     }
@@ -282,6 +288,12 @@ EDGE_TYPE_COVERAGE_WARNING_RULES = (
         "WRITES_SQL_OBJECT",
         "unresolved_sql_writes",
         "This source has unresolved SQL object writes.",
+        "warning",
+    ),
+    CoverageWarningRule(
+        "REFERENCES_SQL_OBJECT",
+        "unresolved_sql_schema_references",
+        "This source has unresolved SQL schema references.",
         "warning",
     ),
     CoverageWarningRule(

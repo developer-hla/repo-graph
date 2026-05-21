@@ -161,6 +161,87 @@ sources:
             },
         )
 
+    def test_build_graph_discovers_sql_schema_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "database"
+            repo.mkdir()
+            (repo / "schema.sql").write_text(
+                """
+CREATE TABLE dbo.customers (id int)
+CREATE TABLE dbo.orders (customer_id int REFERENCES dbo.customers(id))
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: database
+    path: database
+""",
+                encoding="utf-8",
+            )
+
+            graph = build_graph(load_config(config_path))
+            graph_data = graph.to_dict()
+
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "REFERENCES_SQL_OBJECT"
+                and edge["from_name"] == "dbo.orders"
+                and edge["to_name"] == "dbo.customers"
+                and edge["resolved"]
+                and edge["properties"].get("dependency_scope") == "schema"
+                and edge["properties"].get("interaction_kind") == "sql_schema_reference"
+                and edge["properties"].get("schema_state") == "current_schema"
+                for edge in graph_data["edges"]
+            )
+        )
+
+    def test_build_graph_does_not_resolve_against_historical_migration_sql(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = root / "service"
+            (repo / "migrations").mkdir(parents=True)
+            (repo / "app.ts").write_text("const sql = 'EXEC dbo.old_proc';", encoding="utf-8")
+            (repo / "migrations" / "001_create_old_proc.sql").write_text(
+                "CREATE PROCEDURE dbo.old_proc AS SELECT 1",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+
+            graph = build_graph(load_config(config_path))
+            graph_data = graph.to_dict()
+
+        self.assertTrue(
+            any(
+                entity["entity_type"] == "stored_procedure"
+                and entity["name"] == "dbo.old_proc"
+                and entity["properties"].get("schema_state") == "historical"
+                and entity["properties"].get("sql_source_kind") == "migration_file"
+                for entity in graph_data["entities"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL" and edge["to_name"] == "dbo.old_proc" and not edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+
     def test_build_graph_resolves_cross_source_code_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

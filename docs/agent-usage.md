@@ -520,13 +520,16 @@ curl "http://localhost:8000/reports/interactions?source=api-service"
 curl "http://localhost:8000/reports/interactions?target_source=database-project"
 curl "http://localhost:8000/reports/interactions?type=READS_SQL_OBJECT"
 curl "http://localhost:8000/reports/interactions?type=WRITES_SQL_OBJECT"
+curl "http://localhost:8000/reports/interactions?type=REFERENCES_SQL_OBJECT"
 ```
 
 Report groups include `from_source`, `target_source`, `target_boundary`,
 `dependency_scope`, `interaction_kind`, counts, and bounded evidence examples.
 Use this report to summarize chains such as a UI calling an API, an API calling
 another service, an application querying SQL, or a stored procedure/view reading
-or writing a table.
+or writing a table. SQL schema references include provenance such as
+`schema_state=current_schema`, `historical`, or `unknown`; do not treat
+historical migration evidence as proof of the current database shape.
 
 ## List Unresolved Edges
 

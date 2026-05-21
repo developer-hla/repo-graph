@@ -5,9 +5,9 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents the graph types exercised by the synthetic examples, not a private source set.
 
 - Graph schema version: `0.1`
-- Entity count: `86`
-- Edge count: `160`
-- Resolved edge count: `143`
+- Entity count: `88`
+- Edge count: `163`
+- Resolved edge count: `146`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -29,7 +29,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `repository` | 8 |
 | `service` | 1 |
 | `solution` | 1 |
-| `sql_table` | 1 |
+| `sql_table` | 3 |
 | `stored_procedure` | 2 |
 
 ## Edge Types
@@ -52,12 +52,13 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `DECLARES_SERVICE` | 1 |
 | `DECLARES_SOLUTION` | 1 |
 | `DECLARES_SYMBOL` | 12 |
-| `DEFINES` | 3 |
+| `DEFINES` | 5 |
 | `DEPENDS_ON_PACKAGE` | 12 |
 | `DEPENDS_ON_PROJECT` | 1 |
 | `EXPOSES_ROUTE` | 8 |
 | `IMPORTS` | 9 |
 | `READS_SQL_OBJECT` | 1 |
+| `REFERENCES_SQL_OBJECT` | 1 |
 | `ROUTES_TO_SERVICE` | 1 |
 | `RUNS_CONTAINER` | 1 |
 | `SELECTS_DEPLOYMENT` | 1 |
@@ -97,8 +98,8 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `python_route` | 2 |
 | `python_symbol` | 6 |
 | `requirements` | 1 |
-| `sql` | 3 |
-| `sql_reference` | 5 |
+| `sql` | 5 |
+| `sql_reference` | 6 |
 | `vb_config_service` | 1 |
 | `vb_contract_route` | 2 |
 | `vb_http` | 1 |
@@ -109,5 +110,5 @@ It documents the graph types exercised by the synthetic examples, not a private 
 
 | Confidence | Example Edge Count |
 | --- | ---: |
-| `high` | 120 |
-| `medium` | 40 |
+| `high` | 122 |
+| `medium` | 41 |

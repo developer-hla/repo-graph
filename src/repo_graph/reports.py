@@ -333,6 +333,8 @@ def interaction_example(edge: Mapping[str, Any]) -> dict[str, Any]:
             "config_key": string_value(properties.get("config_key")),
             "sql_operation": string_value(properties.get("sql_operation")),
             "database_object_type": string_value(properties.get("database_object_type")),
+            "schema_state": string_value(properties.get("schema_state")),
+            "sql_source_kind": string_value(properties.get("sql_source_kind")),
         }
     )
 

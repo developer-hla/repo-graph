@@ -5,7 +5,7 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
 - Parser count: `37`
-- Edge count: `160`
+- Edge count: `163`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -42,8 +42,8 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `python_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `python-worker` |
 | `python_symbol` | 6 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
-| `sql` | 3 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
-| `sql_reference` | 5 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
+| `sql` | 5 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
+| `sql_reference` | 6 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
 | `vb_config_service` | 1 | 0 | `CALLS_SERVICE` | `file` | `service` | `legacy-vb-service` |
 | `vb_contract_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `legacy-vb-service` |
 | `vb_http` | 1 | 0 | `CALLS_SERVICE` | `file` | `service` | `legacy-vb-service` |

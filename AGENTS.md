@@ -83,6 +83,9 @@ logic in the CLI, or graph-resolution policy in storage code.
   include SQL reads and writes, SQL schema dependencies, message publish/consume
   boundaries, storage reads and writes, cache usage, and scheduled/background
   work.
+- SQL migration or revision files are historical evidence, not proof of current
+  database state. Preserve schema provenance and do not use historical SQL
+  objects as normal resolution candidates for current application dependencies.
 - Interaction edges should preserve evidence on the edge, including protocol,
   method, route or target path, raw target, normalized target, config key,
   client library, parser, file path, and line number when those values are

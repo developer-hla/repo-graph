@@ -116,6 +116,8 @@ class Graph:
     def resolve_edges(self) -> None:
         lookup: dict[tuple[str | None, str], list[Entity]] = defaultdict(list)
         for entity in self.entities.values():
+            if not is_resolution_candidate(entity):
+                continue
             keys = {entity.name, *entity.aliases}
             full_name = entity.properties.get("full_name")
             if isinstance(full_name, str):
@@ -233,6 +235,12 @@ def choose_resolution(candidates: list[Entity], source_name: str) -> Entity | No
     if len(candidates) == 1:
         return candidates[0]
     return None
+
+
+def is_resolution_candidate(entity: Entity) -> bool:
+    if entity.entity_type.startswith("sql_") or entity.entity_type == "stored_procedure":
+        return entity.properties.get("schema_state") != "historical"
+    return True
 
 
 def dedupe_entities(candidates: list[Entity]) -> list[Entity]:
