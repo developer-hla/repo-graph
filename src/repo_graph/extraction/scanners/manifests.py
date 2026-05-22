@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.facts import EntityReference, Evidence, RelationshipFact
 from repo_graph.extraction.legacy_graph_helpers import resolved_edge, unresolved_edge
 from repo_graph.extraction.scanners.common import read_yaml_object, string_value
 from repo_graph.extraction.scanners.dotnet_helpers import (
@@ -188,18 +189,29 @@ class PythonRequirementsExtractor:
             dependency = requirement_dependency(line)
             if not dependency:
                 continue
-            result.edges.append(
-                package_dependency_edge(
-                    dependency_source,
-                    dependency["name"],
-                    "python",
-                    "requirements",
-                    dependency["version"],
-                    dependency["raw_target"],
-                    context.source.name,
-                    context.rel_path,
-                    self.name,
-                    line_number=line_number,
+            target_name = dependency["name"] or dependency["raw_target"] or ""
+            result.facts.relationships.append(
+                RelationshipFact(
+                    from_ref=EntityReference(
+                        entity_type=dependency_source.entity_type,
+                        name=dependency_source.name,
+                        entity_id=dependency_source.entity_id,
+                    ),
+                    to_ref=EntityReference(entity_type="package", name=target_name),
+                    edge_type="DEPENDS_ON_PACKAGE",
+                    evidence=Evidence(
+                        source_name=context.source.name,
+                        file_path=context.rel_path,
+                        line_number=line_number,
+                        parser=self.name,
+                    ),
+                    properties={
+                        "ecosystem": "python",
+                        "dependency_type": "requirements",
+                        "version": dependency["version"],
+                        "raw_target": dependency["raw_target"],
+                        "normalized_target": target_name,
+                    },
                 )
             )
         return result

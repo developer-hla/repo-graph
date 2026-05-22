@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from repo_graph.extraction.facts import FactBatch
 from repo_graph.graph import Edge, Entity
 from repo_graph.sources import ResolvedSource
 
@@ -14,11 +15,13 @@ from repo_graph.sources import ResolvedSource
 class ScanResult:
     entities: list[Entity] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
+    facts: FactBatch = field(default_factory=FactBatch)
     errors: list[str] = field(default_factory=list)
 
     def extend(self, other: ScanResult) -> None:
         self.entities.extend(other.entities)
         self.edges.extend(other.edges)
+        self.facts.extend(other.facts)
         self.errors.extend(other.errors)
 
 

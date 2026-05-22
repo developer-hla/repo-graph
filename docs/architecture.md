@@ -187,18 +187,22 @@ ExtractedFact
   properties: structured fact-specific evidence
 ```
 
-Facts should describe source evidence, not final graph mechanics. For example:
+The current public fact model lives in `repo_graph.extraction.facts`:
 
-- `DeclaredRouteFact`
-- `HandledByFact`
-- `SymbolCallFact`
-- `HttpCallFact`
-- `SqlObjectReadFact`
-- `PackageDependencyFact`
-- `DeploymentRoutesToServiceFact`
+- `Evidence`
+- `EntityReference`
+- `EntityFact`
+- `RelationshipFact`
+- `ScanIssue`
+- `FactBatch`
+
+Those generic records are the migration surface. More specific domain fact
+helpers can be added when they reduce parser complexity without hiding the
+underlying evidence.
 
 The graph constructor decides whether those facts become entities, edges,
-unresolved targets, warnings, or report inputs.
+unresolved targets, warnings, or report inputs. During the legacy migration,
+`ScanResult` may contain both typed facts and direct graph records.
 
 ## Graph Constructor Contract
 
@@ -216,6 +220,8 @@ The graph constructor owns the stable graph language:
 - load-ready graph records for storage
 
 Graph construction must remain deterministic for the same facts and config.
+`repo_graph.graph.builder` adapts typed facts into the current graph model while
+the external JSON schema stays stable.
 
 ## Import Direction Rules
 
@@ -325,7 +331,8 @@ for implementation details.
    current JSON output.
 3. Move shared scanner contracts and helpers out of the large scanner module.
 4. Move one scanner family at a time behind the same registry.
-5. Convert scanners from direct `Entity`/`Edge` emission to fact emission.
+5. Convert scanners from direct `Entity`/`Edge` emission to fact emission, one
+   scanner family at a time.
 6. Move graph construction, resolution, and filtering behind a dedicated graph
    builder.
 7. Keep generated docs and synthetic examples updated after each slice.

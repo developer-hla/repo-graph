@@ -45,6 +45,8 @@ Target module responsibilities:
 - `orchestrator.py`: build flow, database-source handoff, dependency filtering,
   source-level graph build orchestration.
 - `contracts.py`: public scanner protocol and scan result types.
+- `facts.py`: typed scanner fact contracts, evidence, entity references, and
+  local scan issues.
 - `source_scanner.py`: source file walking, scanner invocation, and local
   scanner error collection.
 - `registry.py`: deterministic default scanner registration.
@@ -58,9 +60,10 @@ Target module responsibilities:
   scanner families still emit graph objects directly. Shared helpers should be
   split by domain instead of collected in one large module.
 
-New parser work should add or update the relevant scanner family module and
-register through `registry.py`. Do not add new scanner behavior to orchestration,
-source walking, API, CLI, reports, storage, or graph resolution modules.
+New parser work should add or update the relevant scanner family module, emit
+typed facts when practical, and register through `registry.py`. Do not add new
+scanner behavior to orchestration, source walking, API, CLI, reports, storage,
+or graph resolution modules.
 
 ## Scanner Registry
 
@@ -89,8 +92,8 @@ graph-construction policy to scanner family modules.
 
 1. Keep scanner-family modules behind the registry and keep domain helper
    modules small enough that ownership stays obvious.
-2. Add typed extracted facts and adapt legacy graph output through the graph
-   constructor.
+2. Migrate scanner families from direct `Entity` and `Edge` emission to typed
+   facts, one family at a time.
 3. Remove direct scanner emission of `Entity` and `Edge`.
 
 Each slice should preserve generated graph output unless the spec explicitly

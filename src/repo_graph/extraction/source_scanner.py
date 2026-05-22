@@ -13,6 +13,7 @@ from repo_graph.extraction.project_discovery import discover_projects
 from repo_graph.extraction.scanners.common import safe_relative_path
 from repo_graph.extraction.scanners.manifest_helpers import is_scannable_file
 from repo_graph.graph import Entity, Graph
+from repo_graph.graph.builder import add_facts_to_graph
 from repo_graph.sources import ResolvedSource
 from repo_graph.validation import positive_int
 
@@ -145,6 +146,7 @@ def apply_scan_result(graph: Graph, result: ScanResult) -> None:
         graph.add_entity(entity)
     for edge_item in result.edges:
         graph.add_edge(edge_item)
+    add_facts_to_graph(graph, result.facts)
     graph.errors.extend(result.errors)
 
 

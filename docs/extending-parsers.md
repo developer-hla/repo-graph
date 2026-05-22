@@ -40,8 +40,9 @@ architecture spec rather than expanding that coupling.
    While legacy code still emits `Entity` and `Edge` directly, use
    `repo_graph.extraction.legacy_graph_helpers` consistently. File-derived
    facts should include `file_path`, `line_number` when available, parser name,
-   and confidence. New refactors should prefer typed fact drafts that the graph
-   constructor converts into graph objects.
+   and confidence. New refactors should prefer typed fact drafts from
+   `repo_graph.extraction.facts` and append them to `ScanResult.facts`; the
+   graph builder converts those facts into graph objects.
 
 7. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
