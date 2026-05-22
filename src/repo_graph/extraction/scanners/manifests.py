@@ -20,7 +20,6 @@ from repo_graph.extraction.scanners.dotnet_helpers import (
     DOTNET_PROJECT_SUFFIXES,
     config_file_entity,
     config_service_edge,
-    dotnet_package_entity,
     dotnet_package_references,
     dotnet_project_metadata_from_root,
     dotnet_project_references,
@@ -31,7 +30,6 @@ from repo_graph.extraction.scanners.dotnet_helpers import (
 )
 from repo_graph.extraction.scanners.manifest_helpers import is_requirements_file
 from repo_graph.extraction.scanners.package_helpers import (
-    dependency_source_entity,
     normalize_python_package_name,
     package_dependencies,
     package_dependency_edge,
@@ -201,43 +199,44 @@ class DotnetProjectExtractor:
             return result
 
         metadata = dotnet_project_metadata_from_root(root, Path(context.rel_path).stem)
-        package_entity = dotnet_package_entity(context, metadata)
-        if package_entity:
-            result.entities.append(package_entity)
-            result.edges.append(
-                resolved_edge(
-                    context.file_entity,
-                    package_entity,
-                    "DECLARES_PACKAGE",
-                    context.source.name,
-                    context.rel_path,
-                    self.name,
-                )
+        package_ref = None
+        package_name = metadata["package_id"] or metadata["assembly_name"]
+        if package_name:
+            aliases = {package_name}
+            if metadata["assembly_name"]:
+                aliases.add(metadata["assembly_name"])
+            package_fact = package_entity_fact(
+                context,
+                name=package_name,
+                aliases=aliases,
+                properties={
+                    "ecosystem": "dotnet",
+                    "version": metadata["version"],
+                    "target_framework": metadata["target_framework"],
+                    "target_frameworks": metadata["target_frameworks"],
+                    "output_type": metadata["output_type"],
+                    "project": context.project.name if context.project else None,
+                },
             )
-            if context.project:
-                result.edges.append(
-                    resolved_edge(
-                        context.project.entity,
-                        package_entity,
-                        "DECLARES_PACKAGE",
-                        context.source.name,
-                        context.rel_path,
-                        self.name,
-                    )
-                )
+            result.facts.entities.append(package_fact)
+            package_ref = package_fact.reference
+            result.facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
 
-        dependency_source = dependency_source_entity(context, package_entity)
+        dependency_source_ref = (
+            package_ref
+            if package_ref
+            else entity_reference(context.project.entity if context.project else context.file_entity)
+        )
         for dependency in dotnet_package_references(root):
-            result.edges.append(
-                package_dependency_edge(
-                    dependency_source,
+            result.facts.relationships.append(
+                package_dependency_fact(
+                    dependency_source_ref,
                     dependency["name"],
                     "dotnet",
                     "PackageReference",
                     dependency["version"],
                     dependency["raw_target"],
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                 )
             )
@@ -373,16 +372,15 @@ class DotnetBuildConfigExtractor:
             )
         )
         for dependency in dotnet_package_references(root):
-            result.edges.append(
-                package_dependency_edge(
-                    config_entity,
+            result.facts.relationships.append(
+                package_dependency_fact(
+                    entity_reference(config_entity),
                     dependency["name"],
                     "dotnet",
                     "PackageReference",
                     dependency["version"],
                     dependency["raw_target"],
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                 )
             )

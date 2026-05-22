@@ -180,30 +180,6 @@ def dotnet_metadata_defaults() -> dict[str, str | None]:
     }
 
 
-def dotnet_package_entity(context: FileScanContext, metadata: dict[str, str | None]) -> Entity | None:
-    package_name = metadata["package_id"] or metadata["assembly_name"]
-    if not package_name:
-        return None
-    aliases = {package_name}
-    if metadata["assembly_name"]:
-        aliases.add(metadata["assembly_name"])
-    return Entity(
-        entity_type="package",
-        name=package_name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
-        aliases=aliases,
-        properties={
-            "ecosystem": "dotnet",
-            "version": metadata["version"],
-            "target_framework": metadata["target_framework"],
-            "target_frameworks": metadata["target_frameworks"],
-            "output_type": metadata["output_type"],
-            "project": context.project.name if context.project else None,
-        },
-    )
-
-
 def dotnet_package_references(root: ET.Element) -> Iterable[dict[str, str | None]]:
     for element in root.iter():
         if xml_local_name(element.tag) != "PackageReference":
