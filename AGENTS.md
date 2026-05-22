@@ -30,15 +30,18 @@ RepoGraph is organized as a pipeline:
 1. **Config** (`repo_graph.config`) parses source profiles and scan rules.
 2. **Sources** (`repo_graph.sources`) resolves local paths and syncs Git repos
    into a local cache.
-3. **Scanner** (`repo_graph.scanner`) reads source files and emits entities and
-   edges.
-4. **Graph** (`repo_graph.graph`) owns graph identity, resolution, summaries,
-   and JSON export.
-5. **CLI/API/storage** layers call the pipeline; they should not contain parser
-   or graph-resolution logic.
+3. **Extraction** reads source files or read-only database metadata and invokes
+   scanners.
+4. **Scanners** parse one input domain and emit typed facts with evidence.
+5. **Graph construction** converts extracted facts into entities, edges,
+   stable IDs, resolution, summaries, and JSON export.
+6. **CLI/API/storage/report/UI** layers call the pipeline; they should not
+   contain parser or graph-resolution logic.
 
 Keep those boundaries intact. Do not put Git sync logic in scanners, parser
-logic in the CLI, or graph-resolution policy in storage code.
+logic in the CLI, graph-resolution policy in storage code, or graph mutation
+inside scanners. The target architecture is defined in
+`docs/architecture.md`.
 
 ## Architecture Principles
 
@@ -48,6 +51,9 @@ logic in the CLI, or graph-resolution policy in storage code.
 - One obvious extension path: common changes such as adding a parser, source
   type, graph fact, report, or API surface should follow one documented
   workflow with expected tests and generated docs.
+- Spec-first changes: meaningful architecture, parser, graph, storage, API, UI,
+  and workflow changes should update a written spec before implementation.
+  Follow `docs/spec-driven-development.md`.
 - Standard-library depth: shared graph vocabulary, parser helpers, runtime
   operations, diagnostics, and storage/query behavior should live in coherent
   project APIs rather than scattered literals or one-off scripts.
@@ -68,6 +74,20 @@ logic in the CLI, or graph-resolution policy in storage code.
   application, data, deployment, or integration boundary, evaluate it against
   `docs/first-class-coverage.md` before hiding it in generic properties or
   creating parser-specific vocabulary.
+
+## Spec Rules
+
+- Write or update a spec before changing public contracts, module boundaries,
+  parser contracts, graph construction, graph resolution, storage behavior,
+  reports, API routes, UI workflows, or incremental refresh behavior.
+- Specs must define ownership, non-ownership, inputs, outputs, evidence,
+  unresolved/error states, examples, tests, and migration path.
+- Implementation should follow the smallest slice that moves the code toward
+  the spec. Do not combine broad refactors with unrelated feature changes.
+- When implementation teaches us the spec is wrong or incomplete, update the
+  spec in the same slice.
+- Architecture work should cite `docs/architecture.md`; process work should
+  cite `docs/spec-driven-development.md`.
 
 ## Graph Rules
 
@@ -122,6 +142,8 @@ logic in the CLI, or graph-resolution policy in storage code.
 ## Parser Rules
 
 - Parsers must be deterministic and side-effect free.
+- Parsers extract facts with evidence. They should not own graph construction,
+  stable IDs, cross-source resolution, graph summaries, or storage writes.
 - Parsers should tolerate partial failures and record errors rather than
   stopping the whole scan, unless strict mode is enabled.
 - Prefer structured parsing when practical. Regex-based parsing is acceptable

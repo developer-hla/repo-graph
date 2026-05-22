@@ -3,29 +3,44 @@
 RepoGraph parser work should follow one repeatable path. A parser slice is not
 complete until code, examples, tests, and generated references all agree.
 
+Parser work must also follow the architecture boundary in
+[architecture.md](architecture.md): scanners extract typed facts with evidence;
+graph construction converts those facts into graph entities, edges, IDs,
+resolution, and export shape. Current code still has legacy direct
+`Entity`/`Edge` emission in places, so refactors should move toward the
+architecture spec rather than expanding that coupling.
+
 ## Add A Parser Slice
 
-1. Add or update a synthetic fixture under `examples/`.
+1. Write or update the relevant spec.
+   For scanner contracts and boundaries, update [architecture.md](architecture.md)
+   or a scanner-family spec. For broad workflow changes, follow
+   [spec-driven-development.md](spec-driven-development.md).
+
+2. Add or update a synthetic fixture under `examples/`.
    Use public-safe names such as `example`, `api-service`, and
    `database-project`.
 
-2. Add the file type to `DEFAULT_FILE_EXTENSIONS` in
+3. Add the file type to `DEFAULT_FILE_EXTENSIONS` in
    `repo_graph.config` when RepoGraph does not already scan it.
 
-3. Add project discovery only when the parser needs a new project boundary.
+4. Add project discovery only when the parser needs a new project boundary.
    Project discovery belongs near `project_info_for_manifest` in
    `repo_graph.scanner`.
 
-4. Add a `FileExtractor` implementation in `repo_graph.scanner`.
+5. Add or register a scanner implementation.
    Each extractor should define a stable `name`, a narrow `can_process`
-   predicate, and an `extract` method that returns a `ScanResult`.
+   predicate, and an extraction method that returns scanner output. Long-term,
+   scanner output should be typed extracted facts, not graph objects.
 
-5. Emit graph facts through `Entity`, `Edge`, `resolved_edge`, and
-   `unresolved_edge`. Every emitted fact needs source provenance. File-derived
-   facts should include `file_path`, `line_number` when available, parser name,
-   and confidence.
+6. Emit semantic facts with source provenance.
+   While legacy code still emits `Entity` and `Edge` directly, use shared
+   helpers consistently. File-derived facts should include `file_path`,
+   `line_number` when available, parser name, and confidence. New refactors
+   should prefer typed fact drafts that the graph constructor converts into
+   graph objects.
 
-6. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
+7. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
    such as `fetch`, `axios`, `requests`, `httpx`, or `HttpClient` in edge
    properties. Do not add one edge type or parser ID per client library.
@@ -44,18 +59,18 @@ complete until code, examples, tests, and generated references all agree.
    use the scanner `interaction_properties` helper or an equivalent wrapper so
    `target_boundary`, `dependency_scope`, and `interaction_kind` are present.
 
-7. Register the extractor in `default_extractors`.
+8. Register the extractor in the scanner registry.
    The registry order should stay deterministic.
 
-8. Add focused tests in `tests/test_scanner.py`.
+9. Add focused tests in `tests/test_scanner.py`.
    Tests should cover at least one positive extraction and any important
    unresolved or ambiguous reference behavior.
 
-9. Regenerate docs with `pixi run generate-docs`.
+10. Regenerate docs with `pixi run generate-docs`.
    Confirm `docs/generated/parser-coverage.md` includes the new parser when
    the examples exercise it.
 
-10. Run `pixi run audit`.
+11. Run `pixi run audit`.
 
 ## Parser Rules
 
@@ -64,6 +79,9 @@ complete until code, examples, tests, and generated references all agree.
 - Preserve unresolved edges when a target cannot be resolved safely.
 - Do not require users to predefine relationships that RepoGraph can discover
   from source evidence.
+- Keep extraction separate from graph construction. Scanners should not own
+  stable IDs, graph resolution, summary counts, dependency filtering, storage
+  writes, or API/report shapes.
 - Optimize parser output for app-boundary dependencies. Parser names and
   library names are evidence; edge types should remain useful for impact
   analysis and agent summaries.

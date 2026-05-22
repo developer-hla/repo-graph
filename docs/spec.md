@@ -78,6 +78,11 @@ live SQL Server and PostgreSQL metadata when the optional driver and configured
 environment variable are available. A database source error should not prevent
 repository sources in the same config from being scanned.
 
+The implementation architecture is defined separately in
+[architecture.md](architecture.md). Meaningful changes to scanner contracts,
+graph construction, storage, API, reports, UI, or incremental refresh should
+follow [spec-driven-development.md](spec-driven-development.md).
+
 ## Graph Model
 
 The graph has two primary concepts:
@@ -125,6 +130,11 @@ Internal code delegation should use `CALLS_SYMBOL` when a parser can identify
 that one function calls another discovered function or method. Parser-specific
 syntax such as `self.method()`, `Worker().load()`, or a direct local function
 call is evidence for the same semantic edge.
+
+Scanners should not construct the final graph directly. The target architecture
+has scanners emit typed facts with source evidence, then a graph constructor
+turns those facts into entities, edges, IDs, resolved references, unresolved
+targets, summaries, and JSON/storage output.
 
 Unresolved edges are expected. They mean a reference was found but the scanner
 could not map it to a known entity in the current graph scope.
