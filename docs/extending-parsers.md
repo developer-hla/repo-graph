@@ -31,7 +31,9 @@ architecture spec rather than expanding that coupling.
 
 5. Add or register a scanner implementation.
    Each extractor should define a stable `name`, a narrow `can_process`
-   predicate, and an extraction method that returns scanner output. Long-term,
+   predicate, and an extraction method that returns scanner output. Put the
+   implementation in the relevant `repo_graph.extraction.scanners` family
+   module and keep cross-family registration in `registry.py`. Long-term,
    scanner output should be typed extracted facts, not graph objects.
 
 6. Emit semantic facts with source provenance.

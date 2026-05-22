@@ -7,8 +7,8 @@ from dataclasses import replace
 
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.database import DatabaseGraphFacts, DatabaseSourceRequest, graph_from_database_source
-from repo_graph.extraction._scanner_impl import scan_source, source_to_dict
 from repo_graph.extraction.registry import default_extractors
+from repo_graph.extraction.source_scanner import scan_source, source_to_dict
 from repo_graph.graph import Edge, Graph
 from repo_graph.sources import resolve_sources, sync_sources
 

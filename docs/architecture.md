@@ -258,11 +258,14 @@ repo_graph/
     cached_builds.py
     facts.py
     legacy_graph_helpers.py
+    project_discovery.py
     registry.py
     snapshots.py
+    source_scanner.py
     source_graphs.py
     scanners/
       __init__.py
+      shared.py
       code/
         python/
           __init__.py

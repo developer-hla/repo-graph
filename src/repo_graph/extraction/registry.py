@@ -2,26 +2,30 @@
 
 from __future__ import annotations
 
-from repo_graph.extraction._scanner_impl import (
+from repo_graph.extraction.contracts import FileExtractor
+from repo_graph.extraction.scanners.deployment import KubernetesManifestExtractor
+from repo_graph.extraction.scanners.dotnet import (
     CSharpCodeExtractor,
+    LegacyDotnetEndpointExtractor,
+    VbCodeExtractor,
+)
+from repo_graph.extraction.scanners.javascript import JavaScriptExtractor
+from repo_graph.extraction.scanners.manifests import (
     DotnetBuildConfigExtractor,
     DotnetFrameworkConfigExtractor,
     DotnetPackagesConfigExtractor,
     DotnetProjectExtractor,
     DotnetSolutionExtractor,
-    JavaScriptExtractor,
-    KubernetesManifestExtractor,
-    LegacyDotnetEndpointExtractor,
     PackageJsonExtractor,
     PnpmWorkspaceExtractor,
-    PythonCodeExtractor,
     PythonProjectExtractor,
     PythonRequirementsExtractor,
+)
+from repo_graph.extraction.scanners.python import PythonCodeExtractor
+from repo_graph.extraction.scanners.sql import (
     SqlExtractor,
     SqlReferenceExtractor,
-    VbCodeExtractor,
 )
-from repo_graph.extraction.contracts import FileExtractor
 
 
 def default_extractors() -> list[FileExtractor]:

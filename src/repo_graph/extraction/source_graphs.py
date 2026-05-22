@@ -7,10 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.config import RepoGraphConfig
-from repo_graph.extraction._scanner_impl import (
-    scan_source,
-    source_to_dict,
-)
 from repo_graph.extraction.orchestrator import MAX_FILE_BYTES, config_without_unsupported_sources
 from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.snapshots import (
@@ -19,6 +15,7 @@ from repo_graph.extraction.snapshots import (
     source_snapshot,
     source_snapshot_path,
 )
+from repo_graph.extraction.source_scanner import scan_source, source_to_dict
 from repo_graph.graph import Graph
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 
