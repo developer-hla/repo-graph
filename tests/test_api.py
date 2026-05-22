@@ -57,7 +57,7 @@ from repo_graph.api import (
 )
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.jobs import JobRegistry
-from repo_graph.storage.neo4j import LoadSummary
+from repo_graph.storage import LoadSummary
 
 
 class ApiTests(unittest.TestCase):

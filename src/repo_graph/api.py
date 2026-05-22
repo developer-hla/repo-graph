@@ -25,7 +25,7 @@ from repo_graph.reports import (
     unresolved_report_from_items,
 )
 from repo_graph.sources import config_summary, inspect_sources, source_path, sync_sources_with_status
-from repo_graph.storage.neo4j import (
+from repo_graph.storage import (
     Neo4jSettings,
     get_entity,
     get_entity_neighbors,

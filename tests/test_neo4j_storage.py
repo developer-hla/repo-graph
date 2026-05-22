@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from repo_graph.storage.neo4j import (
+from repo_graph.storage._neo4j import (
     cross_source_edges_query,
     delete_current_edges_tx,
     delete_source_data_tx,

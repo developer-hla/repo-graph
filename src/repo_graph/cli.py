@@ -26,7 +26,7 @@ from repo_graph.reports import (
     unresolved_report_from_graph,
 )
 from repo_graph.sources import resolve_sources, sync_sources
-from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
+from repo_graph.storage import load_graph_path, read_graph_stats
 from repo_graph.validation import positive_int
 
 DEFAULT_API_URL = "http://localhost:8000"

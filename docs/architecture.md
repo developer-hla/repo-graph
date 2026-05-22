@@ -290,7 +290,7 @@ repo_graph/
     vocabulary.py
   storage/
     __init__.py
-    neo4j.py
+    _neo4j.py
   reports.py
   api.py
   cli.py

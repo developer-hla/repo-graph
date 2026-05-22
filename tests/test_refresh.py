@@ -7,7 +7,7 @@ from typing import Any
 
 from repo_graph.config import load_config
 from repo_graph.refresh import refresh_graph
-from repo_graph.storage.neo4j import Neo4jSettings
+from repo_graph.storage import Neo4jSettings
 
 
 class RefreshTests(unittest.TestCase):
