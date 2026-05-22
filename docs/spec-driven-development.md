@@ -27,6 +27,8 @@ A spec should answer these questions in plain language:
 - Who uses it?
 - Which layer owns the behavior?
 - Which layers are explicitly not responsible for it?
+- What is the public package or module surface?
+- Which internals must stay private to that package or layer?
 - What are the input and output contracts?
 - What deterministic IDs, names, or keys are required?
 - What evidence is preserved for agents and developers?
@@ -50,6 +52,10 @@ Before implementation, confirm:
 - Reports read graph data; they do not create graph facts.
 - API, UI, and CLI orchestrate workflows; they do not hide parser or
   resolution policy.
+- Each package exposes a small documented public surface, and other layers
+  import through that surface instead of reaching into implementation modules.
+- Directory layout reflects ownership. A package may be internally detailed,
+  but the complexity should stay inside the owning package.
 
 ## Implementation Rules
 
@@ -59,6 +65,8 @@ Before implementation, confirm:
 - Keep examples synthetic and public-safe.
 - Add or update tests at the boundary being changed.
 - Regenerate docs when generated references change.
+- Keep package `__init__.py` exports intentional and small when adding or
+  moving modules.
 - Run `pixi run audit` before committing.
 
 ## Review Rules
@@ -69,6 +77,8 @@ Reviewers should ask:
 - Did the spec need to be updated based on what was learned?
 - Are ownership boundaries clearer after the change?
 - Did any layer gain a responsibility it should not own?
+- Is the public package surface still small enough for an agent to learn from
+  examples and compiler feedback?
 - Can a future agent find the expected extension path without reading the whole
   codebase?
 

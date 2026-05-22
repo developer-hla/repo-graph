@@ -51,6 +51,9 @@ inside scanners. The target architecture is defined in
 - One obvious extension path: common changes such as adding a parser, source
   type, graph fact, report, or API surface should follow one documented
   workflow with expected tests and generated docs.
+- Small public surfaces over complex internals: every package may be detailed
+  internally, but other layers should import through a small documented API.
+  Directory layout should make ownership and separation of concerns obvious.
 - Spec-first changes: meaningful architecture, parser, graph, storage, API, UI,
   and workflow changes should update a written spec before implementation.
   Follow `docs/spec-driven-development.md`.
@@ -81,7 +84,8 @@ inside scanners. The target architecture is defined in
   parser contracts, graph construction, graph resolution, storage behavior,
   reports, API routes, UI workflows, or incremental refresh behavior.
 - Specs must define ownership, non-ownership, inputs, outputs, evidence,
-  unresolved/error states, examples, tests, and migration path.
+  unresolved/error states, public package surface, private internals, examples,
+  tests, and migration path.
 - Implementation should follow the smallest slice that moves the code toward
   the spec. Do not combine broad refactors with unrelated feature changes.
 - When implementation teaches us the spec is wrong or incomplete, update the
@@ -167,6 +171,10 @@ inside scanners. The target architecture is defined in
 - Use Python 3.11 syntax: `list[str]`, `dict[str, str]`, `str | None`.
 - Keep imports at the top of files.
 - Prefer small functions with one responsibility.
+- Keep package APIs small and intentional. Use package `__init__.py` files to
+  expose stable contracts, not implementation details.
+- Do not import private implementation modules across layer boundaries when a
+  public package surface exists.
 - Use early returns to avoid deep nesting.
 - Avoid broad `Any` unless parsing untyped external data.
 - Avoid inline comments unless they explain non-obvious behavior.

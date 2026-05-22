@@ -45,6 +45,35 @@ config
 | Reports | Read-only projections from graph data | Building or mutating graph state |
 | API/UI/CLI | User workflows and orchestration | Parser internals, graph resolution policy |
 
+## Package Boundaries And Public Surfaces
+
+Directory and file structure are part of the architecture. A package should
+make ownership obvious before a contributor reads implementation details.
+
+Each layer may have complex internals, but it should expose a small, regular
+public surface. For example, a Python scanner package can contain AST visitors,
+normalizers, framework adapters, and test helpers, but code outside that package
+should only need its public scanner contract or registration function.
+
+This rule applies to every application layer, not just scanners:
+
+- `config` exposes validated configuration types and loading helpers; parsing
+  internals stay private.
+- `sources` exposes source resolution and sync operations; provider-specific
+  Git or GitHub details stay behind that boundary.
+- `extraction` exposes the orchestrator, scanner contracts, fact model, and
+  registry; scanner-family internals stay under their scanner package.
+- `graph` exposes graph construction and the graph model; resolution, ID, and
+  adapter internals stay behind that surface.
+- `storage` exposes load/query operations; database-driver details stay private.
+- `reports` exposes read-only report builders; formatting helpers stay private.
+- `api`, `ui`, and `cli` expose user workflows; they should call layer APIs
+  rather than reaching into private implementation modules.
+
+Public module names should be stable, documented, and easy for agents to learn.
+Private modules may be split as deeply as needed, but cross-layer imports
+should target the documented package surface.
+
 ## Scanner Families
 
 Scanners share one public contract but can use different implementation
@@ -215,19 +244,31 @@ The codebase should move toward this shape:
 
 ```text
 repo_graph/
+  __init__.py
   config.py
   sources.py
   extraction/
+    __init__.py
     orchestrator.py
     contracts.py
     facts.py
     registry.py
     scanners/
+      __init__.py
       code/
-        python.py
-        dotnet.py
-        vb.py
-        javascript.py
+        python/
+          __init__.py
+          scanner.py
+          ast_parse.py
+          symbols.py
+        dotnet/
+          __init__.py
+          scanner.py
+          csharp.py
+          vb.py
+        javascript/
+          __init__.py
+          scanner.py
       manifests/
         package_json.py
         pyproject.py
@@ -239,11 +280,14 @@ repo_graph/
         sqlserver.py
         postgres.py
   graph/
+    __init__.py
     builder.py
     model.py
     resolution.py
     vocabulary.py
   storage/
+    __init__.py
+    neo4j.py
   reports.py
   api.py
   cli.py
@@ -251,6 +295,10 @@ repo_graph/
 
 This is a direction, not a requirement to move everything in one change.
 Refactors should preserve behavior and keep public APIs stable.
+
+Package `__init__.py` files should be intentional. They should re-export only
+the small public contract for that package and should not become dumping grounds
+for implementation details.
 
 ## Refactor Path
 
