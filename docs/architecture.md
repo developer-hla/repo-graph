@@ -291,7 +291,9 @@ repo_graph/
   storage/
     __init__.py
     _neo4j.py
-  reports.py
+  reports/
+    __init__.py
+    _builders.py
   api.py
   cli.py
 ```
