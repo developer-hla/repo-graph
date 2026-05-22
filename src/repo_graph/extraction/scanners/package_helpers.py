@@ -6,10 +6,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.legacy_graph_helpers import unresolved_edge
 from repo_graph.extraction.scanners.common import object_mapping, string_value
-from repo_graph.graph import Edge, Entity
 
 REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)")
 
@@ -120,46 +117,6 @@ def normalize_python_package_name(value: str) -> str:
 
 def python_import_name(value: str) -> str:
     return normalize_python_package_name(value).replace("-", "_")
-
-
-def dependency_source_entity(context: FileScanContext, package_entity: Entity | None = None) -> Entity:
-    if package_entity:
-        return package_entity
-    if context.project:
-        return context.project.entity
-    return context.file_entity
-
-
-def package_dependency_edge(
-    from_entity: Entity,
-    name: str | None,
-    ecosystem: str,
-    dependency_type: str | None,
-    version: str | None,
-    raw_target: str | None,
-    source_name: str,
-    file_path: str,
-    parser: str,
-    line_number: int | None = None,
-) -> Edge:
-    target_name = name or raw_target or ""
-    return unresolved_edge(
-        from_entity,
-        target_name,
-        "DEPENDS_ON_PACKAGE",
-        source_name,
-        file_path,
-        parser,
-        to_type="package",
-        line_number=line_number,
-        properties={
-            "ecosystem": ecosystem,
-            "dependency_type": dependency_type,
-            "version": version,
-            "raw_target": raw_target,
-            "normalized_target": target_name,
-        },
-    )
 
 
 def package_root(value: str) -> str:

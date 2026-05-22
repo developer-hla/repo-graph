@@ -32,7 +32,6 @@ from repo_graph.extraction.scanners.manifest_helpers import is_requirements_file
 from repo_graph.extraction.scanners.package_helpers import (
     normalize_python_package_name,
     package_dependencies,
-    package_dependency_edge,
     pyproject_dependencies,
     pyproject_metadata,
     python_import_name,
@@ -265,7 +264,6 @@ class DotnetPackagesConfigExtractor:
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
         root = xml_root(content, context)
-        dependency_source = context.project.entity if context.project else context.file_entity
         config_entity = config_file_entity(context, "packages_config")
         result.entities.append(config_entity)
         result.edges.append(
@@ -279,16 +277,15 @@ class DotnetPackagesConfigExtractor:
             )
         )
         for dependency in packages_config_references(root):
-            result.edges.append(
-                package_dependency_edge(
-                    dependency_source,
+            result.facts.relationships.append(
+                package_dependency_fact(
+                    entity_reference(context.project.entity if context.project else context.file_entity),
                     dependency["name"],
                     "dotnet",
                     "packages.config",
                     dependency["version"],
                     dependency["raw_target"],
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                 )
             )
