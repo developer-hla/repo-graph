@@ -13,8 +13,9 @@ architecture spec rather than expanding that coupling.
 ## Add A Parser Slice
 
 1. Write or update the relevant spec.
-   For scanner contracts and boundaries, update [architecture.md](architecture.md)
-   or a scanner-family spec. For broad workflow changes, follow
+   For scanner contracts and boundaries, update [extraction.md](extraction.md),
+   [architecture.md](architecture.md), or a scanner-family spec. For broad
+   workflow changes, follow
    [spec-driven-development.md](spec-driven-development.md).
 
 2. Add or update a synthetic fixture under `examples/`.
@@ -34,11 +35,11 @@ architecture spec rather than expanding that coupling.
    scanner output should be typed extracted facts, not graph objects.
 
 6. Emit semantic facts with source provenance.
-   While legacy code still emits `Entity` and `Edge` directly, use shared
-   helpers consistently. File-derived facts should include `file_path`,
-   `line_number` when available, parser name, and confidence. New refactors
-   should prefer typed fact drafts that the graph constructor converts into
-   graph objects.
+   While legacy code still emits `Entity` and `Edge` directly, use
+   `repo_graph.extraction.legacy_graph_helpers` consistently. File-derived
+   facts should include `file_path`, `line_number` when available, parser name,
+   and confidence. New refactors should prefer typed fact drafts that the graph
+   constructor converts into graph objects.
 
 7. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence

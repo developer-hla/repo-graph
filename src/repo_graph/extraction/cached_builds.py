@@ -10,13 +10,13 @@ from typing import Any
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.database import graph_from_database_source
-from repo_graph.extraction._scanner_impl import (
+from repo_graph.extraction._scanner_impl import source_to_dict
+from repo_graph.extraction.orchestrator import (
     MAX_FILE_BYTES,
     apply_dependency_filter,
     config_without_unsupported_sources,
     database_source_dicts,
     database_source_request,
-    source_to_dict,
 )
 from repo_graph.extraction.snapshots import (
     compare_source_snapshot,

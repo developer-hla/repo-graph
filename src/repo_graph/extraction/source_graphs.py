@@ -8,12 +8,11 @@ from typing import Any
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction._scanner_impl import (
-    MAX_FILE_BYTES,
-    config_without_unsupported_sources,
-    default_extractors,
     scan_source,
     source_to_dict,
 )
+from repo_graph.extraction.orchestrator import MAX_FILE_BYTES, config_without_unsupported_sources
+from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.snapshots import (
     parser_fingerprint,
     snapshot_root,

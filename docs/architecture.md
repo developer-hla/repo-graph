@@ -257,6 +257,7 @@ repo_graph/
     contracts.py
     cached_builds.py
     facts.py
+    legacy_graph_helpers.py
     registry.py
     snapshots.py
     source_graphs.py

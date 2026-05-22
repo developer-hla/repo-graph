@@ -157,7 +157,8 @@ inside scanners. The target architecture is defined in
   `requests`, `httpx`, or `HttpClient` in edge properties instead of creating
   one parser ID or edge type per library.
 - Do not add language-specific parser behavior without synthetic tests.
-- Follow `docs/extending-parsers.md` when adding or changing parser behavior.
+- Follow `docs/extraction.md` and `docs/extending-parsers.md` when adding or
+  changing parser behavior.
 
 ## Code Style
 

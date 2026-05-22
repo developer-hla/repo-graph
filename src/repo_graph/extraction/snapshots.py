@@ -12,12 +12,11 @@ from typing import Any
 from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction._scanner_impl import (
-    MAX_FILE_BYTES,
-    config_without_unsupported_sources,
-    default_extractors,
     iter_scannable_files,
     safe_relative_path,
 )
+from repo_graph.extraction.orchestrator import MAX_FILE_BYTES, config_without_unsupported_sources
+from repo_graph.extraction.registry import default_extractors
 from repo_graph.schema import GRAPH_SCHEMA_VERSION, SOURCE_SNAPSHOT_SCHEMA_VERSION
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 

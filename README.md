@@ -310,6 +310,7 @@ docker-compose.yaml     Local API plus Neo4j runtime
 docs/spec.md            MVP planning spec
 docs/architecture.md    Target architecture and layer boundaries
 docs/spec-driven-development.md Spec-first workflow for meaningful changes
+docs/extraction.md      Extraction layer contract and refactor path
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
 docs/extending-parsers.md Parser extension workflow
