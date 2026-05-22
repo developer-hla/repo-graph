@@ -245,7 +245,9 @@ The codebase should move toward this shape:
 ```text
 repo_graph/
   __init__.py
-  config.py
+  config/
+    __init__.py
+    _loader.py
   sources.py
   extraction/
     __init__.py
