@@ -13,7 +13,7 @@ from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.orchestrator import MAX_FILE_BYTES, config_without_unsupported_sources
 from repo_graph.extraction.registry import default_extractors
-from repo_graph.extraction.scanners.shared import safe_relative_path
+from repo_graph.extraction.scanners.common import safe_relative_path
 from repo_graph.extraction.source_scanner import iter_scannable_files
 from repo_graph.schema import GRAPH_SCHEMA_VERSION, SOURCE_SNAPSHOT_SCHEMA_VERSION
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources

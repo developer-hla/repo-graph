@@ -7,14 +7,14 @@ from pathlib import Path
 import yaml
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.scanners.shared import (
+from repo_graph.extraction.scanners.common import string_value
+from repo_graph.extraction.scanners.deployment_helpers import (
     KubernetesDeployment,
     KubernetesService,
     kubernetes_deployment_result,
     kubernetes_ingress_result,
     kubernetes_selector_edges,
     kubernetes_service_result,
-    string_value,
 )
 
 

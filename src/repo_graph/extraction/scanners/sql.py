@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.scanners.shared import (
+from repo_graph.extraction.scanners.sql_helpers import (
     SQL_BATCH_SEPARATOR_RE,
     scan_sql_references,
     sql_call_edges,

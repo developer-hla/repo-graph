@@ -8,29 +8,30 @@ from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
 from repo_graph.extraction.legacy_graph_helpers import resolved_edge, unresolved_edge
-from repo_graph.extraction.scanners.shared import (
+from repo_graph.extraction.scanners.common import read_yaml_object, string_value
+from repo_graph.extraction.scanners.dotnet_helpers import (
     DOTNET_BUILD_SUFFIXES,
     DOTNET_PROJECT_SUFFIXES,
     config_file_entity,
     config_service_edge,
-    dependency_source_entity,
     dotnet_package_entity,
     dotnet_package_references,
     dotnet_project_metadata_from_root,
     dotnet_project_references,
     framework_config_values,
-    is_requirements_file,
+    packages_config_references,
+    solution_project_reference,
+    xml_root,
+)
+from repo_graph.extraction.scanners.manifest_helpers import is_requirements_file
+from repo_graph.extraction.scanners.package_helpers import (
+    dependency_source_entity,
     package_dependencies,
     package_dependency_edge,
-    packages_config_references,
     pyproject_dependencies,
     pyproject_metadata,
     python_package_entity,
-    read_yaml_object,
     requirement_dependency,
-    solution_project_reference,
-    string_value,
-    xml_root,
 )
 from repo_graph.graph import Entity
 

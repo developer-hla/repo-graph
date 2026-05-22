@@ -8,19 +8,19 @@ from pathlib import Path
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.contracts import ProjectInfo
-from repo_graph.extraction.scanners.shared import (
-    DOTNET_PROJECT_SUFFIXES,
-    dotnet_project_metadata,
-    is_project_manifest,
-    is_requirements_file,
-    normalize_python_package_name,
+from repo_graph.extraction.scanners.common import (
     project_name_from_path,
-    pyproject_metadata,
-    python_import_name,
     read_json_object,
     read_toml_object,
     safe_relative_path,
     string_value,
+)
+from repo_graph.extraction.scanners.dotnet_helpers import DOTNET_PROJECT_SUFFIXES, dotnet_project_metadata
+from repo_graph.extraction.scanners.manifest_helpers import is_project_manifest, is_requirements_file
+from repo_graph.extraction.scanners.package_helpers import (
+    normalize_python_package_name,
+    pyproject_metadata,
+    python_import_name,
 )
 from repo_graph.graph import Entity
 from repo_graph.sources import ResolvedSource

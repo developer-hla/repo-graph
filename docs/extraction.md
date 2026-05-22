@@ -54,8 +54,9 @@ Target module responsibilities:
 - `scanners/`: scanner family implementations. Current families are
   `manifests.py`, `python.py`, `dotnet.py`, `javascript.py`, `sql.py`, and
   `deployment.py`.
-- `scanners/shared.py`: shared legacy scanner helpers while scanner families
-  still emit graph objects directly.
+- `scanners/*_helpers.py`: domain-specific legacy scanner helpers while
+  scanner families still emit graph objects directly. Shared helpers should be
+  split by domain instead of collected in one large module.
 
 New parser work should add or update the relevant scanner family module and
 register through `registry.py`. Do not add new scanner behavior to orchestration,
@@ -86,8 +87,8 @@ graph-construction policy to scanner family modules.
 
 ## Refactor Path
 
-1. Keep scanner-family modules behind the registry and continue splitting
-   `scanners/shared.py` into smaller domain helpers when a family grows.
+1. Keep scanner-family modules behind the registry and keep domain helper
+   modules small enough that ownership stays obvious.
 2. Add typed extracted facts and adapt legacy graph output through the graph
    constructor.
 3. Remove direct scanner emission of `Entity` and `Edge`.

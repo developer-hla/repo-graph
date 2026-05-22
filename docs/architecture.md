@@ -265,7 +265,12 @@ repo_graph/
     source_graphs.py
     scanners/
       __init__.py
-      shared.py
+      common.py
+      interaction_helpers.py
+      manifest_helpers.py
+      package_helpers.py
+      sql_helpers.py
+      symbol_helpers.py
       code/
         python/
           __init__.py

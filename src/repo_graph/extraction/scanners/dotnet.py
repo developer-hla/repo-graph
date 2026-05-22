@@ -6,7 +6,8 @@ from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
 from repo_graph.extraction.legacy_graph_helpers import resolved_edge
-from repo_graph.extraction.scanners.shared import (
+from repo_graph.extraction.scanners.common import first_entity
+from repo_graph.extraction.scanners.dotnet_helpers import (
     CS_METHOD_RE,
     CS_NAMESPACE_RE,
     CS_TYPE_RE,
@@ -26,9 +27,6 @@ from repo_graph.extraction.scanners.shared import (
     csharp_should_clear_attributes,
     csharp_symbol_call_edges,
     csharp_symbol_result,
-    first_entity,
-    route_entity,
-    sql_reference_edges_for_line,
     vb_contract_route_result,
     vb_method_index,
     vb_service_call_edges,
@@ -36,6 +34,8 @@ from repo_graph.extraction.scanners.shared import (
     vb_symbol_call_edges,
     vb_symbol_result,
 )
+from repo_graph.extraction.scanners.interaction_helpers import route_entity
+from repo_graph.extraction.scanners.sql_helpers import sql_reference_edges_for_line
 from repo_graph.graph import Entity
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.scanners.shared import (
+from repo_graph.extraction.scanners.interaction_helpers import (
     export_entities_and_edges,
     http_call_edges,
     import_edges,

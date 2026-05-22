@@ -10,7 +10,8 @@ from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo, ScanResult
 from repo_graph.extraction.legacy_graph_helpers import resolved_edge
 from repo_graph.extraction.project_discovery import discover_projects
-from repo_graph.extraction.scanners.shared import is_scannable_file, safe_relative_path
+from repo_graph.extraction.scanners.common import safe_relative_path
+from repo_graph.extraction.scanners.manifest_helpers import is_scannable_file
 from repo_graph.graph import Entity, Graph
 from repo_graph.sources import ResolvedSource
 from repo_graph.validation import positive_int

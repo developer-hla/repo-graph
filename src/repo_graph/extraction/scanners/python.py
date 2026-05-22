@@ -6,9 +6,9 @@ import ast
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.scanners.shared import (
+from repo_graph.extraction.scanners.common import first_entity
+from repo_graph.extraction.scanners.python_helpers import (
     PythonCallableIndex,
-    first_entity,
     python_http_call_edges,
     python_import_edge,
     python_route_result,
