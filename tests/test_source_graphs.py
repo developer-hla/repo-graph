@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from repo_graph.config import load_config
-from repo_graph.source_graphs import source_graph_data, source_graph_path, write_source_graphs
+from repo_graph.extraction.source_graphs import source_graph_data, source_graph_path, write_source_graphs
 from repo_graph.sources import resolve_sources
 
 

@@ -7,9 +7,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import RepoGraphConfig
-from repo_graph.scanner import MAX_FILE_BYTES
+from repo_graph.extraction import MAX_FILE_BYTES, build_cached_graph
 from repo_graph.storage.neo4j import Neo4jSettings, load_graph_path, read_graph_scope
 
 ScopeReader = Callable[[Neo4jSettings], Mapping[str, Any]]

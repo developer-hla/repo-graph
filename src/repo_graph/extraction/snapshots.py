@@ -11,7 +11,7 @@ from typing import Any
 
 from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig
-from repo_graph.scanner import (
+from repo_graph.extraction._scanner_impl import (
     MAX_FILE_BYTES,
     config_without_unsupported_sources,
     default_extractors,

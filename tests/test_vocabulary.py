@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from repo_graph.config import load_config
-from repo_graph.scanner import build_graph
+from repo_graph.extraction import build_graph
 from repo_graph.vocabulary import (
     CLASSIFICATION_ACTIONS,
     CLASSIFICATION_COVERAGE_WARNING_RULES,

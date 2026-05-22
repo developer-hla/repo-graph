@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import load_config
 from repo_graph.database import DatabaseGraphFacts
+from repo_graph.extraction.cached_builds import build_cached_graph
 from repo_graph.graph import Entity
 
 
@@ -72,7 +72,7 @@ class CachedBuildTests(unittest.TestCase):
                 ]
             )
 
-            with patch("repo_graph.cached_builds.graph_from_database_source", return_value=facts):
+            with patch("repo_graph.extraction.cached_builds.graph_from_database_source", return_value=facts):
                 first = build_cached_graph(config)
                 second = build_cached_graph(config)
 

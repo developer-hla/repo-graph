@@ -10,17 +10,21 @@ import uvicorn
 
 from repo_graph import __version__
 from repo_graph.api import RuntimeSettings, create_app
-from repo_graph.cached_builds import build_cached_graph
 from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.extraction import (
+    MAX_FILE_BYTES,
+    build_cached_graph,
+    build_graph,
+    snapshot_status,
+    write_snapshots,
+    write_source_graphs,
+)
 from repo_graph.refresh import refresh_graph
 from repo_graph.reports import (
     database_reconciliation_report_from_graph,
     interactions_report_from_graph,
     unresolved_report_from_graph,
 )
-from repo_graph.scanner import MAX_FILE_BYTES, build_graph
-from repo_graph.snapshots import snapshot_status, write_snapshots
-from repo_graph.source_graphs import write_source_graphs
 from repo_graph.sources import resolve_sources, sync_sources
 from repo_graph.storage.neo4j import load_graph_path, read_graph_stats
 from repo_graph.validation import positive_int

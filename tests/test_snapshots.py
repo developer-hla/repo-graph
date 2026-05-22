@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from repo_graph.config import load_config
-from repo_graph.snapshots import snapshot_status, source_snapshot, write_snapshots
+from repo_graph.extraction.snapshots import snapshot_status, source_snapshot, write_snapshots
 from repo_graph.sources import resolve_sources
 
 

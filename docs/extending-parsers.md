@@ -25,8 +25,8 @@ architecture spec rather than expanding that coupling.
    `repo_graph.config` when RepoGraph does not already scan it.
 
 4. Add project discovery only when the parser needs a new project boundary.
-   Project discovery belongs near `project_info_for_manifest` in
-   `repo_graph.scanner`.
+   Project discovery belongs to the extraction layer near project manifest
+   discovery.
 
 5. Add or register a scanner implementation.
    Each extractor should define a stable `name`, a narrow `can_process`
@@ -62,7 +62,7 @@ architecture spec rather than expanding that coupling.
 8. Register the extractor in the scanner registry.
    The registry order should stay deterministic.
 
-9. Add focused tests in `tests/test_scanner.py`.
+9. Add focused tests in `tests/test_extraction.py`.
    Tests should cover at least one positive extraction and any important
    unresolved or ambiguous reference behavior.
 

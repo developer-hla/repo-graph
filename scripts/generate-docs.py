@@ -29,7 +29,7 @@ from repo_graph.config import (
     Source,
     load_config,
 )
-from repo_graph.scanner import build_graph
+from repo_graph.extraction import build_graph
 from repo_graph.vocabulary import (
     CLASSIFICATION_COVERAGE_WARNING_RULES,
     EDGE_TARGET_TYPES,

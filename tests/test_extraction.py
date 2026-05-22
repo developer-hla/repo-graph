@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 
 from repo_graph.config import load_config
-from repo_graph.scanner import build_graph
+from repo_graph.extraction import build_graph
 
 
-class ScannerTests(unittest.TestCase):
+class ExtractionTests(unittest.TestCase):
     def test_build_graph_from_local_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

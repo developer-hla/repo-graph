@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from repo_graph import __version__
 from repo_graph.config import RepoGraphConfig, load_config
+from repo_graph.extraction import MAX_FILE_BYTES, build_graph, snapshot_status
 from repo_graph.jobs import JobRegistry
 from repo_graph.refresh import refresh_graph
 from repo_graph.reports import (
@@ -23,8 +24,6 @@ from repo_graph.reports import (
     interactions_report_from_items,
     unresolved_report_from_items,
 )
-from repo_graph.scanner import MAX_FILE_BYTES, build_graph
-from repo_graph.snapshots import snapshot_status
 from repo_graph.sources import config_summary, inspect_sources, source_path, sync_sources_with_status
 from repo_graph.storage.neo4j import (
     Neo4jSettings,

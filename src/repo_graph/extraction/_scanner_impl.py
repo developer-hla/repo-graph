@@ -9,15 +9,16 @@ import re
 import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 from urllib.parse import urlparse
 
 import yaml
 
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.database import DatabaseGraphFacts, DatabaseSourceRequest, graph_from_database_source
+from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo, ScanResult
 from repo_graph.graph import Edge, Entity, Graph
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 from repo_graph.validation import positive_int
@@ -160,38 +161,8 @@ SQL_REFERENCE_STOPWORDS = frozenset(
 SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE)
 
 
-@dataclass
-class ScanResult:
-    entities: list[Entity] = field(default_factory=list)
-    edges: list[Edge] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
-
-    def extend(self, other: ScanResult) -> None:
-        self.entities.extend(other.entities)
-        self.edges.extend(other.edges)
-        self.errors.extend(other.errors)
-
-
 def first_entity(result: ScanResult) -> Entity | None:
     return result.entities[0] if result.entities else None
-
-
-@dataclass(frozen=True)
-class ProjectInfo:
-    name: str
-    path: Path
-    entity: Entity
-    ecosystem: str | None = None
-
-
-@dataclass(frozen=True)
-class FileScanContext:
-    source: ResolvedSource
-    repo_entity: Entity
-    file_entity: Entity
-    file_path: Path
-    rel_path: str
-    project: ProjectInfo | None = None
 
 
 @dataclass(frozen=True)
@@ -239,18 +210,6 @@ class SymbolCallTarget:
     raw_target: str
     call_kind: str
     receiver: str | None = None
-
-
-class FileExtractor(Protocol):
-    name: str
-
-    def can_process(self, rel_path: str) -> bool:
-        """Return whether this extractor can scan a relative file path."""
-        ...
-
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        """Extract entities and edges from a file."""
-        ...
 
 
 def build_graph(

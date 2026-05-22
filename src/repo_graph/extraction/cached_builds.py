@@ -10,8 +10,7 @@ from typing import Any
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.database import graph_from_database_source
-from repo_graph.graph import Edge, Entity, Graph
-from repo_graph.scanner import (
+from repo_graph.extraction._scanner_impl import (
     MAX_FILE_BYTES,
     apply_dependency_filter,
     config_without_unsupported_sources,
@@ -19,12 +18,13 @@ from repo_graph.scanner import (
     database_source_request,
     source_to_dict,
 )
-from repo_graph.snapshots import (
+from repo_graph.extraction.snapshots import (
     compare_source_snapshot,
     snapshot_root,
     source_snapshot_path,
 )
-from repo_graph.source_graphs import source_graph_path, write_source_graph
+from repo_graph.extraction.source_graphs import source_graph_path, write_source_graph
+from repo_graph.graph import Edge, Entity, Graph
 from repo_graph.sources import ResolvedSource, resolve_sources, sync_sources
 
 

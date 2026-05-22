@@ -36,8 +36,8 @@ config
 | Layer | Owns | Must Not Own |
 | --- | --- | --- |
 | Config | Public-safe source profiles, scan limits, dependency filters, runtime settings | Git operations, parsing source code, graph resolution |
-| Source resolver | Local path validation, Git/GitHub sync, source snapshots, commit metadata | File parsing, database introspection, graph construction |
-| Extraction orchestrator | Walking files, selecting scanners, invoking database scanners, collecting scanner outputs | Language semantics, graph ID assignment, storage writes |
+| Source resolver | Local path validation, Git/GitHub sync, commit metadata | File parsing, database introspection, graph construction |
+| Extraction orchestrator | Walking files, selecting scanners, invoking database scanners, collecting scanner outputs, source snapshots, source-level graph artifacts | Language semantics, graph ID assignment, storage writes |
 | Scanners | Parsing one input domain and emitting typed facts with evidence | Stable graph IDs, cross-source resolution, graph mutation, storage writes |
 | Fact model | Typed extraction outputs, references, evidence, confidence, provenance | Parser-specific syntax, storage schema, UI shape |
 | Graph constructor | Entity/edge creation, stable IDs, dedupe, resolution, unresolved target handling, summaries | Source sync, parsing files, database queries, API responses |
@@ -251,8 +251,11 @@ repo_graph/
     __init__.py
     orchestrator.py
     contracts.py
+    cached_builds.py
     facts.py
     registry.py
+    snapshots.py
+    source_graphs.py
     scanners/
       __init__.py
       code/
