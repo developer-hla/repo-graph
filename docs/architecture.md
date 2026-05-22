@@ -262,6 +262,7 @@ repo_graph/
     orchestrator.py
     contracts.py
     cached_builds.py
+    fact_helpers.py
     facts.py
     legacy_graph_helpers.py
     project_discovery.py

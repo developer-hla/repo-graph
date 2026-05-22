@@ -42,7 +42,9 @@ architecture spec rather than expanding that coupling.
    facts should include `file_path`, `line_number` when available, parser name,
    and confidence. New refactors should prefer typed fact drafts from
    `repo_graph.extraction.facts` and append them to `ScanResult.facts`; the
-   graph builder converts those facts into graph objects.
+   graph builder converts those facts into graph objects. Use
+   `repo_graph.extraction.fact_helpers` for common patterns before hand-building
+   `RelationshipFact` or `EntityFact` objects in scanner code.
 
 7. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence

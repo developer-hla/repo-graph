@@ -7,7 +7,12 @@ import tomllib
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.facts import EntityReference, Evidence, RelationshipFact
+from repo_graph.extraction.fact_helpers import (
+    declares_package_facts,
+    entity_reference,
+    package_dependency_fact,
+    package_entity_fact,
+)
 from repo_graph.extraction.legacy_graph_helpers import resolved_edge, unresolved_edge
 from repo_graph.extraction.scanners.common import read_yaml_object, string_value
 from repo_graph.extraction.scanners.dotnet_helpers import (
@@ -27,11 +32,12 @@ from repo_graph.extraction.scanners.dotnet_helpers import (
 from repo_graph.extraction.scanners.manifest_helpers import is_requirements_file
 from repo_graph.extraction.scanners.package_helpers import (
     dependency_source_entity,
+    normalize_python_package_name,
     package_dependencies,
     package_dependency_edge,
     pyproject_dependencies,
     pyproject_metadata,
-    python_package_entity,
+    python_import_name,
     requirement_dependency,
 )
 from repo_graph.graph import Entity
@@ -55,13 +61,11 @@ class PackageJsonExtractor:
             return result
 
         package_name = string_value(package.get("name"))
-        package_entity: Entity | None = None
+        package_ref = None
         if package_name:
-            package_entity = Entity(
-                entity_type="package",
+            package_fact = package_entity_fact(
+                context,
                 name=package_name,
-                source_name=context.source.name,
-                file_path=context.rel_path,
                 aliases={package_name, package_name.removeprefix("@").split("/")[-1]},
                 properties={
                     "version": package.get("version"),
@@ -71,41 +75,25 @@ class PackageJsonExtractor:
                     else [],
                 },
             )
-            result.entities.append(package_entity)
-            result.edges.append(
-                resolved_edge(
-                    context.file_entity,
-                    package_entity,
-                    "DECLARES_PACKAGE",
-                    context.source.name,
-                    context.rel_path,
-                    self.name,
-                )
-            )
-            if context.project:
-                result.edges.append(
-                    resolved_edge(
-                        context.project.entity,
-                        package_entity,
-                        "DECLARES_PACKAGE",
-                        context.source.name,
-                        context.rel_path,
-                        self.name,
-                    )
-                )
+            result.facts.entities.append(package_fact)
+            package_ref = package_fact.reference
+            result.facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
 
-        dependency_source = dependency_source_entity(context, package_entity)
+        dependency_source_ref = (
+            package_ref
+            if package_ref
+            else entity_reference(context.project.entity if context.project else context.file_entity)
+        )
         for dependency in package_dependencies(package):
-            result.edges.append(
-                package_dependency_edge(
-                    dependency_source,
+            result.facts.relationships.append(
+                package_dependency_fact(
+                    dependency_source_ref,
                     dependency["name"],
                     "javascript",
                     dependency["dependency_type"],
                     dependency["version"],
                     dependency["raw_target"],
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                 )
             )
@@ -133,43 +121,38 @@ class PythonProjectExtractor:
             return result
 
         metadata = pyproject_metadata(pyproject)
-        package_entity = python_package_entity(context, metadata["name"], metadata["version"])
-        if package_entity:
-            result.entities.append(package_entity)
-            result.edges.append(
-                resolved_edge(
-                    context.file_entity,
-                    package_entity,
-                    "DECLARES_PACKAGE",
-                    context.source.name,
-                    context.rel_path,
-                    self.name,
-                )
+        package_ref = None
+        if metadata["name"]:
+            package_name = metadata["name"]
+            package_fact = package_entity_fact(
+                context,
+                name=package_name,
+                aliases={package_name, normalize_python_package_name(package_name), python_import_name(package_name)},
+                properties={
+                    "ecosystem": "python",
+                    "version": metadata["version"],
+                    "project": context.project.name if context.project else None,
+                },
             )
-            if context.project:
-                result.edges.append(
-                    resolved_edge(
-                        context.project.entity,
-                        package_entity,
-                        "DECLARES_PACKAGE",
-                        context.source.name,
-                        context.rel_path,
-                        self.name,
-                    )
-                )
+            result.facts.entities.append(package_fact)
+            package_ref = package_fact.reference
+            result.facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
 
-        dependency_source = dependency_source_entity(context, package_entity)
+        dependency_source_ref = (
+            package_ref
+            if package_ref
+            else entity_reference(context.project.entity if context.project else context.file_entity)
+        )
         for dependency in pyproject_dependencies(pyproject):
-            result.edges.append(
-                package_dependency_edge(
-                    dependency_source,
+            result.facts.relationships.append(
+                package_dependency_fact(
+                    dependency_source_ref,
                     dependency["name"],
                     "python",
                     dependency["dependency_type"],
                     dependency["version"],
                     dependency["raw_target"],
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                 )
             )
@@ -189,29 +172,17 @@ class PythonRequirementsExtractor:
             dependency = requirement_dependency(line)
             if not dependency:
                 continue
-            target_name = dependency["name"] or dependency["raw_target"] or ""
             result.facts.relationships.append(
-                RelationshipFact(
-                    from_ref=EntityReference(
-                        entity_type=dependency_source.entity_type,
-                        name=dependency_source.name,
-                        entity_id=dependency_source.entity_id,
-                    ),
-                    to_ref=EntityReference(entity_type="package", name=target_name),
-                    edge_type="DEPENDS_ON_PACKAGE",
-                    evidence=Evidence(
-                        source_name=context.source.name,
-                        file_path=context.rel_path,
-                        line_number=line_number,
-                        parser=self.name,
-                    ),
-                    properties={
-                        "ecosystem": "python",
-                        "dependency_type": "requirements",
-                        "version": dependency["version"],
-                        "raw_target": dependency["raw_target"],
-                        "normalized_target": target_name,
-                    },
+                package_dependency_fact(
+                    entity_reference(dependency_source),
+                    dependency["name"],
+                    "python",
+                    "requirements",
+                    dependency["version"],
+                    dependency["raw_target"],
+                    context,
+                    self.name,
+                    line_number=line_number,
                 )
             )
         return result

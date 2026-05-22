@@ -118,25 +118,6 @@ def normalize_python_package_name(value: str) -> str:
     return value.strip().lower().replace("_", "-")
 
 
-def python_package_entity(context: FileScanContext, name: str | None, version: str | None) -> Entity | None:
-    if not name:
-        return None
-    normalized = normalize_python_package_name(name)
-    import_name = python_import_name(name)
-    return Entity(
-        entity_type="package",
-        name=name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
-        aliases={name, normalized, import_name},
-        properties={
-            "ecosystem": "python",
-            "version": version,
-            "project": context.project.name if context.project else None,
-        },
-    )
-
-
 def python_import_name(value: str) -> str:
     return normalize_python_package_name(value).replace("-", "_")
 

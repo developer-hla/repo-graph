@@ -151,6 +151,8 @@ inside scanners. The target architecture is defined in
 - New parser refactors should emit typed facts from `repo_graph.extraction.facts`
   through `ScanResult.facts` when practical. Legacy direct `Entity` and `Edge`
   output is a migration path, not the target.
+- Use `repo_graph.extraction.fact_helpers` for common typed fact patterns before
+  hand-building fact objects in scanner code.
 - Parsers should tolerate partial failures and record errors rather than
   stopping the whole scan, unless strict mode is enabled.
 - Prefer structured parsing when practical. Regex-based parsing is acceptable

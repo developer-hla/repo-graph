@@ -47,6 +47,8 @@ Target module responsibilities:
 - `contracts.py`: public scanner protocol and scan result types.
 - `facts.py`: typed scanner fact contracts, evidence, entity references, and
   local scan issues.
+- `fact_helpers.py`: small helper functions for common typed fact patterns,
+  such as package declarations and package dependency relationships.
 - `source_scanner.py`: source file walking, scanner invocation, and local
   scanner error collection.
 - `registry.py`: deterministic default scanner registration.
