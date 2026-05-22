@@ -137,7 +137,7 @@ ALLOWLIST = (
     AllowlistEntry("token_handling_identifier", "scripts/check-public-boundary.py", re.compile(r".*")),
     AllowlistEntry(
         "token_handling_identifier",
-        "src/repo_graph/sources.py",
+        "src/repo_graph/sources/_resolver.py",
         re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|AUTHORIZATION|x-access-token)\b"),
     ),
     AllowlistEntry("token_handling_identifier", "tests/test_sources.py", re.compile(r".*")),

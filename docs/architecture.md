@@ -248,7 +248,9 @@ repo_graph/
   config/
     __init__.py
     _loader.py
-  sources.py
+  sources/
+    __init__.py
+    _resolver.py
   extraction/
     __init__.py
     orchestrator.py
