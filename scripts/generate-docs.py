@@ -29,7 +29,10 @@ from repo_graph.config import (
     Source,
     load_config,
 )
-from repo_graph.extraction import build_graph
+from repo_graph.extraction import MAX_FILE_BYTES, build_graph
+from repo_graph.extraction.registry import default_extractors
+from repo_graph.extraction.source_scanner import scan_source
+from repo_graph.sources import resolve_sources
 from repo_graph.vocabulary import (
     CLASSIFICATION_COVERAGE_WARNING_RULES,
     EDGE_TARGET_TYPES,
@@ -87,6 +90,7 @@ def generated_documents() -> dict[Path, str]:
         GENERATED_DIR / "parser-coverage.md": parser_coverage_doc(),
         GENERATED_DIR / "pixi-tasks.md": pixi_tasks_doc(),
         GENERATED_DIR / "runtime-docker.md": runtime_docker_doc(),
+        GENERATED_DIR / "scanner-catalog.md": scanner_catalog_doc(),
         GENERATED_DIR / "vocabulary.md": vocabulary_doc(),
     }
 
@@ -331,6 +335,75 @@ def parser_coverage_doc() -> str:
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def scanner_catalog_doc() -> str:
+    config = load_config(LOCAL_EXAMPLE_CONFIG)
+    extractors = default_extractors()
+    examples = scanner_example_coverage(config, extractors)
+
+    lines = [
+        generated_header("Scanner Catalog"),
+        "This file is generated from `repo_graph.extraction.registry.default_extractors` and a strict scan of "
+        "`config/local-example.yaml`.",
+        "It documents scanner registration order, target patterns, parser IDs, and graph types exercised by "
+        "synthetic examples.",
+        "",
+        f"- Scanner count: `{len(extractors)}`",
+        "",
+        "| Order | Scanner | Module | Target Patterns | Parser IDs | Exercised Edge Types | Exercised Node Types |",
+        "| ---: | --- | --- | --- | --- | --- | --- |",
+    ]
+    for index, extractor in enumerate(extractors, start=1):
+        example = examples[extractor.name]
+        lines.append(
+            "| "
+            f"{index} | "
+            f"`{extractor.name}` | "
+            f"`{extractor.__class__.__module__}` | "
+            f"{format_inline_values(extractor.target_patterns)} | "
+            f"{format_inline_values(extractor.parser_ids)} | "
+            f"{format_inline_values(example['edge_types'])} | "
+            f"{format_inline_values(example['node_types'])} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Notes",
+            "",
+            "- `Target Patterns` are scanner-declared file targets, not filesystem glob expansion rules.",
+            "- `Exercised Edge Types` and `Exercised Node Types` come from the synthetic example graph.",
+            "- Empty exercised columns mean the scanner is registered but the example graph did not create those "
+            "facts.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def scanner_example_coverage(
+    config: Any,
+    extractors: list[Any],
+) -> dict[str, dict[str, list[str]]]:
+    sources = list(resolve_sources(config))
+    coverage: dict[str, dict[str, list[str]]] = {}
+    for extractor in extractors:
+        parser_ids = set(extractor.parser_ids)
+        edge_types: set[str] = set()
+        node_types: set[str] = set()
+        for source in sources:
+            result = scan_source(config, source, max_file_bytes=MAX_FILE_BYTES, extractors=[extractor])
+            for relationship in result.facts.relationships:
+                if relationship.parser not in parser_ids:
+                    continue
+                edge_types.add(relationship.edge_type)
+                node_types.add(relationship.from_type)
+                node_types.add(relationship.to_type)
+        coverage[extractor.name] = {
+            "edge_types": sorted(edge_types),
+            "node_types": sorted(node_types),
+        }
+    return coverage
 
 
 def unique_edge_values(edges: list[dict[str, Any]], key: str) -> list[str]:

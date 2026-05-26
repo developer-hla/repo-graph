@@ -21,6 +21,15 @@ from repo_graph.extraction.scanners.code.python.helpers import (
 
 class PythonCodeExtractor:
     name = "python"
+    target_patterns = ("*.py",)
+    parser_ids = (
+        "python_call",
+        "python_http",
+        "python_import",
+        "python_route",
+        "python_symbol",
+        "sql_reference",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".py"

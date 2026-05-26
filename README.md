@@ -139,6 +139,8 @@ database projects so package, HTTP, project reference, Kubernetes service,
 service config, and SQL relationships can resolve locally. For generated
 coverage from those examples, see
 [docs/generated/parser-coverage.md](docs/generated/parser-coverage.md).
+For scanner registration order, target patterns, and parser IDs, see
+[docs/generated/scanner-catalog.md](docs/generated/scanner-catalog.md).
 
 ## Scanning Your Own Repositories
 
@@ -316,7 +318,7 @@ docs/agent-usage.md     Agent query API examples
 docs/extending-parsers.md Parser extension workflow
 docs/database-introspection.md Planned read-only database source design
 docs/first-class-coverage.md First-class graph coverage audit
-docs/generated/         Generated API, config, runtime, and vocabulary docs
+docs/generated/         Generated API, scanner, config, runtime, and vocabulary docs
 docs/public-release.md  Public release checklist
 examples/               Offline demo sources
 scripts/                Local verification and docs generation scripts

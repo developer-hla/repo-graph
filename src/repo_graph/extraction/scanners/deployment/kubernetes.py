@@ -22,6 +22,16 @@ from repo_graph.extraction.scanners.deployment.helpers import (
 
 class KubernetesManifestExtractor:
     name = "kubernetes"
+    target_patterns = ("*.yaml", "*.yml")
+    parser_ids = (
+        "kubernetes_container",
+        "kubernetes_deployment",
+        "kubernetes_env",
+        "kubernetes_ingress",
+        "kubernetes_ingress_route",
+        "kubernetes_selector",
+        "kubernetes_service",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".yaml", ".yml"}

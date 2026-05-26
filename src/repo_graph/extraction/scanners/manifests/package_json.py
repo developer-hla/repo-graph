@@ -22,6 +22,8 @@ from repo_graph.extraction.scanners.package_helpers import package_dependencies
 
 class PackageJsonExtractor:
     name = "package_json"
+    target_patterns = ("package.json",)
+    parser_ids = ("package_json",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "package.json"
@@ -88,6 +90,8 @@ class PackageJsonExtractor:
 
 class PnpmWorkspaceExtractor:
     name = "pnpm_workspace"
+    target_patterns = ("pnpm-workspace.yaml",)
+    parser_ids = ("pnpm_workspace",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "pnpm-workspace.yaml"

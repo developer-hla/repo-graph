@@ -26,6 +26,8 @@ from repo_graph.extraction.scanners.package_helpers import (
 
 class PythonProjectExtractor:
     name = "pyproject"
+    target_patterns = ("pyproject.toml",)
+    parser_ids = ("pyproject",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "pyproject.toml"
@@ -94,6 +96,8 @@ class PythonProjectExtractor:
 
 class PythonRequirementsExtractor:
     name = "requirements"
+    target_patterns = ("requirements*.txt",)
+    parser_ids = ("requirements",)
 
     def can_process(self, rel_path: str) -> bool:
         return is_requirements_file(Path(rel_path))

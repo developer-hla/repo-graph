@@ -30,6 +30,8 @@ class FileScanContext:
 
 class FileExtractor(Protocol):
     name: str
+    target_patterns: tuple[str, ...]
+    parser_ids: tuple[str, ...]
 
     def can_process(self, rel_path: str) -> bool:
         """Return whether this extractor can scan a relative file path."""

@@ -30,10 +30,11 @@ resolution, and export shape.
 
 5. Add or register a scanner implementation.
    Each extractor should define a stable `name`, a narrow `can_process`
-   predicate, and an extraction method that returns scanner output. Put the
-   implementation in the relevant `repo_graph.extraction.scanners` family
-   module and keep cross-family registration in `registry.py`. Scanner output
-   should be typed extracted facts, not graph objects.
+   predicate, `target_patterns`, `parser_ids`, and an extraction method that
+   returns scanner output. Put the implementation in the relevant
+   `repo_graph.extraction.scanners` family module and keep cross-family
+   registration in `registry.py`. Scanner output should be typed extracted
+   facts, not graph objects.
 
 6. Emit semantic facts with source provenance.
    File-derived facts should include `file_path`, `line_number` when available,

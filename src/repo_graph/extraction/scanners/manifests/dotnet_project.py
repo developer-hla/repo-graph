@@ -32,6 +32,8 @@ from repo_graph.extraction.scanners.manifest_dotnet_helpers import (
 
 class DotnetProjectExtractor:
     name = "dotnet_project"
+    target_patterns = ("*.csproj", "*.fsproj", "*.vbproj")
+    parser_ids = ("dotnet_project",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in DOTNET_PROJECT_SUFFIXES
@@ -101,6 +103,8 @@ class DotnetProjectExtractor:
 
 class DotnetPackagesConfigExtractor:
     name = "packages_config"
+    target_patterns = ("packages.config",)
+    parser_ids = ("packages_config",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "packages.config"
@@ -137,6 +141,8 @@ class DotnetPackagesConfigExtractor:
 
 class DotnetFrameworkConfigExtractor:
     name = "dotnet_framework_config"
+    target_patterns = ("*.config except packages.config",)
+    parser_ids = ("dotnet_framework_config",)
 
     def can_process(self, rel_path: str) -> bool:
         path = Path(rel_path)
@@ -175,6 +181,8 @@ class DotnetFrameworkConfigExtractor:
 
 class DotnetBuildConfigExtractor:
     name = "dotnet_build_config"
+    target_patterns = ("Directory.Build.props", "*.props", "*.targets")
+    parser_ids = ("dotnet_build_config",)
 
     def can_process(self, rel_path: str) -> bool:
         path = Path(rel_path)
@@ -225,6 +233,8 @@ class DotnetBuildConfigExtractor:
 
 class DotnetSolutionExtractor:
     name = "dotnet_solution"
+    target_patterns = ("*.sln",)
+    parser_ids = ("dotnet_solution",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".sln"

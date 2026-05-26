@@ -40,6 +40,8 @@ from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_l
 
 class LegacyDotnetEndpointExtractor:
     name = "legacy_dotnet_endpoint"
+    target_patterns = ("*.asmx", "*.svc")
+    parser_ids = ("legacy_dotnet_endpoint",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".asmx", ".svc"}
@@ -77,6 +79,15 @@ class LegacyDotnetEndpointExtractor:
 
 class CSharpCodeExtractor:
     name = "csharp_code"
+    target_patterns = ("*.cs",)
+    parser_ids = (
+        "dotnet_call",
+        "dotnet_controller_route",
+        "dotnet_http",
+        "dotnet_minimal_route",
+        "dotnet_symbol",
+        "sql_reference",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".cs"
@@ -191,6 +202,15 @@ class CSharpCodeExtractor:
 
 class VbCodeExtractor:
     name = "vb_code"
+    target_patterns = ("*.vb",)
+    parser_ids = (
+        "vb_call",
+        "vb_config_service",
+        "vb_contract_route",
+        "vb_http",
+        "vb_sql_command",
+        "vb_symbol",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".vb"

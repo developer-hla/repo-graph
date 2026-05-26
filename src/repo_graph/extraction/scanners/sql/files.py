@@ -16,6 +16,8 @@ from repo_graph.extraction.scanners.sql.helpers import (
 
 class SqlExtractor:
     name = "sql"
+    target_patterns = ("*.sql",)
+    parser_ids = ("sql", "sql_reference")
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".sql"
@@ -39,6 +41,8 @@ class SqlExtractor:
 
 class SqlReferenceExtractor:
     name = "sql_reference"
+    target_patterns = ("*.cs", "*.js", "*.jsx", "*.py", "*.ts", "*.tsx", "*.vb")
+    parser_ids = ("sql_reference",)
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".cs", ".js", ".jsx", ".py", ".ts", ".tsx", ".vb"}

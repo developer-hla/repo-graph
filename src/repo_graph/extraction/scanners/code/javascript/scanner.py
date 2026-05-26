@@ -16,6 +16,8 @@ from repo_graph.extraction.scanners.interaction_helpers import (
 
 class JavaScriptExtractor:
     name = "javascript"
+    target_patterns = ("*.js", "*.jsx", "*.ts", "*.tsx")
+    parser_ids = ("javascript_export", "javascript_http", "javascript_import", "javascript_route")
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".js", ".jsx", ".ts", ".tsx"}
