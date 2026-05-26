@@ -268,6 +268,10 @@ Impact queries should default to dependency and usage edges so refactor
 blast-radius results are not dominated by containment or declaration paths.
 Agents can request `profile=all` for raw graph traversal or
 `profile=structural` for containment and declaration paths.
+The impact UI should let users find a start entity from the same workflow
+instead of requiring a copied entity ID from another page. Start-entity search,
+trace controls, affected-source summaries, and path evidence should be shown as
+one shareable hash route.
 Impact responses should include ordered path steps with edge evidence so users
 can see the proof chain for each affected entity.
 Impact and entity overview responses should also include source coverage

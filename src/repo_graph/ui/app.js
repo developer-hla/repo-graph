@@ -16,7 +16,7 @@ const routes = {
     render: renderSearch,
   },
   impact: {
-    title: "Impact",
+    title: "Blast Radius",
     meta: "Trace blast radius from an entity",
     render: renderImpact,
   },
@@ -102,6 +102,10 @@ const state = {
   },
   impact: {
     entityId: "",
+    q: "",
+    startType: "",
+    source: "",
+    searchLimit: 10,
     direction: "in",
     profile: "impact",
     type: "",
@@ -203,6 +207,10 @@ function hydrateRouteState(routeName, params) {
   if (routeName === "impact") {
     state.impact = {
       entityId: stringParam(params, "entityId"),
+      q: stringParam(params, "q"),
+      startType: stringParam(params, "startType"),
+      source: stringParam(params, "source"),
+      searchLimit: numberParam(params, "searchLimit", 10),
       direction: stringParam(params, "direction", "in") || "in",
       profile: stringParam(params, "profile", "impact") || "impact",
       type: stringParam(params, "type"),
@@ -561,60 +569,107 @@ async function renderDatabaseReconciliation() {
 
 async function renderImpact() {
   view.innerHTML = `
-    ${panel(
-      "Blast Radius",
-      `<form class="stack" data-form="impact">
-        <div class="query-row">
-          <label class="field query-field">
-            <span>Entity ID</span>
-            <input name="entityId" value="${escapeAttr(state.impact.entityId)}" />
-          </label>
-          <button class="button" type="submit">Run Impact</button>
-        </div>
-        <div class="quick-actions">
-          <button class="button secondary" type="button" data-impact-direction="in">Show Callers</button>
-          <button class="button secondary" type="button" data-impact-direction="out">Show Dependencies</button>
-          <button class="button secondary" type="button" data-impact-direction="both">Show Both</button>
-        </div>
-        ${advancedControls(
-          `<div class="toolbar">
-            <label class="field small">
-              <span>Direction</span>
-              <select name="direction">
-                ${option("in", "Incoming", state.impact.direction)}
-                ${option("out", "Outgoing", state.impact.direction)}
-                ${option("both", "Both", state.impact.direction)}
-              </select>
-            </label>
-            <label class="field">
-              <span>Profile</span>
-              <select name="profile">
-                ${option("impact", "Dependency impact", state.impact.profile)}
-                ${option("all", "All graph paths", state.impact.profile)}
-                ${option("structural", "Structural paths", state.impact.profile)}
-              </select>
-            </label>
-            <label class="field">
-              <span>Edge Type</span>
-              <input name="type" value="${escapeAttr(state.impact.type)}" placeholder="CALLS_SQL" />
-            </label>
-            <label class="field small">
-              <span>Depth</span>
-              <input name="depth" type="number" min="1" max="3" value="${state.impact.depth}" />
-            </label>
-            <label class="field small">
-              <span>Limit</span>
-              <input name="limit" type="number" min="1" max="200" value="${state.impact.limit}" />
-            </label>
-          </div>`
-        )}
-      </form>`
-    )}
-    <div id="impact-results">${state.impact.entityId ? loadingMarkup() : emptyMarkup("Open an entity from search or paste an entity ID.")}</div>
+    ${panel("Find Start Entity", impactStartSearchForm())}
+    <div id="impact-start-results">
+      ${impactStartSearchActive() ? loadingMarkup() : emptyMarkup("Search for a graph entity.")}
+    </div>
+    ${panel("Trace", impactTraceForm())}
+    <div id="impact-results">
+      ${state.impact.entityId ? loadingMarkup() : emptyMarkup("Open an entity from search or paste an entity ID.")}
+    </div>
   `;
+  await runImpactEntitySearch();
   if (state.impact.entityId) {
     await runImpact();
   }
+}
+
+function impactStartSearchForm() {
+  return `
+    <form class="stack" data-form="impact-search">
+      <div class="query-row">
+        <label class="field query-field">
+          <span>Search</span>
+          <input name="q" value="${escapeAttr(state.impact.q)}" placeholder="route, table, service, symbol" />
+        </label>
+        <button class="button" type="submit">Find</button>
+      </div>
+      <div class="quick-actions">
+        <button class="button secondary" type="button" data-impact-start-type="api_route">API Routes</button>
+        <button class="button secondary" type="button" data-impact-start-type="function">Functions</button>
+        <button class="button secondary" type="button" data-impact-start-type="service">Services</button>
+        <button class="button secondary" type="button" data-impact-start-type="sql_table">SQL Tables</button>
+        <button class="button secondary" type="button" data-impact-start-type="stored_procedure">Stored Procedures</button>
+      </div>
+      ${advancedControls(
+        `<div class="toolbar">
+          <label class="field">
+            <span>Type</span>
+            <input name="startType" value="${escapeAttr(state.impact.startType)}" placeholder="api_route" />
+          </label>
+          <label class="field">
+            <span>Source</span>
+            <input name="source" value="${escapeAttr(state.impact.source)}" />
+          </label>
+          <label class="field small">
+            <span>Limit</span>
+            <input name="searchLimit" type="number" min="1" max="100" value="${state.impact.searchLimit}" />
+          </label>
+        </div>`
+      )}
+    </form>
+  `;
+}
+
+function impactTraceForm() {
+  return `
+    <form class="stack" data-form="impact">
+      <div class="query-row">
+        <label class="field query-field">
+          <span>Entity ID</span>
+          <input name="entityId" value="${escapeAttr(state.impact.entityId)}" />
+        </label>
+        <button class="button" type="submit">Trace</button>
+      </div>
+      <div class="quick-actions">
+        <button class="button secondary" type="button" data-impact-direction="in">Show Callers</button>
+        <button class="button secondary" type="button" data-impact-direction="out">Show Dependencies</button>
+        <button class="button secondary" type="button" data-impact-direction="both">Show Both</button>
+      </div>
+      ${advancedControls(
+        `<div class="toolbar">
+          <label class="field small">
+            <span>Direction</span>
+            <select name="direction">
+              ${option("in", "Incoming", state.impact.direction)}
+              ${option("out", "Outgoing", state.impact.direction)}
+              ${option("both", "Both", state.impact.direction)}
+            </select>
+          </label>
+          <label class="field">
+            <span>Profile</span>
+            <select name="profile">
+              ${option("impact", "Dependency impact", state.impact.profile)}
+              ${option("all", "All graph paths", state.impact.profile)}
+              ${option("structural", "Structural paths", state.impact.profile)}
+            </select>
+          </label>
+          <label class="field">
+            <span>Edge Type</span>
+            <input name="type" value="${escapeAttr(state.impact.type)}" placeholder="CALLS_SQL" />
+          </label>
+          <label class="field small">
+            <span>Depth</span>
+            <input name="depth" type="number" min="1" max="3" value="${state.impact.depth}" />
+          </label>
+          <label class="field small">
+            <span>Limit</span>
+            <input name="limit" type="number" min="1" max="200" value="${state.impact.limit}" />
+          </label>
+        </div>`
+      )}
+    </form>
+  `;
 }
 
 async function runSearch() {
@@ -693,6 +748,29 @@ async function runDatabaseReconciliation() {
   const target = document.querySelector("#database-results");
   const result = await fetchMaybe(`/reports/database-reconciliation?${params}`);
   target.innerHTML = result.ok ? databaseReconciliationMarkup(result.data) : errorMarkup(result.error);
+}
+
+async function runImpactEntitySearch() {
+  const target = document.querySelector("#impact-start-results");
+  if (!target) return;
+  if (!impactStartSearchActive()) {
+    target.innerHTML = emptyMarkup("Search for a graph entity.");
+    return;
+  }
+  const params = new URLSearchParams();
+  if (state.impact.q) params.set("q", state.impact.q);
+  if (state.impact.startType) params.set("type", state.impact.startType);
+  if (state.impact.source) params.set("source", state.impact.source);
+  params.set("limit", String(state.impact.searchLimit));
+  target.innerHTML = loadingMarkup();
+  const result = await fetchMaybe(`/entities/search?${params}`);
+  target.innerHTML = result.ok
+    ? panel("Matching Start Entities", impactStartResultsTable(result.data.items || []))
+    : errorMarkup(result.error);
+}
+
+function impactStartSearchActive() {
+  return Boolean(state.impact.q || state.impact.startType || state.impact.source);
 }
 
 async function runImpact() {
@@ -929,6 +1007,19 @@ function handleDocumentClick(event) {
     navigateToRoute("impact");
     return;
   }
+  const impactStartTypeButton = event.target.closest("[data-impact-start-type]");
+  if (impactStartTypeButton) {
+    state.impact.startType = impactStartTypeButton.dataset.impactStartType || "";
+    state.impact.q = "";
+    navigateToRoute("impact");
+    return;
+  }
+  const impactStartButton = event.target.closest("[data-impact-start-id]");
+  if (impactStartButton) {
+    state.impact.entityId = impactStartButton.dataset.impactStartId || "";
+    navigateToRoute("impact");
+    return;
+  }
   const impactButton = event.target.closest("[data-impact-id]");
   if (impactButton) {
     state.impact.entityId = impactButton.dataset.impactId;
@@ -1060,8 +1151,19 @@ function handleDocumentSubmit(event) {
     };
     navigateToRoute("database");
   }
+  if (form.dataset.form === "impact-search") {
+    state.impact = {
+      ...state.impact,
+      q: stringField(data, "q"),
+      startType: stringField(data, "startType"),
+      source: stringField(data, "source"),
+      searchLimit: numberField(data, "searchLimit", 10),
+    };
+    navigateToRoute("impact");
+  }
   if (form.dataset.form === "impact") {
     state.impact = {
+      ...state.impact,
       entityId: stringField(data, "entityId"),
       direction: stringField(data, "direction") || "in",
       profile: stringField(data, "profile") || "impact",
@@ -1203,7 +1305,7 @@ function workflowStarters() {
   return `
     <div class="action-grid">
       ${actionButton("Find Something", "Search routes, data objects, packages, and symbols", "data-route-link", "search")}
-      ${actionButton("Review Impact", "Trace callers and dependencies from a known entity", "data-route-link", "impact")}
+      ${actionButton("Blast Radius", "Trace callers and dependencies from a known entity", "data-route-link", "impact")}
       ${actionButton("Needs Attention", "Group unresolved references by likely cause", "data-route-link", "unresolved")}
       ${actionButton("Database Drift", "Compare code, SQL files, and current database metadata", "data-route-link", "database")}
       ${actionButton("Refresh Graph", "Sync sources and update loaded graph data", "data-route-link", "jobs")}
@@ -1442,7 +1544,7 @@ function ownedSurfaceTable(items) {
           <td>${escapeHtml(item.line_number || "")}</td>
           <td class="row-actions">
             <button class="button secondary" type="button" data-entity-id="${escapeAttr(item.entity_id || "")}">Open</button>
-            <button class="button secondary" type="button" data-impact-id="${escapeAttr(item.entity_id || "")}">Impact</button>
+            <button class="button secondary" type="button" data-impact-id="${escapeAttr(item.entity_id || "")}">Trace</button>
           </td>
         </tr>`
     )
@@ -1758,7 +1860,7 @@ function entityWorkbench(entity) {
     <div class="stack">
       ${keyValueTable(entityRows(entity))}
       <div class="action-grid">
-        ${actionButton("Impact", "Trace dependency blast radius", "data-impact-id", entityId)}
+        ${actionButton("Blast Radius", "Trace dependency blast radius", "data-impact-id", entityId)}
         ${actionButton("Open Source", "Inspect repository context", "data-source-name", entity.source_name || "")}
         ${actionButton("Same Source", "Search entities in this source", "data-search-source", entity.source_name || "")}
         ${actionButton("Same Type", "Search entities of this type", "data-search-type", entity.entity_type || "")}
@@ -1945,7 +2047,7 @@ function searchResultsTable(items) {
       (item) => `
         <tr>
           <td><button class="button secondary" type="button" data-entity-id="${escapeAttr(item.entity_id)}">Open</button></td>
-          <td><button class="button secondary" type="button" data-impact-id="${escapeAttr(item.entity_id)}">Impact</button></td>
+          <td><button class="button secondary" type="button" data-impact-id="${escapeAttr(item.entity_id)}">Trace</button></td>
           <td>${escapeHtml(item.entity_type || "")}</td>
           <td>${escapeHtml(item.name || "")}</td>
           <td>${escapeHtml(item.source_name || "")}</td>
@@ -1954,6 +2056,29 @@ function searchResultsTable(items) {
     )
     .join("");
   return table(["", "", "Type", "Name", "Source", "File"], rows);
+}
+
+function impactStartResultsTable(items) {
+  if (!items.length) return emptyMarkup("No matching start entities.");
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td class="row-actions">
+            <button class="button secondary" type="button" data-impact-start-id="${escapeAttr(item.entity_id || "")}">
+              Use
+            </button>
+            <button class="button secondary" type="button" data-entity-id="${escapeAttr(item.entity_id || "")}">Open</button>
+          </td>
+          <td>${escapeHtml(item.entity_type || "")}</td>
+          <td>${escapeHtml(item.name || "")}</td>
+          <td>${escapeHtml(item.source_name || "")}</td>
+          <td class="mono">${escapeHtml(item.file_path || "")}</td>
+          <td>${escapeHtml(item.line_number || "")}</td>
+        </tr>`
+    )
+    .join("");
+  return table(["", "Type", "Name", "Source", "File", "Line"], rows);
 }
 
 function neighborsTable(items) {
@@ -1965,7 +2090,7 @@ function neighborsTable(items) {
       const entityId = neighbor.entity_id || "";
       const actions = entityId
         ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(entityId)}">Open</button>
-           <button class="button secondary" type="button" data-impact-id="${escapeAttr(entityId)}">Impact</button>`
+           <button class="button secondary" type="button" data-impact-id="${escapeAttr(entityId)}">Trace</button>`
         : "";
       return `
         <tr>
@@ -1984,11 +2109,12 @@ function neighborsTable(items) {
 
 function impactMarkup(payload) {
   const entity = payload.entity || {};
+  const summary = payload.summary || {};
   return `
     <div class="grid three">
       ${metric("Affected Sources", numberValue(payload.affected_source_count), "grouped by source", true)}
-      ${metric("Paths", numberValue(payload.count), "returned paths", true)}
-      ${metric("Depth", numberValue(payload.depth), `${payload.direction || ""} / ${payload.profile || ""}`, true)}
+      ${metric("Paths", numberValue(summary.path_count || payload.count), "returned paths", true)}
+      ${metric("Max Depth", numberValue(summary.max_observed_depth || payload.depth), `${payload.direction || ""} / ${payload.profile || ""}`, true)}
     </div>
     ${coverageWarningsPanel(payload.coverage)}
     ${panel("Start Entity", keyValueTable(entityRows(entity)))}
@@ -2048,22 +2174,17 @@ function impactPathEvidenceTable(items) {
         const fromId = from.entity_id || "";
         const toId = to.entity_id || "";
         const sourceName = edge.source_name || from.source_name || "";
+        const evidence = [edge.file_path, edge.line_number, edge.parser]
+          .filter((value) => value)
+          .join(" : ");
         return `
           <tr>
             <td>${pathIndex + 1}</td>
-            <td>${escapeHtml(item.direction || "")}</td>
-            <td>${escapeHtml(item.depth || "")}</td>
             <td>${escapeHtml(step.index || "")}</td>
-            <td>${escapeHtml(from.entity_type || from.target_type || edge.from_type || "")}</td>
-            <td>${escapeHtml(from.name || edge.from_name || "")}</td>
-            <td>${escapeHtml(from.source_name || edge.source_name || "")}</td>
-            <td>${escapeHtml(edge.edge_type || "")}</td>
-            <td>${escapeHtml(to.entity_type || to.target_type || edge.to_type || "")}</td>
-            <td>${escapeHtml(to.name || edge.to_name || "")}</td>
-            <td>${escapeHtml(to.source_name || "")}</td>
-            <td class="mono">${escapeHtml(edge.file_path || "")}</td>
-            <td>${escapeHtml(edge.line_number || "")}</td>
-            <td>${escapeHtml(edge.parser || "")}</td>
+            <td>${impactEndpointCell(from, edge.from_type, edge.from_name, edge.source_name)}</td>
+            <td>${status(edge.edge_type || "unknown", "")}</td>
+            <td>${impactEndpointCell(to, edge.to_type, edge.to_name, "")}</td>
+            <td class="mono">${escapeHtml(evidence)}</td>
             <td class="row-actions">
               ${fromId ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(fromId)}">From</button>` : ""}
               ${toId ? `<button class="button secondary" type="button" data-entity-id="${escapeAttr(toId)}">To</button>` : ""}
@@ -2073,10 +2194,19 @@ function impactPathEvidenceTable(items) {
       })
     )
     .join("");
-  return table(
-    ["Path", "Direction", "Depth", "Step", "From Type", "From", "From Source", "Edge", "To Type", "To", "To Source", "File", "Line", "Parser", ""],
-    rows
-  );
+  return table(["Path", "Step", "From", "Edge", "To", "Evidence", ""], rows);
+}
+
+function impactEndpointCell(entity, fallbackType, fallbackName, fallbackSource) {
+  const type = entity.entity_type || entity.target_type || fallbackType || "";
+  const name = entity.name || fallbackName || "";
+  const source = entity.source_name || fallbackSource || "";
+  return `
+    <div class="stack tight">
+      <span>${escapeHtml(name)}</span>
+      <span class="muted">${escapeHtml([type, source].filter((value) => value).join(" / "))}</span>
+    </div>
+  `;
 }
 
 function impactPathSteps(item) {
