@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import (
     entity_fact,
     entity_reference,
@@ -18,16 +18,13 @@ from repo_graph.extraction.fact_helpers import (
     unresolved_relationship_fact,
 )
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
-from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
+from repo_graph.extraction.legacy_graph_helpers import interaction_properties
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.interaction_helpers import (
     add_route_facts,
-    http_edges_for_target,
     http_facts_for_target,
     http_target,
-    route_entity,
     route_entity_fact,
-    route_handler_edge,
     route_handler_fact,
     service_name_from_identifier,
     service_name_from_url,
@@ -41,10 +38,8 @@ from repo_graph.extraction.scanners.sql_helpers import (
 from repo_graph.extraction.scanners.symbol_helpers import (
     SymbolCallTarget,
     TypeMethodIndex,
-    symbol_call_edges,
     symbol_call_facts,
 )
-from repo_graph.graph import Edge, Entity
 
 DOTNET_PROJECT_SUFFIXES = {".csproj", ".fsproj", ".vbproj"}
 
@@ -689,25 +684,24 @@ def config_service_fact(
     )
 
 
-def vb_symbol_result(
+def vb_symbol_facts(
     context: FileScanContext,
     symbol_kind: str,
     name: str,
     namespace: str | None,
     line_number: int,
     parent_name: str | None = None,
-) -> ScanResult:
-    result = ScanResult()
+) -> FactBatch:
+    facts = FactBatch()
     entity_type = "function" if symbol_kind in {"function", "sub"} else symbol_kind
     full_name = ".".join(part for part in (namespace, parent_name, name) if part)
     aliases = {name, full_name or name}
     if parent_name:
         aliases.add(f"{parent_name}.{name}")
-    symbol = Entity(
+    symbol = entity_fact(
+        context,
         entity_type=entity_type,
         name=full_name or name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         line_number=line_number,
         aliases=aliases,
         properties={
@@ -717,19 +711,18 @@ def vb_symbol_result(
             "project": context.project.name if context.project else None,
         },
     )
-    result.entities.append(symbol)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            symbol,
+    facts.entities.append(symbol)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            symbol.reference,
             "DECLARES_SYMBOL",
-            context.source.name,
-            context.rel_path,
+            context,
             "vb_symbol",
             line_number,
         )
     )
-    return result
+    return facts
 
 
 def vb_method_index(content: str) -> TypeMethodIndex:
@@ -746,19 +739,19 @@ def vb_method_index(content: str) -> TypeMethodIndex:
     return TypeMethodIndex(type_methods={type_name: frozenset(methods) for type_name, methods in type_methods.items()})
 
 
-def vb_contract_route_result(
+def vb_contract_route_facts(
     context: FileScanContext,
     method_name: str,
     attributes: Sequence[str],
     line_number: int,
-    handler: Entity | None = None,
-) -> ScanResult:
-    result = ScanResult()
+    handler: EntityFact | None = None,
+) -> FactBatch:
+    facts = FactBatch()
     framework = legacy_contract_framework(attributes)
     if not framework:
-        return result
+        return facts
     service_path = legacy_dotnet_service_path(context.rel_path, framework)
-    route = route_entity(
+    route = route_entity_fact(
         context,
         "POST",
         f"{service_path}/{method_name}",
@@ -766,33 +759,31 @@ def vb_contract_route_result(
         "vb_contract_route",
         operation_name=method_name,
     )
-    result.entities.append(route)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            route,
+    facts.entities.append(route)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            route.reference,
             "DECLARES_ROUTE",
-            context.source.name,
-            context.rel_path,
+            context,
             "vb_contract_route",
             line_number,
         )
     )
     if context.project:
-        result.edges.append(
-            resolved_edge(
-                context.project.entity,
-                route,
+        facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.project.entity),
+                route.reference,
                 "EXPOSES_ROUTE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "vb_contract_route",
                 line_number,
             )
         )
     if handler:
-        result.edges.append(route_handler_edge(context, route, handler, "vb_contract_route", line_number))
-    return result
+        facts.relationships.append(route_handler_fact(context, route, handler, "vb_contract_route", line_number))
+    return facts
 
 
 def legacy_contract_framework(attributes: Sequence[str]) -> str | None:
@@ -817,21 +808,21 @@ def legacy_dotnet_service_path(rel_path: str, framework: str) -> str:
     return "/" + path
 
 
-def vb_symbol_call_edges(
+def vb_symbol_call_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity,
+    from_entity: EntityFact,
     current_type: str | None,
     method_index: TypeMethodIndex,
-) -> list[Edge]:
+) -> list[RelationshipFact]:
     code = vb_scope_code(line)
     targets = [
         *vb_new_method_call_targets(code, method_index),
         *vb_qualified_method_call_targets(code, current_type, method_index),
         *vb_direct_method_call_targets(code, current_type, method_index),
     ]
-    return symbol_call_edges(context, from_entity, targets, "vb_call", line_number)
+    return symbol_call_facts(context, from_entity, targets, "vb_call", line_number)
 
 
 def vb_new_method_call_targets(code: str, method_index: TypeMethodIndex) -> list[SymbolCallTarget]:
@@ -883,18 +874,18 @@ def vb_scope_code(line: str) -> str:
     return re.sub(r'"(?:[^"]|"")*"', '""', line)
 
 
-def vb_service_call_edges(
+def vb_service_call_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | None = None,
-) -> list[Edge]:
-    edges: list[Edge] = []
-    source_entity = from_entity or context.file_entity
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
+    facts: list[RelationshipFact] = []
+    source_ref = entity_reference(from_entity or context.file_entity)
     extra_properties = source_context_properties(from_entity)
     for match in VB_HTTP_LITERAL_RE.finditer(line):
-        edges.extend(
-            legacy_http_edges_for_target(
+        facts.extend(
+            legacy_http_facts_for_target(
                 context,
                 match.group(1),
                 line_number,
@@ -917,32 +908,31 @@ def vb_service_call_edges(
             service_name=service_name,
         )
         properties.update(extra_properties)
-        edges.append(
-            unresolved_edge(
-                source_entity,
+        facts.append(
+            unresolved_relationship_fact(
+                source_ref,
                 service_name,
                 "CALLS_SERVICE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "vb_config_service",
                 to_type="service",
                 line_number=line_number,
                 properties=properties,
             )
         )
-    return edges
+    return facts
 
 
-def legacy_http_edges_for_target(
+def legacy_http_facts_for_target(
     context: FileScanContext,
     raw_target: str,
     line_number: int,
     parser: str,
     client: str,
-    from_entity: Entity | None = None,
+    from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
-) -> list[Edge]:
-    source_entity = from_entity or context.file_entity
+) -> list[RelationshipFact]:
+    source_ref = entity_reference(from_entity or context.file_entity)
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         target = http_target(raw_target, "GET")
@@ -951,19 +941,18 @@ def legacy_http_edges_for_target(
         if extra_properties:
             target.update(extra_properties)
         return [
-            unresolved_edge(
-                source_entity,
+            unresolved_relationship_fact(
+                source_ref,
                 target["service_name"],
                 "CALLS_SERVICE",
-                context.source.name,
-                context.rel_path,
+                context,
                 parser,
                 to_type="service",
                 line_number=line_number,
                 properties=target,
             )
         ]
-    return http_edges_for_target(
+    return http_facts_for_target(
         context,
         "GET",
         raw_target,
@@ -983,28 +972,27 @@ def legacy_http_client(evidence: str) -> str:
     return "legacy_http_client"
 
 
-def vb_sql_command_edges(
+def vb_sql_command_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | None = None,
-) -> list[Edge]:
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
     targets = [match.group(1) for match in VB_COMMAND_TEXT_RE.finditer(line)]
     targets.extend(match.group(1) for match in VB_SQL_COMMAND_RE.finditer(line))
-    edges: list[Edge] = []
-    source_entity = from_entity or context.file_entity
+    facts: list[RelationshipFact] = []
+    source_ref = entity_reference(from_entity or context.file_entity)
     extra_properties = source_context_properties(from_entity)
     for target in targets:
         normalized = stored_procedure_target(target)
         if not normalized:
             continue
-        edges.append(
-            unresolved_edge(
-                source_entity,
+        facts.append(
+            unresolved_relationship_fact(
+                source_ref,
                 normalized,
                 "CALLS_SQL",
-                context.source.name,
-                context.rel_path,
+                context,
                 "vb_sql_command",
                 to_type="stored_procedure",
                 line_number=line_number,
@@ -1016,7 +1004,7 @@ def vb_sql_command_edges(
                 ),
             )
         )
-    return edges
+    return facts
 
 
 def xml_root(content: str, context: FileScanContext) -> ET.Element:
