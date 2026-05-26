@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlparse
 
 from repo_graph.extraction.contracts import FileScanContext
@@ -18,9 +18,6 @@ from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.interaction_properties import interaction_properties
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.package_helpers import import_target_name
-
-if TYPE_CHECKING:
-    from repo_graph.graph import Entity
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 
@@ -253,7 +250,7 @@ def http_facts_for_target(
     line_number: int,
     parser: str,
     client: str | None = None,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
     source_ref = entity_reference(from_entity or context.file_entity)

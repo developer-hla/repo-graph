@@ -81,6 +81,11 @@ must not emit graph `Entity` or `Edge` records directly. The graph constructor
 owns conversion from facts into graph records, stable IDs, resolution, summary
 counts, and export shape.
 
+Source discovery uses the same contract for repository, project, and file
+scaffolding. `FileScanContext` carries `EntityFact` values, so scanner code can
+reference the current repository, project, or file without importing the graph
+model.
+
 Use `repo_graph.extraction.fact_helpers` for common fact patterns and
 `repo_graph.extraction.interaction_properties` for structured interaction
 evidence. Scanner helper modules may create `EntityFact`, `RelationshipFact`,

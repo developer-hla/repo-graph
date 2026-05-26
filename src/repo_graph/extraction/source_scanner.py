@@ -9,11 +9,12 @@ from pathlib import Path
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_source_relationship_fact, scan_issue
-from repo_graph.extraction.facts import FactBatch
+from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.project_discovery import discover_projects
 from repo_graph.extraction.scanners.common import safe_relative_path
 from repo_graph.extraction.scanners.manifest_helpers import is_scannable_file
-from repo_graph.graph import Entity, Graph
+from repo_graph.extraction.source_facts import file_fact, repository_fact
+from repo_graph.graph import Graph
 from repo_graph.graph.builder import add_facts_to_graph
 from repo_graph.sources import ResolvedSource
 from repo_graph.validation import positive_int
@@ -58,12 +59,12 @@ def scan_source(
         graph.errors.append(f"Missing source path: {source.path}")
         return
 
-    repo_entity = graph.add_entity(repository_entity(source))
+    repo_entity = repository_fact(source)
     projects = discover_projects(config, source, repo_entity)
-    project_facts = FactBatch()
+    source_facts = FactBatch(entities=[repo_entity])
     for project in projects:
-        graph.add_entity(project.entity)
-        project_facts.relationships.append(
+        source_facts.entities.append(project.entity)
+        source_facts.relationships.append(
             resolved_source_relationship_fact(
                 entity_reference(repo_entity),
                 entity_reference(project.entity),
@@ -72,7 +73,7 @@ def scan_source(
                 parser="project_discovery",
             )
         )
-    add_facts_to_graph(graph, project_facts)
+    add_facts_to_graph(graph, source_facts)
 
     for file_path in iter_scannable_files(config, source.path, max_file_bytes=max_file_bytes):
         scan_file_path(graph, source, repo_entity, projects, file_path, extractors)
@@ -81,26 +82,15 @@ def scan_source(
 def scan_file_path(
     graph: Graph,
     source: ResolvedSource,
-    repo_entity: Entity,
+    repo_entity: EntityFact,
     projects: Sequence[ProjectInfo],
     file_path: Path,
     extractors: Sequence[FileExtractor],
 ) -> None:
     rel_path = safe_relative_path(source.path, file_path)
     project = project_for_file(projects, file_path)
-    file_entity = graph.add_entity(
-        Entity(
-            entity_type="file",
-            name=rel_path,
-            source_name=source.name,
-            file_path=rel_path,
-            properties={
-                "extension": file_path.suffix.lower(),
-                "project": project.name if project else None,
-            },
-        )
-    )
-    containment_facts = FactBatch()
+    file_entity = file_fact(source, rel_path, file_path.suffix.lower(), project.name if project else None)
+    containment_facts = FactBatch(entities=[file_entity])
     containment_facts.relationships.append(
         resolved_source_relationship_fact(
             entity_reference(repo_entity),
@@ -172,21 +162,3 @@ def iter_scannable_files(config: RepoGraphConfig, root: Path, max_file_bytes: in
 
 def apply_file_facts(graph: Graph, facts: FactBatch) -> None:
     add_facts_to_graph(graph, facts)
-
-
-def repository_entity(source: ResolvedSource) -> Entity:
-    aliases = {source.name}
-    if source.url:
-        aliases.add(Path(source.url.rstrip("/").removesuffix(".git")).name)
-    return Entity(
-        entity_type="repository",
-        name=source.name,
-        source_name=source.name,
-        aliases=aliases,
-        properties={
-            "path": str(source.path),
-            "url": source.url,
-            "ref": source.ref,
-            "commit": source.commit,
-        },
-    )

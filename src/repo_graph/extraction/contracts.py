@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from repo_graph.extraction.facts import FactBatch
-from repo_graph.graph import Entity
+from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.sources import ResolvedSource
 
 
@@ -15,15 +14,15 @@ from repo_graph.sources import ResolvedSource
 class ProjectInfo:
     name: str
     path: Path
-    entity: Entity
+    entity: EntityFact
     ecosystem: str | None = None
 
 
 @dataclass(frozen=True)
 class FileScanContext:
     source: ResolvedSource
-    repo_entity: Entity
-    file_entity: Entity
+    repo_entity: EntityFact
+    file_entity: EntityFact
     file_path: Path
     rel_path: str
     project: ProjectInfo | None = None

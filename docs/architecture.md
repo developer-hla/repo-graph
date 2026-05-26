@@ -202,7 +202,9 @@ underlying evidence.
 
 The graph constructor decides whether those facts become entities, edges,
 unresolved targets, warnings, or report inputs. `FactBatch` contains typed
-facts and local scanner issues; scanners must not emit graph records directly.
+facts and local scanner issues; scanners and source discovery must not emit
+graph records directly. Repository, project, and file scaffolding should use
+the same fact path as language scanner output.
 
 ## Graph Constructor Contract
 
@@ -237,7 +239,7 @@ Rules:
 - Scanners may import scanner contracts, fact model types, vocabulary constants,
   and parser-local helpers.
 - Scanners must not import storage, API, UI, report builders, or Neo4j code.
-- Scanners should not import `repo_graph.graph.Entity` or
+- Scanners and source discovery should not import `repo_graph.graph.Entity` or
   `repo_graph.graph.Edge`; they should emit fact drafts instead.
 - The graph constructor may import the fact model and graph model.
 - Storage adapters may import graph records, but not scanner modules.

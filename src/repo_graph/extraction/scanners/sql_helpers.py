@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import (
@@ -16,9 +16,6 @@ from repo_graph.extraction.fact_helpers import (
 )
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.interaction_properties import interaction_properties
-
-if TYPE_CHECKING:
-    from repo_graph.graph import Entity
 
 SQL_OBJECT_RE = re.compile(
     r"\bCREATE\s+(?:OR\s+ALTER\s+)?(?:PROCEDURE|PROC|TABLE|VIEW|FUNCTION)\s+([\[\]\w.]+)",
@@ -81,7 +78,7 @@ SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE
 def scan_sql_references(
     context: FileScanContext,
     content: str,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
 ) -> FactBatch:
     facts = FactBatch()
     for line_number, line in enumerate(content.splitlines(), start=1):
@@ -93,7 +90,7 @@ def sql_reference_facts_for_line(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
 ) -> list[RelationshipFact]:
     extra_properties = source_context_properties(from_entity)
     return [
@@ -151,7 +148,7 @@ def sql_call_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
     source_ref = entity_reference(from_entity or context.file_entity)
@@ -179,7 +176,7 @@ def sql_object_read_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
     source_ref = entity_reference(from_entity or context.file_entity)
@@ -207,7 +204,7 @@ def sql_object_write_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
     source_ref = entity_reference(from_entity or context.file_entity)
@@ -235,7 +232,7 @@ def sql_object_schema_reference_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | EntityFact | None = None,
+    from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
     source_ref = entity_reference(from_entity or context.file_entity)
@@ -325,7 +322,7 @@ def sql_reference_properties(
     return properties
 
 
-def source_context_properties(from_entity: Entity | EntityFact | None) -> dict[str, str]:
+def source_context_properties(from_entity: EntityFact | None) -> dict[str, str]:
     if not from_entity or from_entity.entity_type == "file":
         return {}
     return {

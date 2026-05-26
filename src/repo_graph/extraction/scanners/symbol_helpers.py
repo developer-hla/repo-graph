@@ -4,15 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.scanners.sql_helpers import source_context_properties
-
-if TYPE_CHECKING:
-    from repo_graph.graph import Entity
 
 
 @dataclass(frozen=True)
@@ -33,7 +29,7 @@ class SymbolCallTarget:
 
 def symbol_call_facts(
     context: FileScanContext,
-    from_entity: Entity | EntityFact,
+    from_entity: EntityFact,
     targets: Sequence[SymbolCallTarget],
     parser: str,
     line_number: int,

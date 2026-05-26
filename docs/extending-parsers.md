@@ -25,7 +25,8 @@ resolution, and export shape.
 
 4. Add project discovery only when the parser needs a new project boundary.
    Project discovery belongs to the extraction layer near project manifest
-   discovery.
+   discovery. Repository, project, and file scaffolding should be emitted as
+   facts through `repo_graph.extraction.source_facts`, not graph objects.
 
 5. Add or register a scanner implementation.
    Each extractor should define a stable `name`, a narrow `can_process`

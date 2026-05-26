@@ -6,19 +6,12 @@ from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact, EntityReference, Evidence, RelationshipFact, ScanIssue
-from repo_graph.graph import Entity
 
 
-def entity_reference(entity: Entity | EntityFact) -> EntityReference:
-    if isinstance(entity, EntityFact):
-        return entity.reference
-    return EntityReference(
-        entity_type=entity.entity_type,
-        name=entity.name,
-        source_name=entity.source_name,
-        file_path=entity.file_path,
-        entity_id=entity.entity_id,
-    )
+def entity_reference(entity: EntityFact | EntityReference) -> EntityReference:
+    if isinstance(entity, EntityReference):
+        return entity
+    return entity.reference
 
 
 def source_evidence(

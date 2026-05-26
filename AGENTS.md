@@ -150,6 +150,9 @@ inside scanners. The target architecture is defined in
   stable IDs, cross-source resolution, graph summaries, or storage writes.
 - Parser output is a `FactBatch` from `repo_graph.extraction.facts`. Do not emit
   graph `Entity` or `Edge` records directly from scanner code.
+- Source discovery should also emit `EntityFact` and `RelationshipFact` records
+  for repository, project, and file scaffolding. Keep graph record creation in
+  `repo_graph.graph.builder`.
 - Use `repo_graph.extraction.fact_helpers` for common typed fact patterns before
   hand-building fact objects in scanner code.
 - Parsers should tolerate partial failures and record errors rather than

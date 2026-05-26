@@ -8,6 +8,7 @@ from pathlib import Path
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.contracts import ProjectInfo
+from repo_graph.extraction.facts import EntityFact, EntityReference
 from repo_graph.extraction.scanners.common import (
     project_name_from_path,
     read_json_object,
@@ -22,11 +23,11 @@ from repo_graph.extraction.scanners.package_helpers import (
     pyproject_metadata,
     python_import_name,
 )
-from repo_graph.graph import Entity
+from repo_graph.extraction.source_facts import project_fact
 from repo_graph.sources import ResolvedSource
 
 
-def requirements_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo:
+def requirements_project_info(source: ResolvedSource, repo_entity: EntityFact, manifest_path: Path) -> ProjectInfo:
     name = project_name_from_path(source, manifest_path.parent)
     return project_info(
         source,
@@ -39,7 +40,7 @@ def requirements_project_info(source: ResolvedSource, repo_entity: Entity, manif
     )
 
 
-def javascript_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo | None:
+def javascript_project_info(source: ResolvedSource, repo_entity: EntityFact, manifest_path: Path) -> ProjectInfo | None:
     package = read_json_object(manifest_path) or {}
     package_name = string_value(package.get("name"))
     name = package_name or project_name_from_path(source, manifest_path.parent)
@@ -70,7 +71,7 @@ def iter_project_manifest_paths(config: RepoGraphConfig, root: Path) -> Iterable
                 yield file_path
 
 
-def dotnet_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo:
+def dotnet_project_info(source: ResolvedSource, repo_entity: EntityFact, manifest_path: Path) -> ProjectInfo:
     try:
         content = manifest_path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
@@ -97,7 +98,7 @@ def dotnet_project_info(source: ResolvedSource, repo_entity: Entity, manifest_pa
 
 def project_info(
     source: ResolvedSource,
-    repo_entity: Entity,
+    repo_entity: EntityFact,
     name: str,
     path: Path,
     project_type: str,
@@ -112,12 +113,11 @@ def project_info(
     project_aliases = {name, path.name, *(aliases or set())}
     if package_name:
         project_aliases.add(package_name)
-    entity = Entity(
-        entity_type="project",
-        name=name,
-        source_name=source.name,
-        file_path=manifest_rel_path,
-        aliases=project_aliases,
+    entity = project_fact(
+        source,
+        name,
+        manifest_rel_path,
+        project_aliases,
         properties={
             "path": rel_path,
             "manifest_path": manifest_rel_path,
@@ -125,13 +125,13 @@ def project_info(
             "version": version,
             "ecosystem": ecosystem,
             "project_type": project_type,
-            "repository_entity_id": repo_entity.entity_id,
+            "repository": repo_entity.name,
         },
     )
     return ProjectInfo(name=name, path=path, entity=entity, ecosystem=ecosystem)
 
 
-def python_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo | None:
+def python_project_info(source: ResolvedSource, repo_entity: EntityFact, manifest_path: Path) -> ProjectInfo | None:
     pyproject = read_toml_object(manifest_path) or {}
     metadata = pyproject_metadata(pyproject)
     name = metadata["name"] or project_name_from_path(source, manifest_path.parent)
@@ -154,13 +154,13 @@ def python_project_info(source: ResolvedSource, repo_entity: Entity, manifest_pa
 
 
 def dedupe_projects(projects: list[ProjectInfo]) -> list[ProjectInfo]:
-    deduped: dict[str, ProjectInfo] = {}
+    deduped: dict[EntityReference, ProjectInfo] = {}
     for project in projects:
-        deduped[project.entity.entity_id] = project
+        deduped[project.entity.reference] = project
     return list(deduped.values())
 
 
-def dotnet_solution_project_info(source: ResolvedSource, repo_entity: Entity, manifest_path: Path) -> ProjectInfo:
+def dotnet_solution_project_info(source: ResolvedSource, repo_entity: EntityFact, manifest_path: Path) -> ProjectInfo:
     return project_info(
         source,
         repo_entity,
@@ -173,7 +173,7 @@ def dotnet_solution_project_info(source: ResolvedSource, repo_entity: Entity, ma
     )
 
 
-def discover_projects(config: RepoGraphConfig, source: ResolvedSource, repo_entity: Entity) -> list[ProjectInfo]:
+def discover_projects(config: RepoGraphConfig, source: ResolvedSource, repo_entity: EntityFact) -> list[ProjectInfo]:
     projects: list[ProjectInfo] = []
 
     for manifest_path in iter_project_manifest_paths(config, source.path):
@@ -186,7 +186,7 @@ def discover_projects(config: RepoGraphConfig, source: ResolvedSource, repo_enti
 
 def project_info_for_manifest(
     source: ResolvedSource,
-    repo_entity: Entity,
+    repo_entity: EntityFact,
     manifest_path: Path,
 ) -> ProjectInfo | None:
     if manifest_path.name == "package.json":
