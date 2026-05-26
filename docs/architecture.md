@@ -101,6 +101,7 @@ Output:
 - imports
 - SQL snippets found in code
 - messaging publish and consume references
+- storage read and write references
 - evidence: parser ID, file path, line number, raw target, normalized target,
   syntax-specific details
 

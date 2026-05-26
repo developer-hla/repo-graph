@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections import defaultdict
 
 from repo_graph.graph.model import Entity, Graph
-from repo_graph.vocabulary import MESSAGE_ENTITY_TYPES
+from repo_graph.vocabulary import MESSAGE_ENTITY_TYPES, STORAGE_ENTITY_TYPES
 
 CANONICAL_RESOURCE_SOURCE_NAME = "external-resources"
 
 
 def resolve_graph_edges(graph: Graph) -> None:
-    materialize_message_resources(graph)
+    materialize_external_resources(graph)
     lookup: dict[tuple[str | None, str], list[Entity]] = defaultdict(list)
     for entity in graph.entities.values():
         if not is_resolution_candidate(entity):
@@ -51,9 +51,9 @@ def resolve_graph_edges(graph: Graph) -> None:
             ]
 
 
-def materialize_message_resources(graph: Graph) -> None:
+def materialize_external_resources(graph: Graph) -> None:
     for edge in graph.edges.values():
-        if edge.to_entity_id or edge.to_type not in MESSAGE_ENTITY_TYPES or not edge.to_name:
+        if edge.to_entity_id or edge.to_type not in external_resource_entity_types() or not edge.to_name:
             continue
         entity = graph.add_entity(
             Entity(
@@ -62,13 +62,25 @@ def materialize_message_resources(graph: Graph) -> None:
                 source_name=CANONICAL_RESOURCE_SOURCE_NAME,
                 aliases={normalize_key(edge.to_name)},
                 properties={
-                    "resource_boundary": "messaging",
+                    "resource_boundary": external_resource_boundary(edge.to_type),
                     "canonical_external_resource": True,
                 },
             )
         )
         edge.to_entity_id = entity.entity_id
         edge.resolved = True
+
+
+def external_resource_entity_types() -> frozenset[str]:
+    return MESSAGE_ENTITY_TYPES | STORAGE_ENTITY_TYPES
+
+
+def external_resource_boundary(entity_type: str | None) -> str:
+    if entity_type in MESSAGE_ENTITY_TYPES:
+        return "messaging"
+    if entity_type in STORAGE_ENTITY_TYPES:
+        return "storage"
+    return "external"
 
 
 def normalize_key(value: str) -> str:

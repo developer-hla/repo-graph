@@ -4,8 +4,8 @@
 This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
-- Parser count: `46`
-- Edge count: `193`
+- Parser count: `50`
+- Edge count: `201`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -21,6 +21,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `dotnet_minimal_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `dotnet-service` |
 | `dotnet_project` | 8 | 0 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT` | `file`, `package`, `project` | `package`, `project` | `dotnet-service`, `legacy-vb-service` |
 | `dotnet_solution` | 3 | 2 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
+| `dotnet_storage` | 2 | 0 | `WRITES_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `dotnet-service` |
 | `dotnet_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `dotnet-service` |
 | `filesystem` | 51 | 0 | `CONTAINS_FILE` | `project`, `repository` | `file` | `api-service`, `database-project`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
 | `javascript_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `api-service` |
@@ -29,6 +30,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `javascript_import` | 3 | 2 | `IMPORTS` | `file` | `package` | `api-service`, `inventory-service` |
 | `javascript_message` | 2 | 0 | `PUBLISHES_MESSAGE` | `file`, `function` | `message_topic` | `api-service` |
 | `javascript_route` | 5 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `api-service`, `inventory-service` |
+| `javascript_storage` | 2 | 0 | `WRITES_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `api-service` |
 | `javascript_symbol` | 1 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service` |
 | `kubernetes_container` | 1 | 0 | `RUNS_CONTAINER` | `deployment` | `container` | `inventory-service` |
 | `kubernetes_deployment` | 1 | 0 | `DECLARES_DEPLOYMENT` | `file` | `deployment` | `inventory-service` |
@@ -47,6 +49,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `python_import` | 6 | 4 | `IMPORTS` | `file` | `package` | `python-shared`, `python-worker` |
 | `python_message` | 2 | 0 | `CONSUMES_MESSAGE` | `file`, `function` | `message_topic` | `python-worker` |
 | `python_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `python-worker` |
+| `python_storage` | 2 | 0 | `READS_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `python-worker` |
 | `python_symbol` | 6 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
 | `sql` | 5 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
@@ -57,6 +60,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `vb_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
 | `vb_message` | 2 | 0 | `CONSUMES_MESSAGE` | `file`, `function` | `message_topic` | `legacy-vb-service` |
 | `vb_sql_command` | 2 | 0 | `CALLS_SQL` | `file`, `function` | `stored_procedure` | `legacy-vb-service` |
+| `vb_storage` | 2 | 0 | `READS_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `legacy-vb-service` |
 | `vb_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `legacy-vb-service` |
 
 ## Notes

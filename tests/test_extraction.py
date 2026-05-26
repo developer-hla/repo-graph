@@ -434,6 +434,7 @@ sources:
                 """
 export async function publishThing(id: string) {
   await producer.send({ topic: "things.changed", messages: [{ value: id }] });
+  await s3.putObject({ Bucket: "shared-artifacts", Key: "things/report.json", Body: id });
 }
 """,
                 encoding="utf-8",
@@ -442,6 +443,7 @@ export async function publishThing(id: string) {
                 """
 def consume_thing() -> None:
     consumer.subscribe(["things.changed"])
+    s3.get_object(Bucket="shared-artifacts", Key="things/report.json")
 """,
                 encoding="utf-8",
             )
@@ -475,6 +477,13 @@ sources:
             for edge in graph_data["edges"]
             if edge["edge_type"] == "CONSUMES_MESSAGE" and edge["from_type"] == "function"
         ]
+        storage_locations = [entity for entity in graph_data["entities"] if entity["entity_type"] == "storage_location"]
+        storage_edges = [
+            edge
+            for edge in graph_data["edges"]
+            if edge["edge_type"] in {"READS_STORAGE_OBJECT", "WRITES_STORAGE_OBJECT"}
+            and edge["from_type"] == "function"
+        ]
 
         self.assertEqual(len(topics), 1)
         self.assertEqual(topics[0]["name"], "things.changed")
@@ -492,6 +501,23 @@ sources:
         )
         self.assertTrue(any(edge["parser"] == "javascript_message" for edge in publish_edges))
         self.assertTrue(any(edge["parser"] == "python_message" for edge in consume_edges))
+        self.assertEqual(len(storage_locations), 1)
+        self.assertEqual(storage_locations[0]["name"], "shared-artifacts/things/report.json")
+        self.assertEqual(storage_locations[0]["source_name"], "external-resources")
+        self.assertEqual(
+            {edge["to_entity_id"] for edge in storage_edges},
+            {storage_locations[0]["entity_id"]},
+        )
+        self.assertTrue(
+            all(
+                edge["resolved"]
+                and edge["properties"].get("target_boundary") == "storage"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                for edge in storage_edges
+            )
+        )
+        self.assertTrue(any(edge["parser"] == "javascript_storage" for edge in storage_edges))
+        self.assertTrue(any(edge["parser"] == "python_storage" for edge in storage_edges))
 
     def test_dependency_filter_keeps_internal_like_unresolved_package_references(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

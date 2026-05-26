@@ -25,6 +25,7 @@ ENTITY_TYPES = (
     "repository",
     "service",
     "solution",
+    "storage_location",
     "sql_function",
     "sql_table",
     "sql_trigger",
@@ -63,12 +64,14 @@ EDGE_TYPES = (
     "IMPORTS",
     "PUBLISHES_MESSAGE",
     "READS_SQL_OBJECT",
+    "READS_STORAGE_OBJECT",
     "REFERENCES_SQL_OBJECT",
     "ROUTES_TO_SERVICE",
     "RUNS_CONTAINER",
     "SELECTS_DEPLOYMENT",
     "TRIGGERS_ON_SQL_OBJECT",
     "WRITES_SQL_OBJECT",
+    "WRITES_STORAGE_OBJECT",
 )
 SQL_EDGE_TYPES = frozenset(
     {"CALLS_SQL", "READS_SQL_OBJECT", "REFERENCES_SQL_OBJECT", "TRIGGERS_ON_SQL_OBJECT", "WRITES_SQL_OBJECT"}
@@ -82,10 +85,12 @@ INTERACTION_EDGE_TYPES = frozenset(
         "CONSUMES_MESSAGE",
         "PUBLISHES_MESSAGE",
         "READS_SQL_OBJECT",
+        "READS_STORAGE_OBJECT",
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
+        "WRITES_STORAGE_OBJECT",
     }
 )
 INTERACTION_EVIDENCE_KEYS = (
@@ -97,6 +102,7 @@ INTERACTION_TARGET_BOUNDARIES = (
     "application",
     "database",
     "messaging",
+    "storage",
 )
 INTERACTION_DEPENDENCY_SCOPES = (
     "configuration",
@@ -114,6 +120,8 @@ INTERACTION_KINDS = (
     "sql_reference",
     "sql_schema_reference",
     "sql_trigger",
+    "storage_read",
+    "storage_write",
 )
 
 PARSER_IDS = (
@@ -126,6 +134,7 @@ PARSER_IDS = (
     "dotnet_message",
     "dotnet_project",
     "dotnet_solution",
+    "dotnet_storage",
     "dotnet_symbol",
     "filesystem",
     "javascript_call",
@@ -134,6 +143,7 @@ PARSER_IDS = (
     "javascript_import",
     "javascript_message",
     "javascript_route",
+    "javascript_storage",
     "javascript_symbol",
     "kubernetes_container",
     "kubernetes_deployment",
@@ -154,6 +164,7 @@ PARSER_IDS = (
     "python_import",
     "python_message",
     "python_route",
+    "python_storage",
     "python_symbol",
     "requirements",
     "sql",
@@ -165,6 +176,7 @@ PARSER_IDS = (
     "vb_http",
     "vb_message",
     "vb_sql_command",
+    "vb_storage",
     "vb_symbol",
 )
 
@@ -182,11 +194,13 @@ IMPACT_EDGE_TYPES = frozenset(
         "IMPORTS",
         "PUBLISHES_MESSAGE",
         "READS_SQL_OBJECT",
+        "READS_STORAGE_OBJECT",
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
         "SELECTS_DEPLOYMENT",
         "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
+        "WRITES_STORAGE_OBJECT",
     }
 )
 STRUCTURAL_EDGE_TYPES = frozenset(
@@ -264,10 +278,12 @@ MISSING_SOURCE_TARGET_TYPES = frozenset(
         "sql_trigger",
         "sql_view",
         "stored_procedure",
+        "storage_location",
     }
 )
 
 MESSAGE_ENTITY_TYPES = frozenset({"message_contract", "message_queue", "message_topic"})
+STORAGE_ENTITY_TYPES = frozenset({"storage_location"})
 PARSER_GAP_TARGET_TYPES = frozenset(
     {
         "api_route",

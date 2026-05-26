@@ -5,9 +5,9 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents the graph types exercised by the synthetic examples, not a private source set.
 
 - Graph schema version: `0.1`
-- Entity count: `94`
-- Edge count: `193`
-- Resolved edge count: `176`
+- Entity count: `95`
+- Edge count: `201`
+- Resolved edge count: `184`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -32,6 +32,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `service` | 1 |
 | `solution` | 1 |
 | `sql_table` | 3 |
+| `storage_location` | 1 |
 | `stored_procedure` | 2 |
 
 ## Edge Types
@@ -64,11 +65,13 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `IMPORTS` | 9 |
 | `PUBLISHES_MESSAGE` | 4 |
 | `READS_SQL_OBJECT` | 1 |
+| `READS_STORAGE_OBJECT` | 4 |
 | `REFERENCES_SQL_OBJECT` | 1 |
 | `ROUTES_TO_SERVICE` | 1 |
 | `RUNS_CONTAINER` | 1 |
 | `SELECTS_DEPLOYMENT` | 1 |
 | `WRITES_SQL_OBJECT` | 1 |
+| `WRITES_STORAGE_OBJECT` | 4 |
 
 ## Parsers
 
@@ -83,6 +86,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `dotnet_minimal_route` | 2 |
 | `dotnet_project` | 8 |
 | `dotnet_solution` | 3 |
+| `dotnet_storage` | 2 |
 | `dotnet_symbol` | 3 |
 | `filesystem` | 51 |
 | `javascript_call` | 1 |
@@ -91,6 +95,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `javascript_import` | 3 |
 | `javascript_message` | 2 |
 | `javascript_route` | 5 |
+| `javascript_storage` | 2 |
 | `javascript_symbol` | 1 |
 | `kubernetes_container` | 1 |
 | `kubernetes_deployment` | 1 |
@@ -109,6 +114,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `python_import` | 6 |
 | `python_message` | 2 |
 | `python_route` | 3 |
+| `python_storage` | 2 |
 | `python_symbol` | 6 |
 | `requirements` | 1 |
 | `sql` | 5 |
@@ -119,6 +125,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `vb_http` | 2 |
 | `vb_message` | 2 |
 | `vb_sql_command` | 2 |
+| `vb_storage` | 2 |
 | `vb_symbol` | 3 |
 
 ## Confidence Values
@@ -126,4 +133,4 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Confidence | Example Edge Count |
 | --- | ---: |
 | `high` | 129 |
-| `medium` | 64 |
+| `medium` | 72 |

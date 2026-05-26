@@ -37,6 +37,7 @@ from repo_graph.extraction.scanners.code.dotnet.helpers import (
 from repo_graph.extraction.scanners.interaction_helpers import route_entity_fact
 from repo_graph.extraction.scanners.messaging_helpers import message_facts_for_line
 from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_line
+from repo_graph.extraction.scanners.storage_helpers import storage_facts_for_line
 
 
 class LegacyDotnetEndpointExtractor:
@@ -88,6 +89,7 @@ class CSharpCodeExtractor:
         "dotnet_minimal_route",
         "dotnet_message",
         "dotnet_symbol",
+        "dotnet_storage",
         "sql_reference",
     )
 
@@ -108,12 +110,16 @@ class CSharpCodeExtractor:
             facts.extend(csharp_minimal_route_facts(context, line, line_number))
             facts.relationships.extend(csharp_http_call_facts(context, line, line_number))
             facts.relationships.extend(message_facts_for_line(context, line, line_number, "dotnet_message"))
+            facts.relationships.extend(storage_facts_for_line(context, line, line_number, "dotnet_storage"))
             if current_function:
                 facts.relationships.extend(
                     csharp_http_call_facts(context, line, line_number, from_entity=current_function)
                 )
                 facts.relationships.extend(
                     message_facts_for_line(context, line, line_number, "dotnet_message", from_entity=current_function)
+                )
+                facts.relationships.extend(
+                    storage_facts_for_line(context, line, line_number, "dotnet_storage", from_entity=current_function)
                 )
                 facts.relationships.extend(
                     sql_reference_facts_for_line(context, line, line_number, from_entity=current_function)
@@ -216,6 +222,7 @@ class VbCodeExtractor:
         "vb_http",
         "vb_message",
         "vb_sql_command",
+        "vb_storage",
         "vb_symbol",
     )
 
@@ -269,6 +276,7 @@ class VbCodeExtractor:
 
             facts.relationships.extend(vb_service_call_facts(context, line, line_number))
             facts.relationships.extend(message_facts_for_line(context, line, line_number, "vb_message"))
+            facts.relationships.extend(storage_facts_for_line(context, line, line_number, "vb_storage"))
             facts.relationships.extend(vb_sql_command_facts(context, line, line_number))
             if current_function:
                 facts.relationships.extend(
@@ -276,6 +284,9 @@ class VbCodeExtractor:
                 )
                 facts.relationships.extend(
                     message_facts_for_line(context, line, line_number, "vb_message", from_entity=current_function)
+                )
+                facts.relationships.extend(
+                    storage_facts_for_line(context, line, line_number, "vb_storage", from_entity=current_function)
                 )
                 facts.relationships.extend(
                     vb_sql_command_facts(context, line, line_number, from_entity=current_function)

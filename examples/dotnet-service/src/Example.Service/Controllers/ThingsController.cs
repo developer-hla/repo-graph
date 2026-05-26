@@ -18,6 +18,7 @@ public class ThingsController : ControllerBase
     {
         await httpClient.GetAsync("http://inventory-service/inventory/" + id);
         await bus.Publish<ThingLoaded>();
+        File.WriteAllText("shared-artifacts/things/report.json", id);
         var query = BuildThingQuery(id);
         return query;
     }

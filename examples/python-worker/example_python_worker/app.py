@@ -10,6 +10,7 @@ router = APIRouter()
 
 
 consumer = object()
+s3 = object()
 
 
 class Worker:
@@ -22,6 +23,7 @@ class Worker:
 async def read_thing(thing_id: str) -> dict[str, str]:
     Worker().fetch_inventory(thing_id)
     consumer.subscribe(["things.changed"])
+    s3.get_object(Bucket="shared-artifacts", Key="things/report.json")
     query = text("EXEC dbo.get_thing_by_id")
     return format_thing(str(query))
 

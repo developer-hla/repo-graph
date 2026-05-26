@@ -19,6 +19,7 @@ from repo_graph.extraction.scanners.interaction_helpers import (
 )
 from repo_graph.extraction.scanners.messaging_helpers import message_facts_for_line
 from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_line
+from repo_graph.extraction.scanners.storage_helpers import storage_facts_for_line
 
 
 class JavaScriptExtractor:
@@ -31,6 +32,7 @@ class JavaScriptExtractor:
         "javascript_import",
         "javascript_message",
         "javascript_route",
+        "javascript_storage",
         "javascript_symbol",
         "sql_reference",
     )
@@ -56,6 +58,7 @@ class JavaScriptExtractor:
                 current_function_seen_body = False
             facts.relationships.extend(http_call_facts(context, line, line_number))
             facts.relationships.extend(message_facts_for_line(context, line, line_number, "javascript_message"))
+            facts.relationships.extend(storage_facts_for_line(context, line, line_number, "javascript_storage"))
             if current_function:
                 facts.relationships.extend(http_call_facts(context, line, line_number, from_entity=current_function))
                 facts.relationships.extend(
@@ -64,6 +67,15 @@ class JavaScriptExtractor:
                         line,
                         line_number,
                         "javascript_message",
+                        from_entity=current_function,
+                    )
+                )
+                facts.relationships.extend(
+                    storage_facts_for_line(
+                        context,
+                        line,
+                        line_number,
+                        "javascript_storage",
                         from_entity=current_function,
                     )
                 )
