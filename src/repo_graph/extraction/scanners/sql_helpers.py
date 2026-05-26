@@ -8,9 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
-from repo_graph.extraction.facts import EntityFact, RelationshipFact
-from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
+from repo_graph.extraction.fact_helpers import (
+    entity_fact,
+    entity_reference,
+    resolved_relationship_fact,
+    unresolved_relationship_fact,
+)
+from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
+from repo_graph.extraction.legacy_graph_helpers import interaction_properties, unresolved_edge
 from repo_graph.graph import Edge, Entity
 
 SQL_OBJECT_RE = re.compile(
@@ -120,21 +125,20 @@ def sql_reference_facts_for_line(
     ]
 
 
-def sql_definition_entities_and_edges(context: FileScanContext, line: str, line_number: int) -> ScanResult:
-    result = ScanResult()
+def sql_definition_facts(context: FileScanContext, line: str, line_number: int) -> FactBatch:
+    facts = FactBatch()
     kind_match = SQL_OBJECT_KIND_RE.search(line)
     object_match = SQL_OBJECT_RE.search(line)
     if not kind_match or not object_match:
-        return result
+        return facts
 
     entity_type = sql_entity_type(kind_match.group(1))
     name = normalize_sql_name(object_match.group(1))
     schema, short_name = split_schema_name(name)
-    entity = Entity(
+    entity = entity_fact(
+        context,
         entity_type=entity_type,
         name=name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         line_number=line_number,
         aliases={short_name},
         properties={
@@ -144,19 +148,18 @@ def sql_definition_entities_and_edges(context: FileScanContext, line: str, line_
             **sql_source_provenance(context.rel_path),
         },
     )
-    result.entities.append(entity)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            entity,
+    facts.entities.append(entity)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            entity.reference,
             "DEFINES",
-            context.source.name,
-            context.rel_path,
+            context,
             "sql",
             line_number,
         )
     )
-    return result
+    return facts
 
 
 def sql_call_edges(
