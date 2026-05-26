@@ -76,10 +76,16 @@ SQL_REFERENCE_STOPWORDS = frozenset(
 SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE)
 
 
-def scan_sql_references(context: FileScanContext, content: str, from_entity: Entity | None = None) -> ScanResult:
+def scan_sql_references(
+    context: FileScanContext,
+    content: str,
+    from_entity: Entity | EntityFact | None = None,
+) -> ScanResult:
     result = ScanResult()
     for line_number, line in enumerate(content.splitlines(), start=1):
-        result.edges.extend(sql_reference_edges_for_line(context, line, line_number, from_entity=from_entity))
+        result.facts.relationships.extend(
+            sql_reference_facts_for_line(context, line, line_number, from_entity=from_entity)
+        )
     return result
 
 
