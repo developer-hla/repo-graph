@@ -56,7 +56,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
 
         with (
             patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://user:secret@localhost/db"}),
-            patch("repo_graph.database._metadata.postgres_driver_available", return_value=False),
+            patch("repo_graph.database._connectors.postgres_driver_available", return_value=False),
         ):
             facts = scan_database_source(request)
 

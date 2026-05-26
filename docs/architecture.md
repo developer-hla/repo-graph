@@ -263,6 +263,21 @@ repo_graph/
   config/
     __init__.py
     _loader.py
+  database/
+    __init__.py
+    _adapters.py
+    _adapter_common.py
+    _connectors.py
+    _constants.py
+    _metadata.py
+    _models.py
+    _naming.py
+    _postgres_adapter.py
+    _postgres_reader.py
+    _reader_common.py
+    _readers.py
+    _sqlserver_adapter.py
+    _sqlserver_reader.py
   sources/
     __init__.py
     _resolver.py
@@ -312,9 +327,6 @@ repo_graph/
         __init__.py
         files.py
         helpers.py
-      database/
-        sqlserver.py
-        postgres.py
   graph/
     __init__.py
     builder.py

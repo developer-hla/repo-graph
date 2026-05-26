@@ -72,7 +72,7 @@ The largest runtime files should be addressed in this order:
 
 1. Reports: split report builders by report type. Done.
 2. Database metadata: split row models, engine registry, live connectors,
-   catalog queries, and fact adapters.
+   catalog queries, and fact adapters. Done.
 3. Neo4j storage: split read operations, write operations, Cypher, payload
    mapping, and record preparation.
 4. API runtime: split request models, runtime settings, workflow handlers,
@@ -103,3 +103,42 @@ repo_graph/reports/
 `repo_graph.reports` remains the public import surface for CLI and API code.
 The focused modules own report-specific grouping, filtering, examples,
 hotspots, and summary calculations.
+
+## Database Package Target
+
+Database metadata code is split by contract and engine:
+
+```text
+repo_graph/database/
+  __init__.py
+  _constants.py
+  _models.py
+  _naming.py
+  _adapters.py
+  _adapter_common.py
+  _sqlserver_adapter.py
+  _postgres_adapter.py
+  _connectors.py
+  _readers.py
+  _reader_common.py
+  _sqlserver_reader.py
+  _postgres_reader.py
+  _metadata.py
+```
+
+`repo_graph.database` remains the public import surface. `_metadata.py` is a
+compatibility facade for older internal imports; new code should import through
+the package root or the focused module that owns the behavior.
+
+Responsibilities:
+
+- `_models.py`: typed metadata rows, source requests, scan results, and graph
+  adapter result types.
+- `_adapters.py`: engine registry and generic dispatch.
+- `_sqlserver_adapter.py` and `_postgres_adapter.py`: pure metadata-row to
+  fact conversion for each engine.
+- `_connectors.py`: live connector entry points and safe connection handling.
+- `_sqlserver_reader.py` and `_postgres_reader.py`: bounded catalog queries
+  for each engine.
+- `_adapter_common.py`, `_reader_common.py`, `_constants.py`, and
+  `_naming.py`: small package-local shared contracts.
