@@ -279,7 +279,10 @@ repo_graph/
       interaction_helpers.py
       manifest_helpers.py
       package_helpers.py
-      sql_helpers.py
+      sql/
+        __init__.py
+        files.py
+        helpers.py
       symbol_helpers.py
       code/
         python/

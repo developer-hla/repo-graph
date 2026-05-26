@@ -35,7 +35,7 @@ from repo_graph.extraction.scanners.code.dotnet.helpers import (
     vb_symbol_facts,
 )
 from repo_graph.extraction.scanners.interaction_helpers import route_entity_fact
-from repo_graph.extraction.scanners.sql_helpers import sql_reference_facts_for_line
+from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_line
 
 
 class LegacyDotnetEndpointExtractor:

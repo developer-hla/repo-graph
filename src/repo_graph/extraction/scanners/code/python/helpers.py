@@ -25,7 +25,7 @@ from repo_graph.extraction.scanners.interaction_helpers import (
     service_name_from_url,
 )
 from repo_graph.extraction.scanners.package_helpers import normalize_python_package_name
-from repo_graph.extraction.scanners.sql_helpers import (
+from repo_graph.extraction.scanners.sql.helpers import (
     source_context_properties,
     sql_call_facts,
     sql_object_read_facts,

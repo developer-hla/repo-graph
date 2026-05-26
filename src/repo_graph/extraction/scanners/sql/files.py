@@ -6,7 +6,7 @@ from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.sql_helpers import (
+from repo_graph.extraction.scanners.sql.helpers import (
     SQL_BATCH_SEPARATOR_RE,
     scan_sql_references,
     sql_definition_facts,
