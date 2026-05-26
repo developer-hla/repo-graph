@@ -54,9 +54,9 @@ Target module responsibilities:
   error collection, and `SourceScanResult` creation.
 - `registry.py`: deterministic default scanner registration.
 - `project_discovery.py`: repository/project boundary discovery from manifests.
-- `scanners/`: scanner family implementations. Current families are
-  `manifests.py`, `python.py`, `dotnet.py`, `javascript.py`, `sql.py`, and
-  `deployment.py`.
+- `scanners/`: scanner family implementations. Current families include
+  `manifests.py`, `python.py`, `javascript.py`, `sql.py`, `deployment.py`, and
+  `code/dotnet`.
 - `scanners/*_helpers.py`: domain-specific scanner helpers. Shared helpers
   should be split by domain instead of collected in one large module.
 

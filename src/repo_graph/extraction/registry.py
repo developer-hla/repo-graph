@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from repo_graph.extraction.contracts import FileExtractor
-from repo_graph.extraction.scanners.deployment import KubernetesManifestExtractor
-from repo_graph.extraction.scanners.dotnet import (
+from repo_graph.extraction.scanners.code.dotnet import (
     CSharpCodeExtractor,
     LegacyDotnetEndpointExtractor,
     VbCodeExtractor,
 )
+from repo_graph.extraction.scanners.deployment import KubernetesManifestExtractor
 from repo_graph.extraction.scanners.javascript import JavaScriptExtractor
 from repo_graph.extraction.scanners.manifests import (
     DotnetBuildConfigExtractor,

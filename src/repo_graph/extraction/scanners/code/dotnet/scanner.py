@@ -1,4 +1,4 @@
-"""C# and legacy .NET scanners."""
+"""C# and legacy .NET code scanners."""
 
 from __future__ import annotations
 
