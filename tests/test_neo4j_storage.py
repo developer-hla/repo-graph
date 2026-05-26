@@ -7,6 +7,7 @@ import unittest
 from repo_graph.storage._neo4j import (
     cross_source_edges_query,
     delete_current_edges_tx,
+    delete_orphan_external_resources_tx,
     delete_source_data_tx,
     edge_payload,
     edge_record,
@@ -427,6 +428,16 @@ class Neo4jStorageTests(unittest.TestCase):
         self.assertIn("DETACH DELETE entity", tx.calls[1]["query"])
         self.assertIn("DETACH DELETE target", tx.calls[2]["query"])
         self.assertIn("DETACH DELETE source", tx.calls[3]["query"])
+
+    def test_delete_orphan_external_resources_tx_removes_unused_canonical_resources(self) -> None:
+        tx = FakeTx()
+
+        delete_orphan_external_resources_tx(tx)
+
+        self.assertEqual(len(tx.calls), 1)
+        self.assertIn("property_canonical_external_resource", tx.calls[0]["query"])
+        self.assertIn("NOT (entity)--()", tx.calls[0]["query"])
+        self.assertIn("DETACH DELETE entity", tx.calls[0]["query"])
 
 
 class FakeResult:

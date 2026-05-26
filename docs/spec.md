@@ -332,13 +332,13 @@ and otherwise runs refresh with Neo4j loading enabled. This gives agents a
 single endpoint for updating local graph data without doing work when the
 source set is already current.
 
-The later Neo4j incremental path should use the same source identity and
-snapshot metadata to replace one changed source at a time. Source replacement
-loads a globally resolved graph, deletes selected source-owned data, removes
-current graph edge IDs before replaying relationships, and cleans orphan
-unresolved targets. That lets changed sources be refreshed without clearing the
-whole database while still letting inbound cross-source references move between
-resolved and unresolved states.
+The Neo4j incremental path uses the same source identity and snapshot metadata
+to replace one changed source at a time. Source replacement loads a globally
+resolved graph, deletes selected source-owned data, removes current graph edge
+IDs before replaying relationships, and cleans orphan unresolved targets plus
+orphan canonical external resource nodes. That lets changed sources be
+refreshed without clearing the whole database while still letting inbound
+cross-source references move between resolved and unresolved states.
 
 ## Parser MVP
 

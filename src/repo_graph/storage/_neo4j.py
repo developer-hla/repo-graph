@@ -133,6 +133,7 @@ def load_graph_data(
                 session.execute_write(write_resolved_edges_tx, relationship_type, resolved_edges(edge_records))
                 session.execute_write(write_unresolved_edges_tx, relationship_type, unresolved_edges(edge_records))
             session.execute_write(delete_orphan_targets_tx)
+            session.execute_write(delete_orphan_external_resources_tx)
 
     return load_summary(
         graph_data,
@@ -1409,6 +1410,17 @@ def delete_orphan_targets_tx(tx: Any) -> None:
         MATCH (target:RepoGraphTarget)
         WHERE NOT (target)<-[]-()
         DELETE target
+        """
+    ).consume()
+
+
+def delete_orphan_external_resources_tx(tx: Any) -> None:
+    tx.run(
+        """
+        MATCH (entity:RepoGraphEntity)
+        WHERE coalesce(entity.property_canonical_external_resource, false) = true
+          AND NOT (entity)--()
+        DETACH DELETE entity
         """
     ).consume()
 
