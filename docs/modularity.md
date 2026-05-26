@@ -74,7 +74,7 @@ The largest runtime files should be addressed in this order:
 2. Database metadata: split row models, engine registry, live connectors,
    catalog queries, and fact adapters. Done.
 3. Neo4j storage: split read operations, write operations, Cypher, payload
-   mapping, and record preparation.
+   mapping, and record preparation. Done.
 4. API runtime: split request models, runtime settings, workflow handlers,
    query/report response builders, and route registration.
 5. UI runtime: split router, API client, views, components, and formatters.
@@ -142,3 +142,44 @@ Responsibilities:
   for each engine.
 - `_adapter_common.py`, `_reader_common.py`, `_constants.py`, and
   `_naming.py`: small package-local shared contracts.
+
+## Storage Package Target
+
+Storage adapters persist and query already-built graph records. They should not
+parse files, construct graph IDs, resolve references, or own API response
+workflow.
+
+The Neo4j storage adapter is organized by responsibility:
+
+```text
+repo_graph/storage/
+  __init__.py
+  _neo4j.py
+  _neo4j_common.py
+  _neo4j_loader.py
+  _neo4j_models.py
+  _neo4j_payloads.py
+  _neo4j_queries.py
+  _neo4j_reads.py
+  _neo4j_records.py
+  _neo4j_settings.py
+  _neo4j_writes.py
+```
+
+`repo_graph.storage` remains the public import surface for CLI, API, and
+refresh code. `_neo4j.py` is a compatibility facade for older internal imports;
+new code should import through the package root or the focused module that owns
+the behavior.
+
+Responsibilities:
+
+- `_neo4j_settings.py`: environment-backed connection settings.
+- `_neo4j_models.py`: typed storage return values and prepared record groups.
+- `_neo4j_loader.py`: load orchestration from graph JSON into Neo4j.
+- `_neo4j_records.py`: conversion from graph export dictionaries to write
+  records.
+- `_neo4j_writes.py`: schema setup and write transactions.
+- `_neo4j_reads.py`: read workflows and result shaping.
+- `_neo4j_queries.py`: Cypher query text builders.
+- `_neo4j_payloads.py`: Neo4j records mapped into API/report payloads.
+- `_neo4j_common.py`: small adapter-local normalization helpers.

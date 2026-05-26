@@ -336,6 +336,15 @@ repo_graph/
   storage/
     __init__.py
     _neo4j.py
+    _neo4j_common.py
+    _neo4j_loader.py
+    _neo4j_models.py
+    _neo4j_payloads.py
+    _neo4j_queries.py
+    _neo4j_reads.py
+    _neo4j_records.py
+    _neo4j_settings.py
+    _neo4j_writes.py
   reports/
     __init__.py
     _common.py
