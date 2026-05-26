@@ -277,12 +277,9 @@ repo_graph/
       __init__.py
       common.py
       interaction_helpers.py
+      manifest_dotnet_helpers.py
       manifest_helpers.py
       package_helpers.py
-      sql/
-        __init__.py
-        files.py
-        helpers.py
       symbol_helpers.py
       code/
         python/
@@ -292,6 +289,7 @@ repo_graph/
         dotnet/
           __init__.py
           scanner.py
+          helpers.py
         javascript/
           __init__.py
           scanner.py
@@ -300,6 +298,7 @@ repo_graph/
         kubernetes.py
         helpers.py
       manifests/
+        __init__.py
         package_json.py
         pyproject.py
         dotnet_project.py
