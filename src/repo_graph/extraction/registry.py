@@ -8,9 +8,9 @@ from repo_graph.extraction.scanners.code.dotnet import (
     LegacyDotnetEndpointExtractor,
     VbCodeExtractor,
 )
+from repo_graph.extraction.scanners.code.javascript import JavaScriptExtractor
 from repo_graph.extraction.scanners.code.python import PythonCodeExtractor
 from repo_graph.extraction.scanners.deployment import KubernetesManifestExtractor
-from repo_graph.extraction.scanners.javascript import JavaScriptExtractor
 from repo_graph.extraction.scanners.manifests import (
     DotnetBuildConfigExtractor,
     DotnetFrameworkConfigExtractor,
