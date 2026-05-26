@@ -55,8 +55,8 @@ Target module responsibilities:
 - `registry.py`: deterministic default scanner registration.
 - `project_discovery.py`: repository/project boundary discovery from manifests.
 - `scanners/`: scanner family implementations. Current families include
-  `manifests.py`, `deployment.py`, `sql`, `code/javascript`, `code/python`,
-  and `code/dotnet`.
+  `manifests.py`, `deployment`, `sql`, `code/javascript`, `code/python`, and
+  `code/dotnet`.
 - `scanners/*_helpers.py`: domain-specific scanner helpers. Shared helpers
   should be split by domain instead of collected in one large module. For
   example, .NET code helpers live under `code/dotnet`, while .NET manifest and

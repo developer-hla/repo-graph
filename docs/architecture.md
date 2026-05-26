@@ -288,23 +288,25 @@ repo_graph/
         python/
           __init__.py
           scanner.py
-          ast_parse.py
-          symbols.py
+          helpers.py
         dotnet/
           __init__.py
           scanner.py
-          csharp.py
-          vb.py
         javascript/
           __init__.py
           scanner.py
+      deployment/
+        __init__.py
+        kubernetes.py
+        helpers.py
       manifests/
         package_json.py
         pyproject.py
         dotnet_project.py
-        kubernetes.py
       sql/
+        __init__.py
         files.py
+        helpers.py
       database/
         sqlserver.py
         postgres.py

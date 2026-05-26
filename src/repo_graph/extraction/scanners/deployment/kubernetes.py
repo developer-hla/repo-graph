@@ -10,7 +10,7 @@ from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import scan_issue
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.common import string_value
-from repo_graph.extraction.scanners.deployment_helpers import (
+from repo_graph.extraction.scanners.deployment.helpers import (
     KubernetesDeployment,
     KubernetesService,
     kubernetes_deployment_facts,
