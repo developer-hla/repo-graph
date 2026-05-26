@@ -72,7 +72,7 @@ class CachedBuildTests(unittest.TestCase):
                 ]
             )
 
-            with patch("repo_graph.extraction.cached_builds.graph_from_database_source", return_value=facts):
+            with patch("repo_graph.extraction.cached_builds.scan_database_source", return_value=facts):
                 first = build_cached_graph(config)
                 second = build_cached_graph(config)
 

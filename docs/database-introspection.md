@@ -176,10 +176,10 @@ The current adapters live in `repo_graph.database` and expose typed
 metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`,
 `SqlServerTriggerRow`, `SqlServerDependencyRow`, `PostgresObjectRow`,
 `PostgresForeignKeyRow`, `PostgresTriggerRow`, and `PostgresDependencyRow`.
-`graph_from_database_metadata()` dispatches through the engine registry, while
-`graph_from_sqlserver_metadata()` and
-`graph_from_postgres_metadata()` remain direct pure adapter entry points.
-`graph_from_database_source()` is the live source entry point. These functions
+`scan_database_metadata()` dispatches through the engine registry, while
+`scan_sqlserver_metadata()` and
+`scan_postgres_metadata()` remain direct pure adapter entry points.
+`scan_database_source()` is the live source entry point. These functions
 return `DatabaseScanResult` with a `FactBatch` of `EntityFact` and
 `RelationshipFact` records. Orchestration passes those facts through the graph
 builder; database adapters do not create graph `Entity` or `Edge` records.

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.config import RepoGraphConfig
-from repo_graph.database import graph_from_database_source
+from repo_graph.database import scan_database_source
 from repo_graph.extraction.orchestrator import (
     MAX_FILE_BYTES,
     add_database_facts,
@@ -75,7 +75,7 @@ def scan_cached_database_sources(config: RepoGraphConfig, graph: Graph) -> list[
     items: list[dict[str, Any]] = []
     for source in config.sources:
         if source.source_type == "database":
-            facts = graph_from_database_source(database_source_request(source))
+            facts = scan_database_source(database_source_request(source))
             add_database_facts(graph, facts)
             items.append(
                 {

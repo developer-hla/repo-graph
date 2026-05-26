@@ -21,12 +21,12 @@ from repo_graph.database import (
     SqlServerTriggerRow,
     database_connector_unavailable_message,
     database_metadata_adapter,
-    graph_from_database_metadata,
-    graph_from_database_source,
-    graph_from_postgres_metadata,
-    graph_from_postgres_source,
-    graph_from_sqlserver_metadata,
-    graph_from_sqlserver_source,
+    scan_database_metadata,
+    scan_database_source,
+    scan_postgres_metadata,
+    scan_postgres_source,
+    scan_sqlserver_metadata,
+    scan_sqlserver_source,
     supported_database_engines,
 )
 from repo_graph.extraction.facts import RelationshipFact
@@ -39,7 +39,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(database_metadata_adapter("sqlserver").metadata_parser, SQLSERVER_METADATA_PARSER)
         self.assertEqual(database_metadata_adapter("postgres").metadata_parser, POSTGRES_METADATA_PARSER)
 
-        facts = graph_from_database_metadata(
+        facts = scan_database_metadata(
             "current-db",
             "sqlserver",
             SqlServerMetadata(tables=(SqlServerObjectRow("dbo", "Customers"),)),
@@ -58,7 +58,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
             patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://user:secret@localhost/db"}),
             patch("repo_graph.database._metadata.postgres_driver_available", return_value=False),
         ):
-            facts = graph_from_database_source(request)
+            facts = scan_database_source(request)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
@@ -87,7 +87,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         connection = FakeSqlServerConnection()
 
         with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_SQLSERVER_URL": "Driver=example"}):
-            facts = graph_from_sqlserver_source(request, connect=lambda connection_string, timeout: connection)
+            facts = scan_sqlserver_source(request, connect=lambda connection_string, timeout: connection)
 
         entities_by_name = {entity.name: entity for entity in facts.entities}
         edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
@@ -111,7 +111,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
             connection_env="REPO_GRAPH_EXAMPLE_SQLSERVER_URL",
         )
 
-        facts = graph_from_sqlserver_source(request, connect=lambda _connection_string, _timeout: None)
+        facts = scan_sqlserver_source(request, connect=lambda _connection_string, _timeout: None)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
@@ -124,7 +124,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
     def test_sqlserver_live_connector_reports_unconfigured_connection_env(self) -> None:
         request = DatabaseSourceRequest(source_name="current-db", engine="sqlserver", connection_env="")
 
-        facts = graph_from_sqlserver_source(request, connect=lambda _connection_string, _timeout: None)
+        facts = scan_sqlserver_source(request, connect=lambda _connection_string, _timeout: None)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
@@ -141,7 +141,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
             raise RuntimeError(f"could not open {connection_string}")
 
         with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_SQLSERVER_URL": "Driver=example;Pwd=secret"}):
-            facts = graph_from_sqlserver_source(request, connect=fail_connection)
+            facts = scan_sqlserver_source(request, connect=fail_connection)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
@@ -163,7 +163,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         connection = FakePostgresConnection()
 
         with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://example"}):
-            facts = graph_from_postgres_source(request, connect=lambda _connection_string, _timeout: connection)
+            facts = scan_postgres_source(request, connect=lambda _connection_string, _timeout: connection)
 
         entities_by_name = {entity.name: entity for entity in facts.entities}
         edges_by_operation = {edge.properties["sql_operation"]: edge for edge in facts.edges}
@@ -189,7 +189,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
             connection_env="REPO_GRAPH_EXAMPLE_POSTGRES_URL",
         )
 
-        facts = graph_from_postgres_source(request, connect=lambda _connection_string, _timeout: None)
+        facts = scan_postgres_source(request, connect=lambda _connection_string, _timeout: None)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
@@ -210,7 +210,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
             raise RuntimeError(f"could not open {connection_string}")
 
         with patch.dict("os.environ", {"REPO_GRAPH_EXAMPLE_POSTGRES_URL": "postgres://user:secret@localhost/db"}):
-            facts = graph_from_postgres_source(request, connect=fail_connection)
+            facts = scan_postgres_source(request, connect=fail_connection)
 
         self.assertEqual(facts.entities, [])
         self.assertEqual(facts.edges, [])
@@ -221,7 +221,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertNotIn("secret", facts.errors[0])
 
     def test_emits_current_database_sql_entities(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(SqlServerObjectRow("dbo", "Customers"),),
@@ -261,7 +261,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(edges_by_operation["TRIGGER_ON"].properties["trigger_events"], ["INSERT", "UPDATE"])
 
     def test_emits_resolved_foreign_key_edge(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(
@@ -299,7 +299,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(edge.identity_key, "foreign_key|dbo.Orders|dbo.Customers|FK_Orders_Customers")
 
     def test_same_table_pair_foreign_keys_keep_distinct_edge_ids(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(
@@ -333,7 +333,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(len(graph.edges), 2)
 
     def test_missing_foreign_key_target_stays_unresolved(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(SqlServerObjectRow("dbo", "Orders"),),
@@ -357,7 +357,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(edge.to_type, "sql_table")
 
     def test_ambiguous_dependency_target_stays_unresolved_with_candidates(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(SqlServerObjectRow("dbo", "CustomerFacts"),),
@@ -387,7 +387,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         )
 
     def test_missing_dependency_source_is_reported(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(SqlServerObjectRow("dbo", "Customers"),),
@@ -408,7 +408,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(facts.errors, ["Missing source entity for SQL Server dependency: dbo.MissingProcedure"])
 
     def test_module_dependency_edges_use_generic_reference_until_operation_is_known(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 tables=(SqlServerObjectRow("dbo", "Customers"),),
@@ -439,7 +439,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(edge.properties["metadata_source"], "sys.sql_expression_dependencies")
 
     def test_execute_dependency_emits_sql_call(self) -> None:
-        facts = graph_from_sqlserver_metadata(
+        facts = scan_sqlserver_metadata(
             "current-db",
             SqlServerMetadata(
                 stored_procedures=(
@@ -470,7 +470,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertEqual(edge.properties["sql_operation"], "EXECUTE")
 
     def test_postgres_metadata_emits_current_database_entities_and_edges(self) -> None:
-        facts = graph_from_postgres_metadata(
+        facts = scan_postgres_metadata(
             "current-pg",
             PostgresMetadata(
                 tables=(

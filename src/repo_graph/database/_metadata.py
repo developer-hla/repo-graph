@@ -94,7 +94,7 @@ class DatabaseMetadataAdapter(Protocol):
     engine: str
     metadata_parser: str
 
-    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
+    def scan_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
         """Convert engine metadata rows into RepoGraph facts."""
         ...
 
@@ -361,10 +361,10 @@ class SqlServerMetadataAdapter:
     engine: str = SQLSERVER_ENGINE
     metadata_parser: str = SQLSERVER_METADATA_PARSER
 
-    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
+    def scan_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
         if not isinstance(metadata, SqlServerMetadata):
             raise TypeError("SQL Server metadata adapter requires SqlServerMetadata.")
-        return graph_from_sqlserver_metadata(source_name, metadata)
+        return scan_sqlserver_metadata(source_name, metadata)
 
 
 @dataclass(frozen=True)
@@ -374,10 +374,10 @@ class PostgresMetadataAdapter:
     engine: str = POSTGRES_ENGINE
     metadata_parser: str = POSTGRES_METADATA_PARSER
 
-    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
+    def scan_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
         if not isinstance(metadata, PostgresMetadata):
             raise TypeError("PostgreSQL metadata adapter requires PostgresMetadata.")
-        return graph_from_postgres_metadata(source_name, metadata)
+        return scan_postgres_metadata(source_name, metadata)
 
 
 DATABASE_METADATA_ADAPTERS: dict[str, DatabaseMetadataAdapter] = {
@@ -402,10 +402,10 @@ def database_metadata_adapter(engine: str) -> DatabaseMetadataAdapter:
     return adapter
 
 
-def graph_from_database_metadata(source_name: str, engine: str, metadata: object) -> DatabaseScanResult:
-    """Convert metadata rows for any supported database engine into graph facts."""
+def scan_database_metadata(source_name: str, engine: str, metadata: object) -> DatabaseScanResult:
+    """Convert metadata rows for any supported database engine into typed facts."""
 
-    return database_metadata_adapter(engine).graph_from_metadata(source_name, metadata)
+    return database_metadata_adapter(engine).scan_metadata(source_name, metadata)
 
 
 def database_connector_unavailable_message(source_name: str, engine: str | None) -> str:
@@ -422,22 +422,22 @@ def database_connector_unavailable_message(source_name: str, engine: str | None)
     return f"Database source '{source_name}' is missing a database engine."
 
 
-def graph_from_database_source(_request: DatabaseSourceRequest) -> DatabaseScanResult:
+def scan_database_source(_request: DatabaseSourceRequest) -> DatabaseScanResult:
     """Live database connector entry point."""
 
     engine = normalize_database_engine(_request.engine)
     if engine == SQLSERVER_ENGINE:
-        return graph_from_sqlserver_source(_request)
+        return scan_sqlserver_source(_request)
     if engine == POSTGRES_ENGINE:
-        return graph_from_postgres_source(_request)
+        return scan_postgres_source(_request)
     return DatabaseScanResult(errors=[database_connector_unavailable_message(_request.source_name, engine)])
 
 
-def graph_from_sqlserver_source(
+def scan_sqlserver_source(
     request: DatabaseSourceRequest,
     connect: Callable[[str, int], Any] | None = None,
 ) -> DatabaseScanResult:
-    """Read SQL Server catalog metadata and convert it into graph facts."""
+    """Read SQL Server catalog metadata and convert it into typed facts."""
 
     connection_string, connection_error = database_connection_string(request)
     if connection_error is not None:
@@ -478,16 +478,16 @@ def graph_from_sqlserver_source(
     finally:
         close_database_connection(connection)
 
-    facts = graph_from_sqlserver_metadata(request.source_name, metadata_result.metadata)
+    facts = scan_sqlserver_metadata(request.source_name, metadata_result.metadata)
     facts.extend_errors(metadata_result.errors, source_name=request.source_name, parser=SQLSERVER_METADATA_PARSER)
     return facts
 
 
-def graph_from_postgres_source(
+def scan_postgres_source(
     request: DatabaseSourceRequest,
     connect: Callable[[str, int], Any] | None = None,
 ) -> DatabaseScanResult:
-    """Read PostgreSQL catalog metadata and convert it into graph facts."""
+    """Read PostgreSQL catalog metadata and convert it into typed facts."""
 
     connection_string, connection_error = database_connection_string(request)
     if connection_error is not None:
@@ -528,7 +528,7 @@ def graph_from_postgres_source(
     finally:
         close_database_connection(connection)
 
-    facts = graph_from_postgres_metadata(request.source_name, metadata_result.metadata)
+    facts = scan_postgres_metadata(request.source_name, metadata_result.metadata)
     facts.extend_errors(metadata_result.errors, source_name=request.source_name, parser=POSTGRES_METADATA_PARSER)
     return facts
 
@@ -1310,8 +1310,8 @@ def normalize_database_engine(engine: str) -> str:
     return required_text(engine, "database engine").lower()
 
 
-def graph_from_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata) -> DatabaseScanResult:
-    """Convert SQL Server catalog metadata rows into RepoGraph facts."""
+def scan_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata) -> DatabaseScanResult:
+    """Convert SQL Server catalog metadata rows into typed facts."""
 
     source_name = required_text(source_name, "source_name")
     result = DatabaseScanResult()
@@ -1376,8 +1376,8 @@ def sqlserver_object_entity(
     )
 
 
-def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -> DatabaseScanResult:
-    """Convert PostgreSQL catalog metadata rows into RepoGraph facts."""
+def scan_postgres_metadata(source_name: str, metadata: PostgresMetadata) -> DatabaseScanResult:
+    """Convert PostgreSQL catalog metadata rows into typed facts."""
 
     source_name = required_text(source_name, "source_name")
     result = DatabaseScanResult()

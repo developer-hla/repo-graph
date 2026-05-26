@@ -6,7 +6,7 @@ import re
 from dataclasses import replace
 
 from repo_graph.config import RepoGraphConfig, Source
-from repo_graph.database import DatabaseScanResult, DatabaseSourceRequest, graph_from_database_source
+from repo_graph.database import DatabaseScanResult, DatabaseSourceRequest, scan_database_source
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.source_scanner import SourceScanResult, scan_source, source_to_dict
@@ -66,7 +66,7 @@ def database_source_to_dict(source: Source) -> dict[str, str | None]:
 def scan_database_sources(config: RepoGraphConfig, graph: Graph) -> None:
     for source in config.sources:
         if source.source_type == "database":
-            add_database_facts(graph, graph_from_database_source(database_source_request(source)))
+            add_database_facts(graph, scan_database_source(database_source_request(source)))
 
 
 def add_source_scan_result(graph: Graph, result: SourceScanResult) -> None:
