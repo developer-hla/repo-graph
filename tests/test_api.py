@@ -254,7 +254,7 @@ class ApiTests(unittest.TestCase):
             output_dir=root / ".repo-graph/output",
             sources=(Source(name="service", source_type="local_path", path=root / "service"),),
         )
-        with patch("repo_graph.api.load_config", return_value=config) as load_config:
+        with patch("repo_graph.api_runtime.settings.load_config", return_value=config) as load_config:
             payload = config_response(RuntimeSettings(config_path=root / "repo-graph.yaml"))
 
         self.assertEqual(payload["name"], "test")
@@ -273,7 +273,7 @@ class ApiTests(unittest.TestCase):
                 output_dir=root / ".repo-graph/output",
                 sources=(Source(name="service", source_type="local_path", path=source_dir),),
             )
-            with patch("repo_graph.api.load_config", return_value=config):
+            with patch("repo_graph.api_runtime.settings.load_config", return_value=config):
                 payload = configured_sources_response(RuntimeSettings(config_path=config.config_path))
 
         self.assertEqual(payload["count"], 1)
@@ -292,7 +292,7 @@ class ApiTests(unittest.TestCase):
                 output_dir=root / ".repo-graph/output",
                 sources=(Source(name="missing", source_type="local_path", path=root / "missing"),),
             )
-            with patch("repo_graph.api.load_config", return_value=config):
+            with patch("repo_graph.api_runtime.settings.load_config", return_value=config):
                 payload = sync_response(RuntimeSettings(config_path=config.config_path), SyncRequest())
 
         self.assertEqual(payload["status"], "failed")
@@ -320,7 +320,7 @@ class ApiTests(unittest.TestCase):
         )
         with (
             patch("pathlib.Path.exists", return_value=True),
-            patch("repo_graph.api.load_graph_path", return_value=summary) as load_graph,
+            patch("repo_graph.api_runtime.config_workflows.load_graph_path", return_value=summary) as load_graph,
         ):
             payload = load_response(settings, LoadRequest(graph_path="graph.json"))
 
@@ -332,8 +332,8 @@ class ApiTests(unittest.TestCase):
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         graph_data = {"summary": {"entity_count": 1}, "entities": [], "edges": []}
         with (
-            patch("repo_graph.api.load_config") as load_config,
-            patch("repo_graph.api.build_graph") as build_graph,
+            patch("repo_graph.api_runtime.settings.load_config") as load_config,
+            patch("repo_graph.api_runtime.config_workflows.build_graph") as build_graph,
             patch("pathlib.Path.write_text") as write_text,
             patch("pathlib.Path.mkdir") as mkdir,
         ):
@@ -355,8 +355,8 @@ class ApiTests(unittest.TestCase):
         build_payload = {"status": "built", "output_path": "/repo/.repo-graph/output/graph.json", "summary": {}}
         load_payload = {"status": "loaded", "graph_path": "/repo/.repo-graph/output/graph.json", "summary": {}}
         with (
-            patch("repo_graph.api.build_response", return_value=build_payload) as build,
-            patch("repo_graph.api.load_response", return_value=load_payload) as load,
+            patch("repo_graph.api_runtime.config_workflows.build_response", return_value=build_payload) as build,
+            patch("repo_graph.api_runtime.config_workflows.load_response", return_value=load_payload) as load,
         ):
             payload = build_load_response(settings, BuildLoadRequest(clear_existing=False))
 
@@ -374,8 +374,8 @@ class ApiTests(unittest.TestCase):
             "changes": {"changed_sources": ["service"]},
         }
         with (
-            patch("repo_graph.api.load_config") as load_config,
-            patch("repo_graph.api.refresh_graph", return_value=refresh_payload) as refresh,
+            patch("repo_graph.api_runtime.settings.load_config") as load_config,
+            patch("repo_graph.api_runtime.config_workflows.refresh_graph", return_value=refresh_payload) as refresh,
         ):
             config = load_config.return_value
             config.config_path = Path("/repo/config/local-example.yaml")
@@ -391,7 +391,7 @@ class ApiTests(unittest.TestCase):
 
     def test_refresh_response_rejects_invalid_max_file_bytes(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
-        with patch("repo_graph.api.load_config") as load_config:
+        with patch("repo_graph.api_runtime.settings.load_config") as load_config:
             config = load_config.return_value
             config.config_path = Path("/repo/config/local-example.yaml")
             config.output_dir = Path("/repo/.repo-graph/output")
@@ -416,9 +416,9 @@ class ApiTests(unittest.TestCase):
             "items": [{"source_name": "service", "changed": False, "status": "unchanged"}],
         }
         with (
-            patch("repo_graph.api.load_config", return_value=config),
-            patch("repo_graph.api.snapshot_status", return_value=snapshot_payload) as snapshot,
-            patch("repo_graph.api.refresh_graph") as refresh,
+            patch("repo_graph.api_runtime.settings.load_config", return_value=config),
+            patch("repo_graph.api_runtime.config_workflows.snapshot_status", return_value=snapshot_payload) as snapshot,
+            patch("repo_graph.api_runtime.config_workflows.refresh_graph") as refresh,
         ):
             payload = refresh_changed_response(settings, RefreshChangedRequest(sync=True))
 
@@ -458,9 +458,9 @@ class ApiTests(unittest.TestCase):
             "load": {"action": "replace_sources", "reason": "changed_sources", "replace_sources": ["service"]},
         }
         with (
-            patch("repo_graph.api.load_config", return_value=config),
-            patch("repo_graph.api.snapshot_status", return_value=snapshot_payload) as snapshot,
-            patch("repo_graph.api.refresh_graph", return_value=refresh_payload) as refresh,
+            patch("repo_graph.api_runtime.settings.load_config", return_value=config),
+            patch("repo_graph.api_runtime.config_workflows.snapshot_status", return_value=snapshot_payload) as snapshot,
+            patch("repo_graph.api_runtime.config_workflows.refresh_graph", return_value=refresh_payload) as refresh,
         ):
             payload = refresh_changed_response(
                 settings,
@@ -484,8 +484,8 @@ class ApiTests(unittest.TestCase):
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         snapshot_payload = {"count": 1, "changed_count": 1, "items": [{"source_name": "service"}]}
         with (
-            patch("repo_graph.api.load_config") as load_config,
-            patch("repo_graph.api.snapshot_status", return_value=snapshot_payload) as compare,
+            patch("repo_graph.api_runtime.settings.load_config") as load_config,
+            patch("repo_graph.api_runtime.config_workflows.snapshot_status", return_value=snapshot_payload) as compare,
         ):
             config = load_config.return_value
 
@@ -499,13 +499,13 @@ class ApiTests(unittest.TestCase):
 
     def test_snapshot_status_response_rejects_invalid_max_file_bytes(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
-        with patch("repo_graph.api.load_config"), self.assertRaises(ValueError):
+        with patch("repo_graph.api_runtime.settings.load_config"), self.assertRaises(ValueError):
             snapshot_status_response(settings, SnapshotStatusRequest(max_file_bytes=0))
 
     def test_submit_build_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
-        with patch("repo_graph.api.build_response", return_value={"status": "built"}):
+        with patch("repo_graph.api_runtime.config_workflows.build_response", return_value={"status": "built"}):
             job = submit_build_job(registry, settings, BuildRequest(strict=True))
 
         self.assertEqual(job["kind"], "build")
@@ -516,7 +516,7 @@ class ApiTests(unittest.TestCase):
     def test_submit_sync_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
-        with patch("repo_graph.api.sync_response", return_value={"status": "synced"}):
+        with patch("repo_graph.api_runtime.config_workflows.sync_response", return_value={"status": "synced"}):
             job = submit_sync_job(registry, settings, SyncRequest(config_path="config/local-example.yaml"))
 
         self.assertEqual(job["kind"], "sync")
@@ -527,7 +527,9 @@ class ApiTests(unittest.TestCase):
     def test_submit_build_load_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
-        with patch("repo_graph.api.build_load_response", return_value={"status": "built_and_loaded"}):
+        with patch(
+            "repo_graph.api_runtime.config_workflows.build_load_response", return_value={"status": "built_and_loaded"}
+        ):
             job = submit_build_load_job(registry, settings, BuildLoadRequest(clear_existing=False))
 
         self.assertEqual(job["kind"], "build-load")
@@ -538,7 +540,7 @@ class ApiTests(unittest.TestCase):
     def test_submit_refresh_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
-        with patch("repo_graph.api.refresh_response", return_value={"status": "refreshed"}):
+        with patch("repo_graph.api_runtime.config_workflows.refresh_response", return_value={"status": "refreshed"}):
             job = submit_refresh_job(registry, settings, RefreshRequest(load=True))
 
         self.assertEqual(job["kind"], "refresh")
@@ -549,7 +551,9 @@ class ApiTests(unittest.TestCase):
     def test_submit_refresh_changed_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
-        with patch("repo_graph.api.refresh_changed_response", return_value={"status": "skipped"}):
+        with patch(
+            "repo_graph.api_runtime.config_workflows.refresh_changed_response", return_value={"status": "skipped"}
+        ):
             job = submit_refresh_changed_job(registry, settings, RefreshChangedRequest(sync=True))
 
         self.assertEqual(job["kind"], "refresh-changed")
@@ -560,7 +564,7 @@ class ApiTests(unittest.TestCase):
     def test_submit_snapshot_status_job_runs_through_registry(self) -> None:
         settings = RuntimeSettings(config_path=Path("config/local-example.yaml"))
         registry = JobRegistry(run_inline=True)
-        with patch("repo_graph.api.snapshot_status_response", return_value={"count": 1}):
+        with patch("repo_graph.api_runtime.config_workflows.snapshot_status_response", return_value={"count": 1}):
             job = submit_snapshot_status_job(registry, settings, SnapshotStatusRequest(sync=True))
 
         self.assertEqual(job["kind"], "snapshot-status")
@@ -577,7 +581,9 @@ class ApiTests(unittest.TestCase):
 
     def test_snapshot_status_endpoint_returns_snapshot_response(self) -> None:
         client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml"))))
-        with patch("repo_graph.api.snapshot_status_response", return_value={"count": 1}) as compare:
+        with patch(
+            "repo_graph.api_runtime.config_workflows.snapshot_status_response", return_value={"count": 1}
+        ) as compare:
             response = client.post("/snapshot/status", json={"sync": True})
 
         self.assertEqual(response.status_code, 200)
@@ -587,7 +593,7 @@ class ApiTests(unittest.TestCase):
     def test_snapshot_status_job_endpoint_submits_job(self) -> None:
         registry = JobRegistry(run_inline=True)
         client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml")), registry))
-        with patch("repo_graph.api.snapshot_status_response", return_value={"count": 1}):
+        with patch("repo_graph.api_runtime.config_workflows.snapshot_status_response", return_value={"count": 1}):
             response = client.post("/jobs/snapshot-status", json={"sync": True})
 
         payload = response.json()
@@ -606,7 +612,9 @@ class ApiTests(unittest.TestCase):
 
     def test_refresh_endpoint_returns_refresh_response(self) -> None:
         client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml"))))
-        with patch("repo_graph.api.refresh_response", return_value={"status": "refreshed"}) as refresh:
+        with patch(
+            "repo_graph.api_runtime.config_workflows.refresh_response", return_value={"status": "refreshed"}
+        ) as refresh:
             response = client.post("/refresh", json={"strict": True})
 
         self.assertEqual(response.status_code, 200)
@@ -616,7 +624,7 @@ class ApiTests(unittest.TestCase):
     def test_refresh_job_endpoint_submits_refresh_job(self) -> None:
         registry = JobRegistry(run_inline=True)
         client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml")), registry))
-        with patch("repo_graph.api.refresh_response", return_value={"status": "refreshed"}):
+        with patch("repo_graph.api_runtime.config_workflows.refresh_response", return_value={"status": "refreshed"}):
             response = client.post("/jobs/refresh", json={"load": True})
 
         payload = response.json()
@@ -629,7 +637,9 @@ class ApiTests(unittest.TestCase):
     def test_refresh_changed_job_endpoint_submits_refresh_changed_job(self) -> None:
         registry = JobRegistry(run_inline=True)
         client = TestClient(create_app(RuntimeSettings(config_path=Path("config/local-example.yaml")), registry))
-        with patch("repo_graph.api.refresh_changed_response", return_value={"status": "skipped"}):
+        with patch(
+            "repo_graph.api_runtime.config_workflows.refresh_changed_response", return_value={"status": "skipped"}
+        ):
             response = client.post("/jobs/refresh-changed", json={"sync": True})
 
         payload = response.json()
@@ -657,14 +667,16 @@ class ApiTests(unittest.TestCase):
     def test_scope_response_returns_loaded_scope(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
         scope = {"loaded": True, "scope_name": "example", "sources": [{"name": "api-service"}]}
-        with patch("repo_graph.api.read_graph_scope", return_value=scope):
+        with patch("repo_graph.api_runtime.query_responses.read_graph_scope", return_value=scope):
             self.assertEqual(scope_response(settings), scope)
 
     def test_explore_response_returns_graph_overview(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
         overview = {"loaded": True, "entity_types": [{"entity_type": "api_route", "entity_count": 3}]}
 
-        with patch("repo_graph.api.read_graph_overview", return_value=overview) as read_overview:
+        with patch(
+            "repo_graph.api_runtime.query_responses.read_graph_overview", return_value=overview
+        ) as read_overview:
             self.assertEqual(explore_response(settings, 25), overview)
 
         read_overview.assert_called_once()
@@ -691,8 +703,12 @@ class ApiTests(unittest.TestCase):
         }
 
         with (
-            patch("repo_graph.api.read_source_overview", return_value=overview) as read_overview,
-            patch("repo_graph.api.list_unresolved_edges", return_value=[unresolved]) as unresolved_edges,
+            patch(
+                "repo_graph.api_runtime.query_responses.read_source_overview", return_value=overview
+            ) as read_overview,
+            patch(
+                "repo_graph.api_runtime.query_responses.list_unresolved_edges", return_value=[unresolved]
+            ) as unresolved_edges,
         ):
             payload = source_overview_response(settings, "api-service", 10)
 
@@ -707,7 +723,10 @@ class ApiTests(unittest.TestCase):
     def test_source_overview_response_raises_for_missing_source(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
 
-        with patch("repo_graph.api.read_source_overview", return_value=None), self.assertRaises(KeyError):
+        with (
+            patch("repo_graph.api_runtime.query_responses.read_source_overview", return_value=None),
+            self.assertRaises(KeyError),
+        ):
             source_overview_response(settings, "missing", 10)
 
     def test_source_file_snippet_response_reads_context_inside_source(self) -> None:
@@ -725,7 +744,7 @@ class ApiTests(unittest.TestCase):
                 sources=(Source(name="service", source_type="local_path", path=source_dir),),
             )
 
-            with patch("repo_graph.api.load_config", return_value=config):
+            with patch("repo_graph.api_runtime.source_files.load_config", return_value=config):
                 payload = source_file_snippet_response(
                     RuntimeSettings(config_path=config.config_path),
                     "service",
@@ -756,7 +775,7 @@ class ApiTests(unittest.TestCase):
             )
 
             with (
-                patch("repo_graph.api.load_config", return_value=config),
+                patch("repo_graph.api_runtime.source_files.load_config", return_value=config),
                 self.assertRaisesRegex(ValueError, "escapes"),
             ):
                 source_file_snippet_response(
@@ -775,7 +794,7 @@ class ApiTests(unittest.TestCase):
             "generated_at": "2026-05-11T00:00:00+00:00",
             "sources": [{"name": "api-service"}],
         }
-        with patch("repo_graph.api.read_graph_scope", return_value=scope):
+        with patch("repo_graph.api_runtime.query_responses.read_graph_scope", return_value=scope):
             payload = sources_response(settings)
 
         self.assertEqual(payload["items"], [{"name": "api-service"}])
@@ -785,7 +804,7 @@ class ApiTests(unittest.TestCase):
     def test_search_entities_response_wraps_items(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
         item = {"entity_id": "entity-1", "name": "GET /accounts"}
-        with patch("repo_graph.api.search_entities", return_value=[item]) as search:
+        with patch("repo_graph.api_runtime.query_responses.search_entities", return_value=[item]) as search:
             payload = search_entities_response(settings, "accounts", "api_route", "api-service", 10)
 
         self.assertEqual(payload, {"items": [item], "count": 1})
@@ -803,7 +822,7 @@ class ApiTests(unittest.TestCase):
             "to_type": "stored_procedure",
         }
 
-        with patch("repo_graph.api.search_relationships", return_value=[item]) as search:
+        with patch("repo_graph.api_runtime.query_responses.search_relationships", return_value=[item]) as search:
             payload = relationship_search_response(
                 settings,
                 "api-service",
@@ -827,7 +846,7 @@ class ApiTests(unittest.TestCase):
 
     def test_entity_response_raises_for_missing_entity(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
-        with patch("repo_graph.api.get_entity", return_value=None), self.assertRaises(KeyError):
+        with patch("repo_graph.api_runtime.query_responses.get_entity", return_value=None), self.assertRaises(KeyError):
             entity_response(settings, "missing")
 
     def test_entity_overview_response_groups_direct_relationships(self) -> None:
@@ -856,9 +875,11 @@ class ApiTests(unittest.TestCase):
         ]
 
         with (
-            patch("repo_graph.api.get_entity", return_value=entity),
-            patch("repo_graph.api.get_entity_neighbors", side_effect=[incoming, outgoing]) as neighbors,
-            patch("repo_graph.api.list_unresolved_edges", return_value=[]) as unresolved,
+            patch("repo_graph.api_runtime.query_responses.get_entity", return_value=entity),
+            patch(
+                "repo_graph.api_runtime.query_responses.get_entity_neighbors", side_effect=[incoming, outgoing]
+            ) as neighbors,
+            patch("repo_graph.api_runtime.coverage.list_unresolved_edges", return_value=[]) as unresolved,
         ):
             payload = entity_overview_response(settings, "entity-1", 20)
 
@@ -911,9 +932,9 @@ class ApiTests(unittest.TestCase):
         ]
 
         with (
-            patch("repo_graph.api.get_entity", return_value=entity),
-            patch("repo_graph.api.get_entity_neighbors", return_value=[]),
-            patch("repo_graph.api.list_unresolved_edges", return_value=unresolved_items),
+            patch("repo_graph.api_runtime.query_responses.get_entity", return_value=entity),
+            patch("repo_graph.api_runtime.query_responses.get_entity_neighbors", return_value=[]),
+            patch("repo_graph.api_runtime.coverage.list_unresolved_edges", return_value=unresolved_items),
         ):
             payload = entity_overview_response(settings, "entity-1", 20)
 
@@ -928,14 +949,14 @@ class ApiTests(unittest.TestCase):
     def test_entity_overview_response_raises_for_missing_entity(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
 
-        with patch("repo_graph.api.get_entity", return_value=None), self.assertRaises(KeyError):
+        with patch("repo_graph.api_runtime.query_responses.get_entity", return_value=None), self.assertRaises(KeyError):
             entity_overview_response(settings, "missing", 10)
 
     def test_neighbors_response_passes_depth_to_storage(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
         item = {"edge": {"edge_id": "edge-1"}, "neighbor": {"entity_id": "entity-2"}}
 
-        with patch("repo_graph.api.get_entity_neighbors", return_value=[item]) as neighbors:
+        with patch("repo_graph.api_runtime.query_responses.get_entity_neighbors", return_value=[item]) as neighbors:
             payload = neighbors_response(settings, "entity-1", "both", "CALLS_SQL", 2, 25)
 
         self.assertEqual(payload["depth"], 2)
@@ -960,9 +981,9 @@ class ApiTests(unittest.TestCase):
         ]
 
         with (
-            patch("repo_graph.api.entity_response", return_value=entity),
-            patch("repo_graph.api.get_entity_neighbors", return_value=items) as neighbors,
-            patch("repo_graph.api.list_unresolved_edges", return_value=[]),
+            patch("repo_graph.api_runtime.query_responses.entity_response", return_value=entity),
+            patch("repo_graph.api_runtime.query_responses.get_entity_neighbors", return_value=items) as neighbors,
+            patch("repo_graph.api_runtime.coverage.list_unresolved_edges", return_value=[]),
         ):
             payload = impact_response(settings, "entity-1", "in", "CALLS_SQL", 2, 25)
 
@@ -985,8 +1006,8 @@ class ApiTests(unittest.TestCase):
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
 
         with (
-            patch("repo_graph.api.entity_response", return_value={"entity_id": "entity-1"}),
-            patch("repo_graph.api.get_entity_neighbors", return_value=[]) as neighbors,
+            patch("repo_graph.api_runtime.query_responses.entity_response", return_value={"entity_id": "entity-1"}),
+            patch("repo_graph.api_runtime.query_responses.get_entity_neighbors", return_value=[]) as neighbors,
         ):
             payload = impact_response(settings, "entity-1", "in", None, 2, 25)
 
@@ -1000,8 +1021,8 @@ class ApiTests(unittest.TestCase):
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
 
         with (
-            patch("repo_graph.api.entity_response", return_value={"entity_id": "entity-1"}),
-            patch("repo_graph.api.get_entity_neighbors", return_value=[]) as neighbors,
+            patch("repo_graph.api_runtime.query_responses.entity_response", return_value={"entity_id": "entity-1"}),
+            patch("repo_graph.api_runtime.query_responses.get_entity_neighbors", return_value=[]) as neighbors,
         ):
             payload = impact_response(settings, "entity-1", "in", None, 2, 25, "structural")
 
@@ -1020,7 +1041,7 @@ class ApiTests(unittest.TestCase):
     def test_unresolved_edges_response_wraps_items(self) -> None:
         settings = RuntimeSettings(neo4j_uri="bolt://neo4j:7687", neo4j_user="neo4j", neo4j_password="password")
         item = {"edge": {"edge_id": "edge-1"}}
-        with patch("repo_graph.api.list_unresolved_edges", return_value=[item]) as unresolved:
+        with patch("repo_graph.api_runtime.query_responses.list_unresolved_edges", return_value=[item]) as unresolved:
             payload = unresolved_edges_response(settings, "api-service", "CALLS_SQL", 10)
 
         self.assertEqual(payload, {"items": [item], "count": 1})
@@ -1039,7 +1060,7 @@ class ApiTests(unittest.TestCase):
                 "properties": {},
             }
         }
-        with patch("repo_graph.api.list_unresolved_edges", return_value=[item]) as unresolved:
+        with patch("repo_graph.api_runtime.report_responses.list_unresolved_edges", return_value=[item]) as unresolved:
             payload = unresolved_report_response(settings, "api-service", "CALLS_SQL", 10, 2)
 
         self.assertEqual(payload["summary"]["unresolved_edge_count"], 1)
@@ -1072,7 +1093,9 @@ class ApiTests(unittest.TestCase):
                 },
             },
         }
-        with patch("repo_graph.api.search_relationships_by_edge_types", return_value=[item]) as search:
+        with patch(
+            "repo_graph.api_runtime.report_responses.search_relationships_by_edge_types", return_value=[item]
+        ) as search:
             payload = interactions_report_response(settings, "api-service", "inventory-service", None, 10, 2)
 
         self.assertEqual(payload["summary"]["interaction_edge_count"], 1)
@@ -1107,8 +1130,12 @@ class ApiTests(unittest.TestCase):
             }
         ]
         with (
-            patch("repo_graph.api.list_entities_by_types", return_value=entities) as list_entities,
-            patch("repo_graph.api.search_relationships_by_edge_types", return_value=items) as search,
+            patch(
+                "repo_graph.api_runtime.report_responses.list_entities_by_types", return_value=entities
+            ) as list_entities,
+            patch(
+                "repo_graph.api_runtime.report_responses.search_relationships_by_edge_types", return_value=items
+            ) as search,
         ):
             payload = database_reconciliation_report_response(settings, "api-service", "current-db", 10, 2)
 

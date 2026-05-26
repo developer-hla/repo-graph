@@ -76,7 +76,7 @@ The largest runtime files should be addressed in this order:
 3. Neo4j storage: split read operations, write operations, Cypher, payload
    mapping, and record preparation. Done.
 4. API runtime: split request models, runtime settings, workflow handlers,
-   query/report response builders, and route registration.
+   query/report response builders, and route registration. Done.
 5. UI runtime: split router, API client, views, components, and formatters.
 
 Each split should preserve generated docs and public examples unless the
@@ -183,3 +183,50 @@ Responsibilities:
 - `_neo4j_queries.py`: Cypher query text builders.
 - `_neo4j_payloads.py`: Neo4j records mapped into API/report payloads.
 - `_neo4j_common.py`: small adapter-local normalization helpers.
+
+## API Runtime Target
+
+`repo_graph.api` is the public facade used by the CLI, docs generator, tests,
+and external callers. Runtime implementation should live in focused
+`repo_graph.api_runtime` modules so adding a route or response builder does
+not require editing a monolithic API file.
+
+The API runtime package is organized by workflow boundary:
+
+```text
+repo_graph/
+  api.py
+  api_runtime/
+    __init__.py
+    config_workflows.py
+    constants.py
+    coverage.py
+    errors.py
+    manifest.py
+    query_responses.py
+    relationships.py
+    report_responses.py
+    requests.py
+    routes.py
+    settings.py
+    source_files.py
+```
+
+Responsibilities:
+
+- `api.py`: stable public import surface and default `app`.
+- `requests.py`: Pydantic request models.
+- `settings.py`: runtime settings, environment parsing, and path resolution.
+- `manifest.py`: health, manifest, and UI shell helpers.
+- `config_workflows.py`: config, sync, build, load, refresh, and job
+  workflows.
+- `query_responses.py`: Neo4j-backed graph query response builders.
+- `report_responses.py`: report endpoint response builders.
+- `source_files.py`: source root lookup and safe snippet reads.
+- `coverage.py` and `relationships.py`: shared response grouping and warning
+  helpers.
+- `routes.py`: FastAPI route registration only.
+- `errors.py`: HTTP exception mapping.
+
+Tests should patch the owning implementation module, not `repo_graph.api`, when
+they need to replace storage, config, refresh, or build dependencies.
