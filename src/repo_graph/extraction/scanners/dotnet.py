@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.facts import EntityFact
 from repo_graph.extraction.legacy_graph_helpers import resolved_edge
 from repo_graph.extraction.scanners.common import first_entity
 from repo_graph.extraction.scanners.dotnet_helpers import (
@@ -18,15 +19,15 @@ from repo_graph.extraction.scanners.dotnet_helpers import (
     VB_TYPE_RE,
     CSharpAttribute,
     csharp_attributes,
-    csharp_controller_route_result,
+    csharp_controller_route_facts,
     csharp_function_scope_state,
-    csharp_http_call_edges,
+    csharp_http_call_facts,
     csharp_method_index,
-    csharp_minimal_route_result,
+    csharp_minimal_route_facts,
     csharp_route_prefix,
     csharp_should_clear_attributes,
-    csharp_symbol_call_edges,
-    csharp_symbol_result,
+    csharp_symbol_call_facts,
+    csharp_symbol_facts,
     vb_contract_route_result,
     vb_method_index,
     vb_service_call_edges,
@@ -35,7 +36,7 @@ from repo_graph.extraction.scanners.dotnet_helpers import (
     vb_symbol_result,
 )
 from repo_graph.extraction.scanners.interaction_helpers import route_entity
-from repo_graph.extraction.scanners.sql_helpers import sql_reference_edges_for_line
+from repo_graph.extraction.scanners.sql_helpers import sql_reference_facts_for_line
 from repo_graph.graph import Entity
 
 
@@ -90,20 +91,22 @@ class CSharpCodeExtractor:
         namespace: str | None = None
         current_type: str | None = None
         current_route_prefix: str | None = None
-        current_function: Entity | None = None
+        current_function: EntityFact | None = None
         current_function_brace_depth = 0
         current_function_seen_body = False
         pending_attributes: list[CSharpAttribute] = []
         for line_number, line in enumerate(content.splitlines(), start=1):
-            result.extend(csharp_minimal_route_result(context, line, line_number))
-            result.edges.extend(csharp_http_call_edges(context, line, line_number))
+            result.facts.extend(csharp_minimal_route_facts(context, line, line_number))
+            result.facts.relationships.extend(csharp_http_call_facts(context, line, line_number))
             if current_function:
-                result.edges.extend(csharp_http_call_edges(context, line, line_number, from_entity=current_function))
-                result.edges.extend(
-                    sql_reference_edges_for_line(context, line, line_number, from_entity=current_function)
+                result.facts.relationships.extend(
+                    csharp_http_call_facts(context, line, line_number, from_entity=current_function)
                 )
-                result.edges.extend(
-                    csharp_symbol_call_edges(
+                result.facts.relationships.extend(
+                    sql_reference_facts_for_line(context, line, line_number, from_entity=current_function)
+                )
+                result.facts.relationships.extend(
+                    csharp_symbol_call_facts(
                         context,
                         line,
                         line_number,
@@ -134,8 +137,8 @@ class CSharpCodeExtractor:
                 current_function_seen_body = False
                 current_type = type_match.group(2)
                 current_route_prefix = csharp_route_prefix(pending_attributes, current_type, None)
-                result.extend(
-                    csharp_symbol_result(
+                result.facts.extend(
+                    csharp_symbol_facts(
                         context,
                         type_match.group(1).lower(),
                         current_type,
@@ -149,7 +152,7 @@ class CSharpCodeExtractor:
             method_match = CS_METHOD_RE.match(line)
             if method_match:
                 method_name = method_match.group(1)
-                symbol_result = csharp_symbol_result(
+                symbol_facts = csharp_symbol_facts(
                     context,
                     "method",
                     method_name,
@@ -157,10 +160,10 @@ class CSharpCodeExtractor:
                     line_number,
                     parent_name=current_type,
                 )
-                current_function = first_entity(symbol_result)
-                result.extend(symbol_result)
-                result.extend(
-                    csharp_controller_route_result(
+                current_function = symbol_facts.entities[0] if symbol_facts.entities else None
+                result.facts.extend(symbol_facts)
+                result.facts.extend(
+                    csharp_controller_route_facts(
                         context,
                         method_name,
                         pending_attributes,

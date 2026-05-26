@@ -11,16 +11,24 @@ from typing import Any
 from urllib.parse import urlparse
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.fact_helpers import entity_fact, unresolved_relationship_fact
-from repo_graph.extraction.facts import EntityFact, RelationshipFact
+from repo_graph.extraction.fact_helpers import (
+    entity_fact,
+    entity_reference,
+    resolved_relationship_fact,
+    unresolved_relationship_fact,
+)
+from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.interaction_helpers import (
-    add_route,
+    add_route_facts,
     http_edges_for_target,
+    http_facts_for_target,
     http_target,
     route_entity,
+    route_entity_fact,
     route_handler_edge,
+    route_handler_fact,
     service_name_from_identifier,
     service_name_from_url,
     url_value,
@@ -30,7 +38,12 @@ from repo_graph.extraction.scanners.sql_helpers import (
     sql_interaction_properties,
     stored_procedure_target,
 )
-from repo_graph.extraction.scanners.symbol_helpers import SymbolCallTarget, TypeMethodIndex, symbol_call_edges
+from repo_graph.extraction.scanners.symbol_helpers import (
+    SymbolCallTarget,
+    TypeMethodIndex,
+    symbol_call_edges,
+    symbol_call_facts,
+)
 from repo_graph.graph import Edge, Entity
 
 DOTNET_PROJECT_SUFFIXES = {".csproj", ".fsproj", ".vbproj"}
@@ -271,25 +284,24 @@ def csharp_method_index(content: str) -> TypeMethodIndex:
     return TypeMethodIndex(type_methods={type_name: frozenset(methods) for type_name, methods in type_methods.items()})
 
 
-def csharp_symbol_result(
+def csharp_symbol_facts(
     context: FileScanContext,
     symbol_kind: str,
     name: str,
     namespace: str | None,
     line_number: int,
     parent_name: str | None = None,
-) -> ScanResult:
-    result = ScanResult()
+) -> FactBatch:
+    facts = FactBatch()
     entity_type = csharp_entity_type(symbol_kind)
     full_name = ".".join(part for part in (namespace, parent_name, name) if part)
     aliases = {name, full_name or name}
     if parent_name:
         aliases.add(f"{parent_name}.{name}")
-    symbol = Entity(
+    symbol = entity_fact(
+        context,
         entity_type=entity_type,
         name=full_name or name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         line_number=line_number,
         aliases=aliases,
         properties={
@@ -299,19 +311,18 @@ def csharp_symbol_result(
             "project": context.project.name if context.project else None,
         },
     )
-    result.entities.append(symbol)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            symbol,
+    facts.entities.append(symbol)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            symbol.reference,
             "DECLARES_SYMBOL",
-            context.source.name,
-            context.rel_path,
+            context,
             "dotnet_symbol",
             line_number,
         )
     )
-    return result
+    return facts
 
 
 def csharp_entity_type(symbol_kind: str) -> str:
@@ -336,16 +347,16 @@ def csharp_route_prefix(
     return csharp_replace_route_tokens(route, type_name, method_name)
 
 
-def csharp_controller_route_result(
+def csharp_controller_route_facts(
     context: FileScanContext,
     method_name: str,
     attributes: Sequence[CSharpAttribute],
     route_prefix: str | None,
     type_name: str | None,
     line_number: int,
-    handler: Entity | None = None,
-) -> ScanResult:
-    result = ScanResult()
+    handler: EntityFact | None = None,
+) -> FactBatch:
+    facts = FactBatch()
     route_path = csharp_route_prefix(attributes, type_name, method_name)
     for attribute in attributes:
         method = csharp_http_attribute_method(attribute)
@@ -355,34 +366,34 @@ def csharp_controller_route_result(
         path = csharp_join_route_paths(
             route_prefix, csharp_replace_route_tokens(attribute_path, type_name, method_name)
         )
-        route = route_entity(context, method, path, line_number, "dotnet_controller_route", method_name)
-        result.entities.append(route)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                route,
+        route = route_entity_fact(context, method, path, line_number, "dotnet_controller_route", method_name)
+        facts.entities.append(route)
+        facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                route.reference,
                 "DECLARES_ROUTE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "dotnet_controller_route",
                 line_number,
             )
         )
         if context.project:
-            result.edges.append(
-                resolved_edge(
-                    context.project.entity,
-                    route,
+            facts.relationships.append(
+                resolved_relationship_fact(
+                    entity_reference(context.project.entity),
+                    route.reference,
                     "EXPOSES_ROUTE",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     "dotnet_controller_route",
                     line_number,
                 )
             )
         if handler:
-            result.edges.append(route_handler_edge(context, route, handler, "dotnet_controller_route", line_number))
-    return result
+            facts.relationships.append(
+                route_handler_fact(context, route, handler, "dotnet_controller_route", line_number)
+            )
+    return facts
 
 
 def csharp_http_attribute_method(attribute: CSharpAttribute) -> str | None:
@@ -398,11 +409,11 @@ def csharp_http_attribute_method(attribute: CSharpAttribute) -> str | None:
     return methods.get(attribute.name)
 
 
-def csharp_minimal_route_result(context: FileScanContext, line: str, line_number: int) -> ScanResult:
-    result = ScanResult()
+def csharp_minimal_route_facts(context: FileScanContext, line: str, line_number: int) -> FactBatch:
+    facts = FactBatch()
     for match in CS_MINIMAL_ROUTE_RE.finditer(line):
-        result.extend(
-            add_route(
+        facts.extend(
+            add_route_facts(
                 context,
                 match.group(1).upper(),
                 csharp_unescape_string(match.group(2)),
@@ -410,24 +421,24 @@ def csharp_minimal_route_result(context: FileScanContext, line: str, line_number
                 "dotnet_minimal_route",
             )
         )
-    return result
+    return facts
 
 
-def csharp_symbol_call_edges(
+def csharp_symbol_call_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity,
+    from_entity: EntityFact,
     current_type: str | None,
     method_index: TypeMethodIndex,
-) -> list[Edge]:
+) -> list[RelationshipFact]:
     code = csharp_scope_code(line)
     targets = [
         *csharp_new_method_call_targets(code, method_index),
         *csharp_qualified_method_call_targets(code, current_type, method_index),
         *csharp_direct_method_call_targets(code, current_type, method_index),
     ]
-    return symbol_call_edges(context, from_entity, targets, "dotnet_call", line_number)
+    return symbol_call_facts(context, from_entity, targets, "dotnet_call", line_number)
 
 
 def csharp_new_method_call_targets(code: str, method_index: TypeMethodIndex) -> list[SymbolCallTarget]:
@@ -475,14 +486,14 @@ def csharp_direct_method_call_targets(
     ]
 
 
-def csharp_http_call_edges(
+def csharp_http_call_facts(
     context: FileScanContext,
     line: str,
     line_number: int,
-    from_entity: Entity | None = None,
-) -> list[Edge]:
-    edges: list[Edge] = []
-    source_entity = from_entity or context.file_entity
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
+    facts: list[RelationshipFact] = []
+    source_ref = entity_reference(from_entity or context.file_entity)
     extra_properties = source_context_properties(from_entity)
     for match in CS_HTTP_CALL_RE.finditer(line):
         method = match.group(1).upper()
@@ -493,13 +504,12 @@ def csharp_http_call_edges(
             target["service_name"] = service_name_from_url(raw_target)
             target["client"] = "HttpClient"
             target.update(extra_properties)
-            edges.append(
-                unresolved_edge(
-                    source_entity,
+            facts.append(
+                unresolved_relationship_fact(
+                    source_ref,
                     target["service_name"],
                     "CALLS_SERVICE",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     "dotnet_http",
                     to_type="service",
                     line_number=line_number,
@@ -507,8 +517,8 @@ def csharp_http_call_edges(
                 )
             )
         else:
-            edges.extend(
-                http_edges_for_target(
+            facts.extend(
+                http_facts_for_target(
                     context,
                     method,
                     raw_target,
@@ -519,7 +529,7 @@ def csharp_http_call_edges(
                     extra_properties=extra_properties,
                 )
             )
-    return edges
+    return facts
 
 
 def csharp_first_string(value: str | None) -> str | None:
