@@ -35,6 +35,7 @@ from repo_graph.extraction.scanners.code.dotnet.helpers import (
     vb_symbol_facts,
 )
 from repo_graph.extraction.scanners.interaction_helpers import route_entity_fact
+from repo_graph.extraction.scanners.messaging_helpers import message_facts_for_line
 from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_line
 
 
@@ -85,6 +86,7 @@ class CSharpCodeExtractor:
         "dotnet_controller_route",
         "dotnet_http",
         "dotnet_minimal_route",
+        "dotnet_message",
         "dotnet_symbol",
         "sql_reference",
     )
@@ -105,9 +107,13 @@ class CSharpCodeExtractor:
         for line_number, line in enumerate(content.splitlines(), start=1):
             facts.extend(csharp_minimal_route_facts(context, line, line_number))
             facts.relationships.extend(csharp_http_call_facts(context, line, line_number))
+            facts.relationships.extend(message_facts_for_line(context, line, line_number, "dotnet_message"))
             if current_function:
                 facts.relationships.extend(
                     csharp_http_call_facts(context, line, line_number, from_entity=current_function)
+                )
+                facts.relationships.extend(
+                    message_facts_for_line(context, line, line_number, "dotnet_message", from_entity=current_function)
                 )
                 facts.relationships.extend(
                     sql_reference_facts_for_line(context, line, line_number, from_entity=current_function)
@@ -208,6 +214,7 @@ class VbCodeExtractor:
         "vb_config_service",
         "vb_contract_route",
         "vb_http",
+        "vb_message",
         "vb_sql_command",
         "vb_symbol",
     )
@@ -261,10 +268,14 @@ class VbCodeExtractor:
                 pending_attributes = []
 
             facts.relationships.extend(vb_service_call_facts(context, line, line_number))
+            facts.relationships.extend(message_facts_for_line(context, line, line_number, "vb_message"))
             facts.relationships.extend(vb_sql_command_facts(context, line, line_number))
             if current_function:
                 facts.relationships.extend(
                     vb_service_call_facts(context, line, line_number, from_entity=current_function)
+                )
+                facts.relationships.extend(
+                    message_facts_for_line(context, line, line_number, "vb_message", from_entity=current_function)
                 )
                 facts.relationships.extend(
                     vb_sql_command_facts(context, line, line_number, from_entity=current_function)

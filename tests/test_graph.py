@@ -108,6 +108,42 @@ class GraphResolutionTests(unittest.TestCase):
         self.assertTrue(edge.resolved)
         self.assertEqual(edge.to_entity_id, same_source.entity_id)
 
+    def test_message_resources_are_materialized_as_shared_external_nodes(self) -> None:
+        graph = Graph(scope_name="test", sources=[])
+        publisher = graph.add_entity(Entity(entity_type="file", name="producer.py", source_name="publisher"))
+        consumer = graph.add_entity(Entity(entity_type="file", name="consumer.ts", source_name="consumer"))
+        graph.add_edge(
+            Edge(
+                from_entity_id=publisher.entity_id,
+                from_name=publisher.name,
+                from_type=publisher.entity_type,
+                to_name="orders.created",
+                to_type="message_topic",
+                edge_type="PUBLISHES_MESSAGE",
+                source_name="publisher",
+            )
+        )
+        graph.add_edge(
+            Edge(
+                from_entity_id=consumer.entity_id,
+                from_name=consumer.name,
+                from_type=consumer.entity_type,
+                to_name="orders.created",
+                to_type="message_topic",
+                edge_type="CONSUMES_MESSAGE",
+                source_name="consumer",
+            )
+        )
+
+        graph.resolve_edges()
+        message_entities = [entity for entity in graph.entities.values() if entity.entity_type == "message_topic"]
+        message_edges = [edge for edge in graph.edges.values() if edge.to_type == "message_topic"]
+
+        self.assertEqual(len(message_entities), 1)
+        self.assertEqual(message_entities[0].source_name, "external-resources")
+        self.assertTrue(all(edge.resolved for edge in message_edges))
+        self.assertEqual({edge.to_entity_id for edge in message_edges}, {message_entities[0].entity_id})
+
 
 if __name__ == "__main__":
     unittest.main()

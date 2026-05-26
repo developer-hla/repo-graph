@@ -59,6 +59,10 @@ resolution, and export shape.
    If the parser discovers a new boundary type, evaluate it against
    [first-class coverage](first-class-coverage.md) before deciding whether to
    add graph vocabulary or reuse an existing edge type.
+   Messaging libraries such as Kafka, RabbitMQ, SQS, Azure Service Bus, and
+   bus abstractions should emit `PUBLISHES_MESSAGE` or `CONSUMES_MESSAGE` with
+   library-specific evidence in properties. The destination should be a
+   generic `message_topic`, `message_queue`, or `message_contract` target.
    For interaction edge types listed in `repo_graph.vocabulary.INTERACTION_EDGE_TYPES`,
    use `repo_graph.extraction.interaction_properties.interaction_properties`
    or an equivalent wrapper so `target_boundary`, `dependency_scope`, and
@@ -93,12 +97,12 @@ resolution, and export shape.
 - Promote important integration boundaries to first-class graph facts when
   they are stable, discoverable, and useful for blast-radius analysis. Use
   `docs/first-class-coverage.md` as the checklist.
-- Use interaction evidence for app-to-app and app-to-database relationships:
+- Use interaction evidence for app-to-app, messaging, and app-to-database relationships:
   `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
-  `CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, and
-  `REFERENCES_SQL_OBJECT`. Do not use interaction evidence for containment,
-  declaration, or ownership edges such as `CONTAINS_FILE`, `DECLARES_SYMBOL`,
-  or `DEFINES`.
+  `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`, `CALLS_SQL`, `READS_SQL_OBJECT`,
+  `WRITES_SQL_OBJECT`, and `REFERENCES_SQL_OBJECT`. Do not use interaction
+  evidence for containment, declaration, or ownership edges such as
+  `CONTAINS_FILE`, `DECLARES_SYMBOL`, or `DEFINES`.
 - SQL parsers should preserve schema provenance. Migration or revision files are
   historical evidence, not proof of current database state. Prefer
   `schema_state=current_schema`, `historical`, `unknown`, or

@@ -10,6 +10,7 @@ Namespace Example.Legacy
     Public Function GetOrder(id As Integer) As String
       Dim baseUrl = ConfigurationManager.AppSettings("InventoryServiceUrl")
       Dim request = WebRequest.Create("http://inventory-service/api/orders/" & id)
+      Dim message = QueueClient.ReceiveAsync("legacy-orders")
       Dim commandName = BuildCommandName(id)
       Dim command As New SqlCommand("dbo.GetOrder")
       command.CommandType = CommandType.StoredProcedure

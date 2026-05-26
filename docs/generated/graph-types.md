@@ -5,9 +5,9 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents the graph types exercised by the synthetic examples, not a private source set.
 
 - Graph schema version: `0.1`
-- Entity count: `91`
-- Edge count: `185`
-- Resolved edge count: `168`
+- Entity count: `94`
+- Edge count: `193`
+- Resolved edge count: `176`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -24,6 +24,8 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `file` | 26 |
 | `function` | 11 |
 | `ingress` | 1 |
+| `message_contract` | 1 |
+| `message_topic` | 2 |
 | `package` | 8 |
 | `project` | 9 |
 | `repository` | 8 |
@@ -41,6 +43,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `CALLS_SQL` | 8 |
 | `CALLS_SYMBOL` | 5 |
 | `CONFIGURES_SERVICE` | 3 |
+| `CONSUMES_MESSAGE` | 4 |
 | `CONTAINS_FILE` | 51 |
 | `CONTAINS_PROJECT` | 11 |
 | `DECLARES_BUILD_CONFIG` | 1 |
@@ -59,6 +62,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `EXPOSES_ROUTE` | 8 |
 | `HANDLES_ROUTE` | 4 |
 | `IMPORTS` | 9 |
+| `PUBLISHES_MESSAGE` | 4 |
 | `READS_SQL_OBJECT` | 1 |
 | `REFERENCES_SQL_OBJECT` | 1 |
 | `ROUTES_TO_SERVICE` | 1 |
@@ -75,6 +79,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `dotnet_controller_route` | 3 |
 | `dotnet_framework_config` | 6 |
 | `dotnet_http` | 2 |
+| `dotnet_message` | 2 |
 | `dotnet_minimal_route` | 2 |
 | `dotnet_project` | 8 |
 | `dotnet_solution` | 3 |
@@ -84,6 +89,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `javascript_export` | 2 |
 | `javascript_http` | 4 |
 | `javascript_import` | 3 |
+| `javascript_message` | 2 |
 | `javascript_route` | 5 |
 | `javascript_symbol` | 1 |
 | `kubernetes_container` | 1 |
@@ -101,6 +107,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `python_call` | 2 |
 | `python_http` | 2 |
 | `python_import` | 6 |
+| `python_message` | 2 |
 | `python_route` | 3 |
 | `python_symbol` | 6 |
 | `requirements` | 1 |
@@ -110,6 +117,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `vb_config_service` | 2 |
 | `vb_contract_route` | 3 |
 | `vb_http` | 2 |
+| `vb_message` | 2 |
 | `vb_sql_command` | 2 |
 | `vb_symbol` | 3 |
 
@@ -118,4 +126,4 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Confidence | Example Edge Count |
 | --- | ---: |
 | `high` | 129 |
-| `medium` | 56 |
+| `medium` | 64 |

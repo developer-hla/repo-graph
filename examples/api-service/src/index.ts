@@ -6,6 +6,7 @@ const server = fastify();
 export async function loadThing(id: string) {
   const response = await fetch(`/things/${id}`);
   await fetch(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
+  await producer.send({ topic: "things.changed", messages: [{ value: id }] });
   return response.json();
 }
 

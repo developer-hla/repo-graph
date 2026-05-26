@@ -100,6 +100,7 @@ Output:
 - call references
 - imports
 - SQL snippets found in code
+- messaging publish and consume references
 - evidence: parser ID, file path, line number, raw target, normalized target,
   syntax-specific details
 

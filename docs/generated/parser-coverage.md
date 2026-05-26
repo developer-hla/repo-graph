@@ -4,8 +4,8 @@
 This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
-- Parser count: `42`
-- Edge count: `185`
+- Parser count: `46`
+- Edge count: `193`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -17,6 +17,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `dotnet_controller_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `dotnet-service` |
 | `dotnet_framework_config` | 6 | 0 | `CONFIGURES_SERVICE`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE` | `config_file`, `config_value`, `file` | `config_file`, `config_value`, `service` | `legacy-vb-service` |
 | `dotnet_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `dotnet-service` |
+| `dotnet_message` | 2 | 0 | `PUBLISHES_MESSAGE` | `file`, `function` | `message_contract` | `dotnet-service` |
 | `dotnet_minimal_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `dotnet-service` |
 | `dotnet_project` | 8 | 0 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT` | `file`, `package`, `project` | `package`, `project` | `dotnet-service`, `legacy-vb-service` |
 | `dotnet_solution` | 3 | 2 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
@@ -26,6 +27,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `javascript_export` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service`, `shared-library` |
 | `javascript_http` | 4 | 0 | `CALLS_HTTP`, `CALLS_SERVICE` | `file`, `function` | `api_route`, `service` | `api-service` |
 | `javascript_import` | 3 | 2 | `IMPORTS` | `file` | `package` | `api-service`, `inventory-service` |
+| `javascript_message` | 2 | 0 | `PUBLISHES_MESSAGE` | `file`, `function` | `message_topic` | `api-service` |
 | `javascript_route` | 5 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `api-service`, `inventory-service` |
 | `javascript_symbol` | 1 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service` |
 | `kubernetes_container` | 1 | 0 | `RUNS_CONTAINER` | `deployment` | `container` | `inventory-service` |
@@ -43,6 +45,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `python_call` | 2 | 0 | `CALLS_SYMBOL` | `function` | `function` | `python-shared`, `python-worker` |
 | `python_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `python-worker` |
 | `python_import` | 6 | 4 | `IMPORTS` | `file` | `package` | `python-shared`, `python-worker` |
+| `python_message` | 2 | 0 | `CONSUMES_MESSAGE` | `file`, `function` | `message_topic` | `python-worker` |
 | `python_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `python-worker` |
 | `python_symbol` | 6 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
@@ -52,6 +55,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `vb_config_service` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
 | `vb_contract_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `legacy-vb-service` |
 | `vb_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
+| `vb_message` | 2 | 0 | `CONSUMES_MESSAGE` | `file`, `function` | `message_topic` | `legacy-vb-service` |
 | `vb_sql_command` | 2 | 0 | `CALLS_SQL` | `file`, `function` | `stored_procedure` | `legacy-vb-service` |
 | `vb_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `legacy-vb-service` |
 

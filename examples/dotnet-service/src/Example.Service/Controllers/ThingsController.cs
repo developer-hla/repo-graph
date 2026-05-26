@@ -17,6 +17,7 @@ public class ThingsController : ControllerBase
     public async Task<string> GetThing(string id)
     {
         await httpClient.GetAsync("http://inventory-service/inventory/" + id);
+        await bus.Publish<ThingLoaded>();
         var query = BuildThingQuery(id);
         return query;
     }

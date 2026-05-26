@@ -5,9 +5,13 @@ from __future__ import annotations
 from collections import defaultdict
 
 from repo_graph.graph.model import Entity, Graph
+from repo_graph.vocabulary import MESSAGE_ENTITY_TYPES
+
+CANONICAL_RESOURCE_SOURCE_NAME = "external-resources"
 
 
 def resolve_graph_edges(graph: Graph) -> None:
+    materialize_message_resources(graph)
     lookup: dict[tuple[str | None, str], list[Entity]] = defaultdict(list)
     for entity in graph.entities.values():
         if not is_resolution_candidate(entity):
@@ -45,6 +49,26 @@ def resolve_graph_edges(graph: Graph) -> None:
                 }
                 for candidate in candidates[:25]
             ]
+
+
+def materialize_message_resources(graph: Graph) -> None:
+    for edge in graph.edges.values():
+        if edge.to_entity_id or edge.to_type not in MESSAGE_ENTITY_TYPES or not edge.to_name:
+            continue
+        entity = graph.add_entity(
+            Entity(
+                entity_type=edge.to_type,
+                name=edge.to_name,
+                source_name=CANONICAL_RESOURCE_SOURCE_NAME,
+                aliases={normalize_key(edge.to_name)},
+                properties={
+                    "resource_boundary": "messaging",
+                    "canonical_external_resource": True,
+                },
+            )
+        )
+        edge.to_entity_id = entity.entity_id
+        edge.resolved = True
 
 
 def normalize_key(value: str) -> str:

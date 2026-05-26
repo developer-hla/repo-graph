@@ -423,6 +423,76 @@ sources:
         )
         self.assertTrue(all(edge["parser"] != "axios_http" for edge in graph_data["edges"]))
 
+    def test_build_graph_connects_publishers_and_consumers_through_message_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            publisher = root / "publisher"
+            consumer = root / "consumer"
+            publisher.mkdir()
+            consumer.mkdir()
+            (publisher / "events.ts").write_text(
+                """
+export async function publishThing(id: string) {
+  await producer.send({ topic: "things.changed", messages: [{ value: id }] });
+}
+""",
+                encoding="utf-8",
+            )
+            (consumer / "worker.py").write_text(
+                """
+def consume_thing() -> None:
+    consumer.subscribe(["things.changed"])
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: publisher
+    path: publisher
+  - type: local_path
+    name: consumer
+    path: consumer
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            graph = build_graph(config)
+            graph_data = graph.to_dict()
+
+        topics = [entity for entity in graph_data["entities"] if entity["entity_type"] == "message_topic"]
+        publish_edges = [
+            edge
+            for edge in graph_data["edges"]
+            if edge["edge_type"] == "PUBLISHES_MESSAGE" and edge["from_type"] == "function"
+        ]
+        consume_edges = [
+            edge
+            for edge in graph_data["edges"]
+            if edge["edge_type"] == "CONSUMES_MESSAGE" and edge["from_type"] == "function"
+        ]
+
+        self.assertEqual(len(topics), 1)
+        self.assertEqual(topics[0]["name"], "things.changed")
+        self.assertEqual(topics[0]["source_name"], "external-resources")
+        self.assertTrue(publish_edges)
+        self.assertTrue(consume_edges)
+        self.assertEqual({edge["to_entity_id"] for edge in publish_edges + consume_edges}, {topics[0]["entity_id"]})
+        self.assertTrue(
+            all(
+                edge["resolved"]
+                and edge["properties"].get("target_boundary") == "messaging"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                for edge in publish_edges + consume_edges
+            )
+        )
+        self.assertTrue(any(edge["parser"] == "javascript_message" for edge in publish_edges))
+        self.assertTrue(any(edge["parser"] == "python_message" for edge in consume_edges))
+
     def test_dependency_filter_keeps_internal_like_unresolved_package_references(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

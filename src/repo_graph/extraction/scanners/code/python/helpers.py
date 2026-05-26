@@ -24,6 +24,12 @@ from repo_graph.extraction.scanners.interaction_helpers import (
     route_handler_fact,
     service_name_from_url,
 )
+from repo_graph.extraction.scanners.messaging_helpers import (
+    MessageTarget,
+    message_operation,
+    message_relationship_fact,
+    message_target,
+)
 from repo_graph.extraction.scanners.package_helpers import normalize_python_package_name
 from repo_graph.extraction.scanners.sql.helpers import (
     source_context_properties,
@@ -273,6 +279,50 @@ def python_sql_call_facts(
     ]
 
 
+def python_message_facts(
+    context: FileScanContext,
+    call: ast.Call,
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
+    callee = python_attribute_name(call.func)
+    operation = message_operation(
+        callee,
+        receiver=python_call_root_name(call.func) or python_call_receiver_name(call.func),
+    )
+    if not operation:
+        return []
+    return [
+        message_relationship_fact(context, operation, target, call.lineno, "python_message", from_entity)
+        for target in python_message_targets(call, operation.method)
+    ]
+
+
+def python_message_targets(call: ast.Call, method: str) -> list[MessageTarget]:
+    targets: list[MessageTarget] = []
+    for key in ("topic", "topics", "queue", "queue_name", "QueueName", "QueueUrl", "routing_key"):
+        values = python_keyword_strings(call, key)
+        targets.extend(message_target(value, python_message_destination_kind(key), key) for value in values)
+    if not targets:
+        targets.extend(
+            message_target(value, python_message_destination_kind_for_method(method), "first_arg")
+            for value in python_string_values_from_arg(call, 0)
+        )
+    return targets
+
+
+def python_message_destination_kind(key: str) -> str:
+    normalized = key.lower()
+    if "queue" in normalized or "routing" in normalized:
+        return "queue"
+    return "topic"
+
+
+def python_message_destination_kind_for_method(method: str) -> str:
+    if method in {"basic_consume", "receive_message", "send_message"}:
+        return "queue"
+    return "topic"
+
+
 def python_symbol_call_facts(
     context: FileScanContext,
     call: ast.Call,
@@ -356,6 +406,12 @@ def python_string_arg(call: ast.Call, index: int) -> str | None:
     if index >= len(call.args):
         return None
     return python_string_value(call.args[index])
+
+
+def python_string_values_from_arg(call: ast.Call, index: int) -> list[str]:
+    if index >= len(call.args):
+        return []
+    return python_string_values(call.args[index])
 
 
 def python_keyword_string(call: ast.Call, keyword_name: str) -> str | None:

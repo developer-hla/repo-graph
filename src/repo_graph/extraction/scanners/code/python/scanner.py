@@ -12,6 +12,7 @@ from repo_graph.extraction.scanners.code.python.helpers import (
     PythonCallableIndex,
     python_http_call_facts,
     python_import_fact,
+    python_message_facts,
     python_route_facts,
     python_sql_call_facts,
     python_symbol_call_facts,
@@ -26,6 +27,7 @@ class PythonCodeExtractor:
         "python_call",
         "python_http",
         "python_import",
+        "python_message",
         "python_route",
         "python_symbol",
         "sql_reference",
@@ -94,10 +96,12 @@ class PythonAstVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         self.facts.relationships.extend(python_http_call_facts(self.context, node))
+        self.facts.relationships.extend(python_message_facts(self.context, node))
         self.facts.relationships.extend(python_sql_call_facts(self.context, node))
         if self.function_stack:
             function_entity = self.function_stack[-1]
             self.facts.relationships.extend(python_http_call_facts(self.context, node, from_entity=function_entity))
+            self.facts.relationships.extend(python_message_facts(self.context, node, from_entity=function_entity))
             self.facts.relationships.extend(python_sql_call_facts(self.context, node, from_entity=function_entity))
             self.facts.relationships.extend(
                 python_symbol_call_facts(

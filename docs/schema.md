@@ -28,7 +28,7 @@ intended shape and meaning of the graph.
 ```json
 {
   "entity_id": "stable-id",
-  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | service | deployment | container | ingress | api_route | function | class | module | interface | sql_table | sql_view | sql_function | stored_procedure",
+  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | service | deployment | container | ingress | api_route | function | class | module | interface | message_topic | message_queue | message_contract | sql_table | sql_view | sql_function | stored_procedure",
   "name": "display name",
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -49,7 +49,7 @@ intended shape and meaning of the graph.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | CALLS_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | CALLS_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | PUBLISHES_MESSAGE | CONSUMES_MESSAGE | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -72,12 +72,12 @@ when known.
 file location but can produce multiple facts with the same source and target,
 such as two database constraints between the same tables.
 
-Application-to-application and application-to-database interaction edges should
-use regular evidence fields. The canonical list lives in
+Application-to-application, application-to-database, and messaging interaction
+edges should use regular evidence fields. The canonical list lives in
 `repo_graph.vocabulary.INTERACTION_EDGE_TYPES` and currently includes
 `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
-`CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, and
-`REFERENCES_SQL_OBJECT`, and `TRIGGERS_ON_SQL_OBJECT`.
+`PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`, `CALLS_SQL`, `READS_SQL_OBJECT`,
+`WRITES_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, and `TRIGGERS_ON_SQL_OBJECT`.
 
 Database-to-database dependencies use the same interaction contract. For
 example, a stored procedure or view that reads a table should emit
@@ -97,11 +97,12 @@ When handler code delegates to another discovered function, use `CALLS_SYMBOL`
 from the caller function to the callee function. This keeps app-internal
 delegation visible without treating it as an app-to-app interaction.
 
-- `target_boundary`: `application` or `database`
+- `target_boundary`: `application`, `database`, or `messaging`
 - `dependency_scope`: `runtime`, `configuration`, `deployment`, or `schema`
 - `interaction_kind`: a stable evidence category such as `http_call`,
-  `service_call`, `service_configuration`, `ingress_route`, `sql_reference`,
-  or `sql_schema_reference`
+  `service_call`, `service_configuration`, `ingress_route`,
+  `message_publish`, `message_consume`, `sql_reference`, or
+  `sql_schema_reference`
 - protocol-specific evidence such as `client`, `protocol`, `http_method`,
   `target_path`, `sql_operation`, `database_object_type`, `schema_state`, or
   `sql_source_kind`
@@ -116,9 +117,10 @@ are kept in the graph but are not used as normal resolution candidates.
 metadata rather than a source file.
 
 Do not model every library or syntax form as a separate edge type. `fetch`,
-`axios`, `requests`, `httpx`, `HttpClient`, and legacy HTTP clients are
-evidence for an app-boundary dependency; they are not the dependency language
-agents should expose to users.
+`axios`, `requests`, `httpx`, `HttpClient`, legacy HTTP clients, Kafka,
+RabbitMQ, SQS, Azure Service Bus, and bus abstractions are evidence for a
+semantic dependency; they are not the dependency language agents should expose
+to users.
 
 ## Core Entity Types
 
@@ -141,6 +143,10 @@ agents should expose to users.
 - `api_route`: an HTTP route declared in source code.
 - `function`, `class`, `module`, and `interface`: exported JavaScript,
   TypeScript, Python, C#, or legacy VB symbols.
+- `message_topic`, `message_queue`, and `message_contract`: shared messaging
+  resources discovered from publish and consume calls. These are materialized
+  as `external-resources` nodes so publishers and consumers in different
+  sources can meet at the same graph target.
 - `sql_table`, `sql_view`, `sql_function`, `sql_trigger`,
   `stored_procedure`: SQL objects declared in SQL files or emitted from
   database metadata.
@@ -177,6 +183,10 @@ agents should expose to users.
   URL names, config keys, or legacy HTTP clients.
 - `CONFIGURES_SERVICE`: config value to a service-like target inferred from
   URL settings or WCF endpoints.
+- `PUBLISHES_MESSAGE`: file or function to a message topic, queue, or contract
+  inferred from producer, publisher, queue, bus, or event client calls.
+- `CONSUMES_MESSAGE`: file or function to a message topic, queue, or contract
+  inferred from consumer, subscriber, queue, bus, or event client calls.
 - `DEFINES`: SQL file to SQL object declaration.
 - `CALLS_SQL`: file, function, or SQL object to stored procedure target.
 - `READS_SQL_OBJECT`: file, function, or SQL object to table, view, function, or

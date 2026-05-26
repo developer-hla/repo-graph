@@ -33,6 +33,7 @@ evidence.
 | Deployment routing | `DECLARES_SERVICE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `ROUTES_TO_SERVICE`, `RUNS_CONTAINER`, `SELECTS_DEPLOYMENT` | Covered for Kubernetes manifests. |
 | API routes | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | Route declarations are covered for common JavaScript, Python, .NET, and legacy VB route forms. Route-to-handler edges are covered when JavaScript route registrations, Python decorators, .NET controller actions, or legacy VB contract methods expose a clear handler function. |
 | Internal code delegation | `CALLS_SYMBOL` | Covered for JavaScript same-file functions, Python local functions and class/instance method calls, C# same-class or explicit class calls, and legacy VB same-class or explicit module/class calls when the parser can identify a discovered callable target without obvious third-party noise. |
+| Messaging and event streams | `message_topic`, `message_queue`, `message_contract`, `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE` | Covered for common JavaScript, Python, .NET, and VB producer/consumer forms with shared external message resource nodes. |
 | Packages and project structure | `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, containment/declaration edges | Covered for supported package and project manifests. |
 | Application-to-database calls | `CALLS_SQL` | Covered for application stored procedure calls in supported languages, with function-level context when the parser can identify the enclosing handler or method. |
 | Database object reads | `READS_SQL_OBJECT` | Covered for SQL object reads from SQL definitions and application SQL snippets, with function-level context when available. |
@@ -50,7 +51,6 @@ shortcuts.
 | --- | --- | --- | --- |
 | High | Current database introspection | Revision and migration files can describe objects that no longer exist. Read-only introspection can provide the current database shape and reconcile code evidence against reality. | Source type: `database`; schema state: `current_database`; SQL Server metadata from `sys.*` catalogs; PostgreSQL metadata from `pg_catalog` catalogs. |
 | High | Richer function-to-function calls | A route handler often delegates to service-layer functions before making HTTP or database calls. Impact paths need those internal calls to connect endpoint blast radius to deeper dependencies across JavaScript, imported Python symbols, dependency-injected .NET services, and richer legacy forms. | Continue using `CALLS_SYMBOL` when the target is a discovered function or method. |
-| High | Messaging and event streams | Services often depend through queues, topics, and event contracts instead of HTTP. Refactors need publisher and consumer impact. | Entities: `message_topic`, `message_queue`, `message_contract`; edges: `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`. |
 | Medium | Deeper SQL schema dependencies | Schema-bound views, computed columns, constraints, and SQL module dependencies create blast radius beyond simple `REFERENCES` clauses. | Continue using `REFERENCES_SQL_OBJECT` with `sql_operation` evidence such as `SCHEMA_BOUND_VIEW` or catalog-derived dependency type. |
 | Medium | File, blob, and transfer storage | Legacy and integration systems often couple through shared paths, buckets, FTP/SFTP drops, or blob containers. | Entities: `storage_location`; edges: `READS_STORAGE_OBJECT`, `WRITES_STORAGE_OBJECT`. |
 | Medium | Cache and distributed state | Redis or similar caches can couple services through key names and invalidation behavior. | Entities: `cache_store`, `cache_key`; edges: `READS_CACHE_KEY`, `WRITES_CACHE_KEY`. |
@@ -74,9 +74,10 @@ shortcuts.
    conservative local callable delegation. Next, extend this to safe imported
    Python symbols and dependency-injected service calls when target identity is
    available.
-4. Add messaging boundaries.
+4. Add messaging boundaries. Done for common code forms.
    Keep Kafka, RabbitMQ, Azure Service Bus, SQS, and similar client libraries as
-   evidence for generic publish/consume graph facts.
+   evidence for generic publish/consume graph facts. Publishers and consumers
+   now connect through shared `external-resources` message nodes.
 5. Add storage and transfer boundaries.
    Model shared storage as a dependency target, not as one edge type per SDK.
 6. Add cache and scheduled-job slices when examples and stable naming rules are

@@ -360,6 +360,7 @@ Start with parsers that are useful across many codebases:
 - TypeScript and JavaScript imports, exports, route declarations, named route
   handlers, and conservative same-file function calls
 - HTTP calls from `fetch` and common client libraries
+- messaging publish and consume calls for topics, queues, and event contracts
 - SQL tables, views, functions, and stored procedures
 - SQL references from application code
 
@@ -373,7 +374,6 @@ Future parser slices should add:
 - deeper database metadata such as computed dependencies and richer trigger body impact
 - route/function/query context so endpoint impact paths do not stop at file
   ownership
-- messaging publish/consume boundaries for queues, topics, and event contracts
 - shared storage and file-transfer boundaries such as blob storage, network
   shares, FTP, and SFTP
 - cache and scheduled-job boundaries when stable target naming rules are clear

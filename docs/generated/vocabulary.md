@@ -16,6 +16,9 @@ This file is generated from `repo_graph.vocabulary`.
 - `function`
 - `ingress`
 - `interface`
+- `message_contract`
+- `message_queue`
+- `message_topic`
 - `module`
 - `package`
 - `project`
@@ -44,6 +47,9 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `function`
 - `ingress`
 - `interface`
+- `message_contract`
+- `message_queue`
+- `message_topic`
 - `module`
 - `package`
 - `project`
@@ -65,6 +71,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `CALLS_SQL`
 - `CALLS_SYMBOL`
 - `CONFIGURES_SERVICE`
+- `CONSUMES_MESSAGE`
 - `CONTAINS_FILE`
 - `CONTAINS_PROJECT`
 - `DECLARES_BUILD_CONFIG`
@@ -84,6 +91,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `EXPOSES_ROUTE`
 - `HANDLES_ROUTE`
 - `IMPORTS`
+- `PUBLISHES_MESSAGE`
 - `READS_SQL_OBJECT`
 - `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
@@ -94,7 +102,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 
 ## Interaction Evidence
 
-These edge types represent application-to-application or application-to-database interactions. They should include the regular evidence keys below in edge `properties`.
+These edge types represent application-to-application, messaging, or application-to-database interactions. They should include the regular evidence keys below in edge `properties`.
 
 ### Edge Types
 
@@ -102,6 +110,8 @@ These edge types represent application-to-application or application-to-database
 - `CALLS_SERVICE`
 - `CALLS_SQL`
 - `CONFIGURES_SERVICE`
+- `CONSUMES_MESSAGE`
+- `PUBLISHES_MESSAGE`
 - `READS_SQL_OBJECT`
 - `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
@@ -118,6 +128,7 @@ These edge types represent application-to-application or application-to-database
 
 - `application`
 - `database`
+- `messaging`
 
 ### Dependency Scopes
 
@@ -130,6 +141,8 @@ These edge types represent application-to-application or application-to-database
 
 - `http_call`
 - `ingress_route`
+- `message_consume`
+- `message_publish`
 - `service_call`
 - `service_configuration`
 - `sql_reference`
@@ -144,6 +157,7 @@ These edge types represent application-to-application or application-to-database
 - `dotnet_framework_config`
 - `dotnet_http`
 - `dotnet_minimal_route`
+- `dotnet_message`
 - `dotnet_project`
 - `dotnet_solution`
 - `dotnet_symbol`
@@ -152,6 +166,7 @@ These edge types represent application-to-application or application-to-database
 - `javascript_export`
 - `javascript_http`
 - `javascript_import`
+- `javascript_message`
 - `javascript_route`
 - `javascript_symbol`
 - `kubernetes_container`
@@ -171,6 +186,7 @@ These edge types represent application-to-application or application-to-database
 - `python_call`
 - `python_http`
 - `python_import`
+- `python_message`
 - `python_route`
 - `python_symbol`
 - `requirements`
@@ -181,6 +197,7 @@ These edge types represent application-to-application or application-to-database
 - `vb_config_service`
 - `vb_contract_route`
 - `vb_http`
+- `vb_message`
 - `vb_sql_command`
 - `vb_symbol`
 
@@ -189,7 +206,7 @@ These edge types represent application-to-application or application-to-database
 | Profile | Edge Types | Description |
 | --- | --- | --- |
 | `all` | `all` | Traverse all edge types. |
-| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CALLS_SYMBOL`, `CONFIGURES_SERVICE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `HANDLES_ROUTE`, `IMPORTS`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
+| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CALLS_SYMBOL`, `CONFIGURES_SERVICE`, `CONSUMES_MESSAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `HANDLES_ROUTE`, `IMPORTS`, `PUBLISHES_MESSAGE`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_SQL_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
 | `structural` | `CONTAINS_FILE`, `CONTAINS_PROJECT`, `DECLARES_BUILD_CONFIG`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `DECLARES_PACKAGE`, `DECLARES_ROUTE`, `DECLARES_SERVICE`, `DECLARES_SOLUTION`, `DECLARES_SYMBOL`, `DECLARES_WORKSPACE`, `DEFINES`, `EXPOSES_ROUTE`, `RUNS_CONTAINER` | Traverse containment and declaration edges. |
 
 ## Unresolved Classifications

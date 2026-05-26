@@ -16,6 +16,9 @@ ENTITY_TYPES = (
     "function",
     "ingress",
     "interface",
+    "message_contract",
+    "message_queue",
+    "message_topic",
     "module",
     "package",
     "project",
@@ -38,6 +41,7 @@ EDGE_TYPES = (
     "CALLS_SQL",
     "CALLS_SYMBOL",
     "CONFIGURES_SERVICE",
+    "CONSUMES_MESSAGE",
     "CONTAINS_FILE",
     "CONTAINS_PROJECT",
     "DECLARES_BUILD_CONFIG",
@@ -57,6 +61,7 @@ EDGE_TYPES = (
     "EXPOSES_ROUTE",
     "HANDLES_ROUTE",
     "IMPORTS",
+    "PUBLISHES_MESSAGE",
     "READS_SQL_OBJECT",
     "REFERENCES_SQL_OBJECT",
     "ROUTES_TO_SERVICE",
@@ -74,6 +79,8 @@ INTERACTION_EDGE_TYPES = frozenset(
         "CALLS_SERVICE",
         "CALLS_SQL",
         "CONFIGURES_SERVICE",
+        "CONSUMES_MESSAGE",
+        "PUBLISHES_MESSAGE",
         "READS_SQL_OBJECT",
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
@@ -89,6 +96,7 @@ INTERACTION_EVIDENCE_KEYS = (
 INTERACTION_TARGET_BOUNDARIES = (
     "application",
     "database",
+    "messaging",
 )
 INTERACTION_DEPENDENCY_SCOPES = (
     "configuration",
@@ -99,6 +107,8 @@ INTERACTION_DEPENDENCY_SCOPES = (
 INTERACTION_KINDS = (
     "http_call",
     "ingress_route",
+    "message_consume",
+    "message_publish",
     "service_call",
     "service_configuration",
     "sql_reference",
@@ -113,6 +123,7 @@ PARSER_IDS = (
     "dotnet_framework_config",
     "dotnet_http",
     "dotnet_minimal_route",
+    "dotnet_message",
     "dotnet_project",
     "dotnet_solution",
     "dotnet_symbol",
@@ -121,6 +132,7 @@ PARSER_IDS = (
     "javascript_export",
     "javascript_http",
     "javascript_import",
+    "javascript_message",
     "javascript_route",
     "javascript_symbol",
     "kubernetes_container",
@@ -140,6 +152,7 @@ PARSER_IDS = (
     "python_call",
     "python_http",
     "python_import",
+    "python_message",
     "python_route",
     "python_symbol",
     "requirements",
@@ -150,6 +163,7 @@ PARSER_IDS = (
     "vb_config_service",
     "vb_contract_route",
     "vb_http",
+    "vb_message",
     "vb_sql_command",
     "vb_symbol",
 )
@@ -161,10 +175,12 @@ IMPACT_EDGE_TYPES = frozenset(
         "CALLS_SQL",
         "CALLS_SYMBOL",
         "CONFIGURES_SERVICE",
+        "CONSUMES_MESSAGE",
         "DEPENDS_ON_PACKAGE",
         "DEPENDS_ON_PROJECT",
         "HANDLES_ROUTE",
         "IMPORTS",
+        "PUBLISHES_MESSAGE",
         "READS_SQL_OBJECT",
         "REFERENCES_SQL_OBJECT",
         "ROUTES_TO_SERVICE",
@@ -239,6 +255,9 @@ MISSING_SOURCE_TARGET_TYPES = frozenset(
         "project",
         "repository",
         "service",
+        "message_contract",
+        "message_queue",
+        "message_topic",
         "sql_function",
         "sql_object",
         "sql_table",
@@ -247,6 +266,8 @@ MISSING_SOURCE_TARGET_TYPES = frozenset(
         "stored_procedure",
     }
 )
+
+MESSAGE_ENTITY_TYPES = frozenset({"message_contract", "message_queue", "message_topic"})
 PARSER_GAP_TARGET_TYPES = frozenset(
     {
         "api_route",
