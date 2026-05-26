@@ -7,8 +7,8 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from repo_graph.config import RepoGraphConfig
-from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo, ScanResult
-from repo_graph.extraction.fact_helpers import entity_reference, resolved_source_relationship_fact
+from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo
+from repo_graph.extraction.fact_helpers import entity_reference, resolved_source_relationship_fact, scan_issue
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.project_discovery import discover_projects
 from repo_graph.extraction.scanners.common import safe_relative_path
@@ -30,15 +30,21 @@ def source_to_dict(source: ResolvedSource) -> dict[str, str | None]:
     }
 
 
-def scan_file_content(context: FileScanContext, content: str, extractors: Sequence[FileExtractor]) -> ScanResult:
-    result = ScanResult()
+def scan_file_content(context: FileScanContext, content: str, extractors: Sequence[FileExtractor]) -> FactBatch:
+    facts = FactBatch()
     for extractor in extractors:
         if extractor.can_process(context.rel_path):
             try:
-                result.extend(extractor.extract(context, content))
+                facts.extend(extractor.extract(context, content))
             except Exception as exc:
-                result.errors.append(f"{extractor.name} failed for {context.source.name}/{context.rel_path}: {exc}")
-    return result
+                facts.issues.append(
+                    scan_issue(
+                        context,
+                        extractor.name,
+                        f"{extractor.name} failed for {context.source.name}/{context.rel_path}: {exc}",
+                    )
+                )
+    return facts
 
 
 def scan_source(
@@ -126,8 +132,8 @@ def scan_file_path(
         return
 
     context = FileScanContext(source, repo_entity, file_entity, file_path, rel_path, project)
-    result = scan_file_content(context, content, extractors)
-    apply_scan_result(graph, result)
+    facts = scan_file_content(context, content, extractors)
+    apply_file_facts(graph, facts)
 
 
 def project_for_file(projects: Sequence[ProjectInfo], file_path: Path) -> ProjectInfo | None:
@@ -164,9 +170,8 @@ def iter_scannable_files(config: RepoGraphConfig, root: Path, max_file_bytes: in
             yield file_path
 
 
-def apply_scan_result(graph: Graph, result: ScanResult) -> None:
-    add_facts_to_graph(graph, result.facts)
-    graph.errors.extend(result.errors)
+def apply_file_facts(graph: Graph, facts: FactBatch) -> None:
+    add_facts_to_graph(graph, facts)
 
 
 def repository_entity(source: ResolvedSource) -> Entity:

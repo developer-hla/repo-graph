@@ -2,23 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.graph import Entity
 from repo_graph.sources import ResolvedSource
-
-
-@dataclass
-class ScanResult:
-    facts: FactBatch = field(default_factory=FactBatch)
-    errors: list[str] = field(default_factory=list)
-
-    def extend(self, other: ScanResult) -> None:
-        self.facts.extend(other.facts)
-        self.errors.extend(other.errors)
 
 
 @dataclass(frozen=True)
@@ -46,7 +36,7 @@ class FileExtractor(Protocol):
         """Return whether this extractor can scan a relative file path."""
         ...
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
         """Extract facts from a file."""
         ...
 
@@ -55,5 +45,4 @@ __all__ = [
     "FileExtractor",
     "FileScanContext",
     "ProjectInfo",
-    "ScanResult",
 ]

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
-from repo_graph.extraction.facts import EntityFact
+from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.dotnet_helpers import (
     CS_METHOD_RE,
     CS_NAMESPACE_RE,
@@ -44,14 +44,14 @@ class LegacyDotnetEndpointExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".asmx", ".svc"}
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         suffix = Path(context.rel_path).suffix.lower()
         framework = "asmx" if suffix == ".asmx" else "wcf"
         path = "/" + context.rel_path.replace("\\", "/")
         route = route_entity_fact(context, "POST", path, 1, framework, operation_name=None)
-        result.facts.entities.append(route)
-        result.facts.relationships.append(
+        facts.entities.append(route)
+        facts.relationships.append(
             resolved_relationship_fact(
                 entity_reference(context.file_entity),
                 route.reference,
@@ -62,7 +62,7 @@ class LegacyDotnetEndpointExtractor:
             )
         )
         if context.project:
-            result.facts.relationships.append(
+            facts.relationships.append(
                 resolved_relationship_fact(
                     entity_reference(context.project.entity),
                     route.reference,
@@ -72,7 +72,7 @@ class LegacyDotnetEndpointExtractor:
                     1,
                 )
             )
-        return result
+        return facts
 
 
 class CSharpCodeExtractor:
@@ -81,8 +81,8 @@ class CSharpCodeExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".cs"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         method_index = csharp_method_index(content)
         namespace: str | None = None
         current_type: str | None = None
@@ -92,16 +92,16 @@ class CSharpCodeExtractor:
         current_function_seen_body = False
         pending_attributes: list[CSharpAttribute] = []
         for line_number, line in enumerate(content.splitlines(), start=1):
-            result.facts.extend(csharp_minimal_route_facts(context, line, line_number))
-            result.facts.relationships.extend(csharp_http_call_facts(context, line, line_number))
+            facts.extend(csharp_minimal_route_facts(context, line, line_number))
+            facts.relationships.extend(csharp_http_call_facts(context, line, line_number))
             if current_function:
-                result.facts.relationships.extend(
+                facts.relationships.extend(
                     csharp_http_call_facts(context, line, line_number, from_entity=current_function)
                 )
-                result.facts.relationships.extend(
+                facts.relationships.extend(
                     sql_reference_facts_for_line(context, line, line_number, from_entity=current_function)
                 )
-                result.facts.relationships.extend(
+                facts.relationships.extend(
                     csharp_symbol_call_facts(
                         context,
                         line,
@@ -133,7 +133,7 @@ class CSharpCodeExtractor:
                 current_function_seen_body = False
                 current_type = type_match.group(2)
                 current_route_prefix = csharp_route_prefix(pending_attributes, current_type, None)
-                result.facts.extend(
+                facts.extend(
                     csharp_symbol_facts(
                         context,
                         type_match.group(1).lower(),
@@ -157,8 +157,8 @@ class CSharpCodeExtractor:
                     parent_name=current_type,
                 )
                 current_function = symbol_facts.entities[0] if symbol_facts.entities else None
-                result.facts.extend(symbol_facts)
-                result.facts.extend(
+                facts.extend(symbol_facts)
+                facts.extend(
                     csharp_controller_route_facts(
                         context,
                         method_name,
@@ -186,7 +186,7 @@ class CSharpCodeExtractor:
                     current_function_brace_depth = 0
                     current_function_seen_body = False
 
-        return result
+        return facts
 
 
 class VbCodeExtractor:
@@ -195,8 +195,8 @@ class VbCodeExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".vb"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         method_index = vb_method_index(content)
         namespace: str | None = None
         current_type: str | None = None
@@ -216,7 +216,7 @@ class VbCodeExtractor:
             if type_match:
                 current_type = type_match.group(2)
                 current_function = None
-                result.facts.extend(
+                facts.extend(
                     vb_symbol_facts(context, type_match.group(1).lower(), current_type, namespace, line_number)
                 )
                 pending_attributes = []
@@ -234,23 +234,23 @@ class VbCodeExtractor:
                     parent_name=current_type,
                 )
                 current_function = symbol_facts.entities[0] if symbol_facts.entities else None
-                result.facts.extend(symbol_facts)
-                result.facts.extend(
+                facts.extend(symbol_facts)
+                facts.extend(
                     vb_contract_route_facts(context, method_name, pending_attributes, line_number, current_function)
                 )
                 pending_attributes = []
 
-            result.facts.relationships.extend(vb_service_call_facts(context, line, line_number))
-            result.facts.relationships.extend(vb_sql_command_facts(context, line, line_number))
+            facts.relationships.extend(vb_service_call_facts(context, line, line_number))
+            facts.relationships.extend(vb_sql_command_facts(context, line, line_number))
             if current_function:
-                result.facts.relationships.extend(
+                facts.relationships.extend(
                     vb_service_call_facts(context, line, line_number, from_entity=current_function)
                 )
-                result.facts.relationships.extend(
+                facts.relationships.extend(
                     vb_sql_command_facts(context, line, line_number, from_entity=current_function)
                 )
                 if not method_match:
-                    result.facts.relationships.extend(
+                    facts.relationships.extend(
                         vb_symbol_call_facts(
                             context,
                             line,
@@ -265,4 +265,4 @@ class VbCodeExtractor:
                 pending_attributes = []
             if VB_END_METHOD_RE.match(line):
                 current_function = None
-        return result
+        return facts

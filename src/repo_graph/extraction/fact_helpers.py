@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.facts import EntityFact, EntityReference, Evidence, RelationshipFact
+from repo_graph.extraction.facts import EntityFact, EntityReference, Evidence, RelationshipFact, ScanIssue
 from repo_graph.graph import Entity
 
 
@@ -33,6 +33,18 @@ def source_evidence(
         file_path=context.rel_path,
         line_number=line_number,
         confidence=confidence,
+    )
+
+
+def scan_issue(
+    context: FileScanContext,
+    parser: str,
+    message: str,
+    line_number: int | None = None,
+) -> ScanIssue:
+    return ScanIssue(
+        message=message,
+        evidence=source_evidence(context, parser, line_number=line_number, confidence="high"),
     )
 
 
@@ -218,6 +230,7 @@ __all__ = [
     "package_entity_fact",
     "resolved_relationship_fact",
     "resolved_source_relationship_fact",
+    "scan_issue",
     "source_evidence",
     "unresolved_relationship_fact",
 ]

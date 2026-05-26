@@ -76,7 +76,7 @@ status, and generated parser coverage depend on it.
 
 ## Scanner Output
 
-Scanners return `ScanResult` with typed facts and local errors. Scanner modules
+Scanners return `FactBatch` with typed facts and local issues. Scanner modules
 must not emit graph `Entity` or `Edge` records directly. The graph constructor
 owns conversion from facts into graph records, stable IDs, resolution, summary
 counts, and export shape.

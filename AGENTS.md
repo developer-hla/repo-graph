@@ -148,9 +148,8 @@ inside scanners. The target architecture is defined in
 - Parsers must be deterministic and side-effect free.
 - Parsers extract facts with evidence. They should not own graph construction,
   stable IDs, cross-source resolution, graph summaries, or storage writes.
-- New parser refactors should emit typed facts from `repo_graph.extraction.facts`
-  through `ScanResult.facts` when practical. Legacy direct `Entity` and `Edge`
-  output is a migration path, not the target.
+- Parser output is a `FactBatch` from `repo_graph.extraction.facts`. Do not emit
+  graph `Entity` or `Edge` records directly from scanner code.
 - Use `repo_graph.extraction.fact_helpers` for common typed fact patterns before
   hand-building fact objects in scanner code.
 - Parsers should tolerate partial failures and record errors rather than

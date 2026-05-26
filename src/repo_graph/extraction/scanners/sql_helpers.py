@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import (
     entity_fact,
     entity_reference,
@@ -82,13 +82,11 @@ def scan_sql_references(
     context: FileScanContext,
     content: str,
     from_entity: Entity | EntityFact | None = None,
-) -> ScanResult:
-    result = ScanResult()
+) -> FactBatch:
+    facts = FactBatch()
     for line_number, line in enumerate(content.splitlines(), start=1):
-        result.facts.relationships.extend(
-            sql_reference_facts_for_line(context, line, line_number, from_entity=from_entity)
-        )
-    return result
+        facts.relationships.extend(sql_reference_facts_for_line(context, line, line_number, from_entity=from_entity))
+    return facts
 
 
 def sql_reference_facts_for_line(

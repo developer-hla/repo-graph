@@ -36,10 +36,10 @@ resolution, and export shape.
 
 6. Emit semantic facts with source provenance.
    File-derived facts should include `file_path`, `line_number` when available,
-   parser name, and confidence. Append typed fact drafts from
-   `repo_graph.extraction.facts` to `ScanResult.facts`; the graph builder
-   converts those facts into graph objects. Use `repo_graph.extraction.fact_helpers`
-   for common patterns before hand-building `RelationshipFact` or `EntityFact`
+   parser name, and confidence. Return typed fact drafts from
+   `repo_graph.extraction.facts` as a `FactBatch`; the graph builder converts
+   those facts into graph objects. Use `repo_graph.extraction.fact_helpers` for
+   common patterns before hand-building `RelationshipFact` or `EntityFact`
    objects in scanner code.
 
 7. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
@@ -101,8 +101,8 @@ resolution, and export shape.
   historical evidence, not proof of current database state. Prefer
   `schema_state=current_schema`, `historical`, `unknown`, or
   `current_database` when that distinction is known.
-- Keep extractor failures local by returning `ScanResult.errors` instead of
-  stopping the whole graph build.
+- Keep extractor failures local by returning `ScanIssue` entries in the
+  `FactBatch` instead of stopping the whole graph build.
 
 ## Expected Outputs
 

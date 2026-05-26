@@ -201,8 +201,8 @@ helpers can be added when they reduce parser complexity without hiding the
 underlying evidence.
 
 The graph constructor decides whether those facts become entities, edges,
-unresolved targets, warnings, or report inputs. `ScanResult` contains typed
-facts and local scanner errors; scanners must not emit graph records directly.
+unresolved targets, warnings, or report inputs. `FactBatch` contains typed
+facts and local scanner issues; scanners must not emit graph records directly.
 
 ## Graph Constructor Contract
 

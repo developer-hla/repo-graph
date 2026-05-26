@@ -6,7 +6,9 @@ from pathlib import Path
 
 import yaml
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.fact_helpers import scan_issue
+from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.deployment_helpers import (
     KubernetesDeployment,
@@ -24,16 +26,22 @@ class KubernetesManifestExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".yaml", ".yml"}
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         if "apiVersion:" not in content or "kind:" not in content:
-            return result
+            return facts
 
         try:
             documents = [document for document in yaml.safe_load_all(content) if isinstance(document, dict)]
         except yaml.YAMLError as exc:
-            result.errors.append(f"Invalid Kubernetes YAML {context.source.name}/{context.rel_path}: {exc}")
-            return result
+            facts.issues.append(
+                scan_issue(
+                    context,
+                    self.name,
+                    f"Invalid Kubernetes YAML {context.source.name}/{context.rel_path}: {exc}",
+                )
+            )
+            return facts
 
         services: list[KubernetesService] = []
         deployments: list[KubernetesDeployment] = []
@@ -42,15 +50,15 @@ class KubernetesManifestExtractor:
             if kind == "Service":
                 service = kubernetes_service_facts(context, document)
                 if service:
-                    result.facts.extend(service[0])
+                    facts.extend(service[0])
                     services.append(service[1])
             elif kind == "Deployment":
                 deployment = kubernetes_deployment_facts(context, document)
                 if deployment:
-                    result.facts.extend(deployment[0])
+                    facts.extend(deployment[0])
                     deployments.append(deployment[1])
             elif kind == "Ingress":
-                result.facts.extend(kubernetes_ingress_facts(context, document))
+                facts.extend(kubernetes_ingress_facts(context, document))
 
-        result.facts.relationships.extend(kubernetes_selector_facts(context, services, deployments))
-        return result
+        facts.relationships.extend(kubernetes_selector_facts(context, services, deployments))
+        return facts

@@ -6,7 +6,7 @@ import json
 import tomllib
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import (
     declares_package_facts,
     entity_fact,
@@ -14,8 +14,10 @@ from repo_graph.extraction.fact_helpers import (
     package_dependency_fact,
     package_entity_fact,
     resolved_relationship_fact,
+    scan_issue,
     unresolved_relationship_fact,
 )
+from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.common import read_yaml_object, string_value
 from repo_graph.extraction.scanners.dotnet_helpers import (
     DOTNET_BUILD_SUFFIXES,
@@ -47,16 +49,24 @@ class PackageJsonExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "package.json"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         try:
             package = json.loads(content)
         except json.JSONDecodeError as exc:
-            result.errors.append(f"Invalid package.json {context.source.name}/{context.rel_path}: {exc}")
-            return result
+            facts.issues.append(
+                scan_issue(context, self.name, f"Invalid package.json {context.source.name}/{context.rel_path}: {exc}")
+            )
+            return facts
         if not isinstance(package, dict):
-            result.errors.append(f"Invalid package.json {context.source.name}/{context.rel_path}: root must be object")
-            return result
+            facts.issues.append(
+                scan_issue(
+                    context,
+                    self.name,
+                    f"Invalid package.json {context.source.name}/{context.rel_path}: root must be object",
+                )
+            )
+            return facts
 
         package_name = string_value(package.get("name"))
         package_ref = None
@@ -73,9 +83,9 @@ class PackageJsonExtractor:
                     else [],
                 },
             )
-            result.facts.entities.append(package_fact)
+            facts.entities.append(package_fact)
             package_ref = package_fact.reference
-            result.facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
+            facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
 
         dependency_source_ref = (
             package_ref
@@ -83,7 +93,7 @@ class PackageJsonExtractor:
             else entity_reference(context.project.entity if context.project else context.file_entity)
         )
         for dependency in package_dependencies(package):
-            result.facts.relationships.append(
+            facts.relationships.append(
                 package_dependency_fact(
                     dependency_source_ref,
                     dependency["name"],
@@ -96,7 +106,7 @@ class PackageJsonExtractor:
                 )
             )
 
-        return result
+        return facts
 
 
 class PythonProjectExtractor:
@@ -105,18 +115,28 @@ class PythonProjectExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "pyproject.toml"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         try:
             pyproject = tomllib.loads(content)
         except tomllib.TOMLDecodeError as exc:
-            result.errors.append(f"Invalid pyproject.toml {context.source.name}/{context.rel_path}: {exc}")
-            return result
-        if not isinstance(pyproject, dict):
-            result.errors.append(
-                f"Invalid pyproject.toml {context.source.name}/{context.rel_path}: root must be object"
+            facts.issues.append(
+                scan_issue(
+                    context,
+                    self.name,
+                    f"Invalid pyproject.toml {context.source.name}/{context.rel_path}: {exc}",
+                )
             )
-            return result
+            return facts
+        if not isinstance(pyproject, dict):
+            facts.issues.append(
+                scan_issue(
+                    context,
+                    self.name,
+                    f"Invalid pyproject.toml {context.source.name}/{context.rel_path}: root must be object",
+                )
+            )
+            return facts
 
         metadata = pyproject_metadata(pyproject)
         package_ref = None
@@ -132,9 +152,9 @@ class PythonProjectExtractor:
                     "project": context.project.name if context.project else None,
                 },
             )
-            result.facts.entities.append(package_fact)
+            facts.entities.append(package_fact)
             package_ref = package_fact.reference
-            result.facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
+            facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
 
         dependency_source_ref = (
             package_ref
@@ -142,7 +162,7 @@ class PythonProjectExtractor:
             else entity_reference(context.project.entity if context.project else context.file_entity)
         )
         for dependency in pyproject_dependencies(pyproject):
-            result.facts.relationships.append(
+            facts.relationships.append(
                 package_dependency_fact(
                     dependency_source_ref,
                     dependency["name"],
@@ -154,7 +174,7 @@ class PythonProjectExtractor:
                     self.name,
                 )
             )
-        return result
+        return facts
 
 
 class PythonRequirementsExtractor:
@@ -163,14 +183,14 @@ class PythonRequirementsExtractor:
     def can_process(self, rel_path: str) -> bool:
         return is_requirements_file(Path(rel_path))
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         dependency_source = context.project.entity if context.project else context.file_entity
         for line_number, line in enumerate(content.splitlines(), start=1):
             dependency = requirement_dependency(line)
             if not dependency:
                 continue
-            result.facts.relationships.append(
+            facts.relationships.append(
                 package_dependency_fact(
                     entity_reference(dependency_source),
                     dependency["name"],
@@ -183,7 +203,7 @@ class PythonRequirementsExtractor:
                     line_number=line_number,
                 )
             )
-        return result
+        return facts
 
 
 class DotnetProjectExtractor:
@@ -192,11 +212,11 @@ class DotnetProjectExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in DOTNET_PROJECT_SUFFIXES
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         root = xml_root(content, context)
         if root is None:
-            return result
+            return facts
 
         metadata = dotnet_project_metadata_from_root(root, Path(context.rel_path).stem)
         package_ref = None
@@ -218,9 +238,9 @@ class DotnetProjectExtractor:
                     "project": context.project.name if context.project else None,
                 },
             )
-            result.facts.entities.append(package_fact)
+            facts.entities.append(package_fact)
             package_ref = package_fact.reference
-            result.facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
+            facts.relationships.extend(declares_package_facts(context, package_ref, self.name))
 
         dependency_source_ref = (
             package_ref
@@ -228,7 +248,7 @@ class DotnetProjectExtractor:
             else entity_reference(context.project.entity if context.project else context.file_entity)
         )
         for dependency in dotnet_package_references(root):
-            result.facts.relationships.append(
+            facts.relationships.append(
                 package_dependency_fact(
                     dependency_source_ref,
                     dependency["name"],
@@ -241,7 +261,7 @@ class DotnetProjectExtractor:
                 )
             )
         for reference in dotnet_project_references(root):
-            result.facts.relationships.append(
+            facts.relationships.append(
                 unresolved_relationship_fact(
                     entity_reference(context.project.entity if context.project else context.file_entity),
                     reference["name"],
@@ -252,7 +272,7 @@ class DotnetProjectExtractor:
                     properties=reference,
                 )
             )
-        return result
+        return facts
 
 
 class DotnetPackagesConfigExtractor:
@@ -261,12 +281,12 @@ class DotnetPackagesConfigExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "packages.config"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         root = xml_root(content, context)
         config_fact = config_file_fact(context, "packages_config")
-        result.facts.entities.append(config_fact)
-        result.facts.relationships.append(
+        facts.entities.append(config_fact)
+        facts.relationships.append(
             resolved_relationship_fact(
                 entity_reference(context.file_entity),
                 config_fact.reference,
@@ -276,7 +296,7 @@ class DotnetPackagesConfigExtractor:
             )
         )
         for dependency in packages_config_references(root):
-            result.facts.relationships.append(
+            facts.relationships.append(
                 package_dependency_fact(
                     entity_reference(context.project.entity if context.project else context.file_entity),
                     dependency["name"],
@@ -288,7 +308,7 @@ class DotnetPackagesConfigExtractor:
                     self.name,
                 )
             )
-        return result
+        return facts
 
 
 class DotnetFrameworkConfigExtractor:
@@ -298,12 +318,12 @@ class DotnetFrameworkConfigExtractor:
         path = Path(rel_path)
         return path.suffix.lower() == ".config" and path.name != "packages.config"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         root = xml_root(content, context)
         config_fact = config_file_fact(context, "dotnet_framework_config")
-        result.facts.entities.append(config_fact)
-        result.facts.relationships.append(
+        facts.entities.append(config_fact)
+        facts.relationships.append(
             resolved_relationship_fact(
                 entity_reference(context.file_entity),
                 config_fact.reference,
@@ -313,8 +333,8 @@ class DotnetFrameworkConfigExtractor:
             )
         )
         for config_value in framework_config_value_facts(context, root):
-            result.facts.entities.append(config_value)
-            result.facts.relationships.append(
+            facts.entities.append(config_value)
+            facts.relationships.append(
                 resolved_relationship_fact(
                     config_fact.reference,
                     config_value.reference,
@@ -325,8 +345,8 @@ class DotnetFrameworkConfigExtractor:
             )
             service_fact = config_service_fact(config_value, context, self.name)
             if service_fact:
-                result.facts.relationships.append(service_fact)
-        return result
+                facts.relationships.append(service_fact)
+        return facts
 
 
 class DotnetBuildConfigExtractor:
@@ -336,11 +356,11 @@ class DotnetBuildConfigExtractor:
         path = Path(rel_path)
         return path.name == "Directory.Build.props" or path.suffix.lower() in DOTNET_BUILD_SUFFIXES
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         root = xml_root(content, context)
         if root is None:
-            return result
+            return facts
 
         config_fact = entity_fact(
             context,
@@ -353,8 +373,8 @@ class DotnetBuildConfigExtractor:
                 "project": context.project.name if context.project else None,
             },
         )
-        result.facts.entities.append(config_fact)
-        result.facts.relationships.append(
+        facts.entities.append(config_fact)
+        facts.relationships.append(
             resolved_relationship_fact(
                 entity_reference(context.file_entity),
                 config_fact.reference,
@@ -364,7 +384,7 @@ class DotnetBuildConfigExtractor:
             )
         )
         for dependency in dotnet_package_references(root):
-            result.facts.relationships.append(
+            facts.relationships.append(
                 package_dependency_fact(
                     config_fact.reference,
                     dependency["name"],
@@ -376,7 +396,7 @@ class DotnetBuildConfigExtractor:
                     self.name,
                 )
             )
-        return result
+        return facts
 
 
 class DotnetSolutionExtractor:
@@ -385,8 +405,8 @@ class DotnetSolutionExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".sln"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         solution_fact = entity_fact(
             context,
             entity_type="solution",
@@ -398,8 +418,8 @@ class DotnetSolutionExtractor:
                 "project": context.project.name if context.project else None,
             },
         )
-        result.facts.entities.append(solution_fact)
-        result.facts.relationships.append(
+        facts.entities.append(solution_fact)
+        facts.relationships.append(
             resolved_relationship_fact(
                 entity_reference(context.file_entity),
                 solution_fact.reference,
@@ -412,7 +432,7 @@ class DotnetSolutionExtractor:
             reference = solution_project_reference(line)
             if not reference:
                 continue
-            result.facts.relationships.append(
+            facts.relationships.append(
                 unresolved_relationship_fact(
                     solution_fact.reference,
                     reference["name"],
@@ -424,7 +444,7 @@ class DotnetSolutionExtractor:
                     properties=reference,
                 )
             )
-        return result
+        return facts
 
 
 class PnpmWorkspaceExtractor:
@@ -433,8 +453,8 @@ class PnpmWorkspaceExtractor:
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "pnpm-workspace.yaml"
 
-    def extract(self, context: FileScanContext, content: str) -> ScanResult:
-        result = ScanResult()
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        facts = FactBatch()
         data = read_yaml_object(content)
         package_patterns = data.get("packages") if data else None
         workspace_fact = entity_fact(
@@ -448,8 +468,8 @@ class PnpmWorkspaceExtractor:
                 "package_patterns": package_patterns if isinstance(package_patterns, list) else [],
             },
         )
-        result.facts.entities.append(workspace_fact)
-        result.facts.relationships.append(
+        facts.entities.append(workspace_fact)
+        facts.relationships.append(
             resolved_relationship_fact(
                 entity_reference(context.file_entity),
                 workspace_fact.reference,
@@ -458,4 +478,4 @@ class PnpmWorkspaceExtractor:
                 self.name,
             )
         )
-        return result
+        return facts
