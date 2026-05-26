@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
+from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
 from repo_graph.graph import Edge, Entity
 
@@ -97,6 +99,27 @@ def sql_reference_edges_for_line(
     ]
 
 
+def sql_reference_facts_for_line(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | EntityFact | None = None,
+) -> list[RelationshipFact]:
+    extra_properties = source_context_properties(from_entity)
+    return [
+        *sql_call_facts(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_read_facts(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_write_facts(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_schema_reference_facts(
+            context,
+            line,
+            line_number,
+            from_entity=from_entity,
+            extra_properties=extra_properties,
+        ),
+    ]
+
+
 def sql_definition_entities_and_edges(context: FileScanContext, line: str, line_number: int) -> ScanResult:
     result = ScanResult()
     kind_match = SQL_OBJECT_KIND_RE.search(line)
@@ -165,6 +188,34 @@ def sql_call_edges(
     ]
 
 
+def sql_call_facts(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | EntityFact | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> list[RelationshipFact]:
+    source_ref = entity_reference(from_entity or context.file_entity)
+    return [
+        unresolved_relationship_fact(
+            source_ref,
+            normalize_sql_name(match.group(1)),
+            "CALLS_SQL",
+            context,
+            "sql_reference",
+            to_type="stored_procedure",
+            line_number=line_number,
+            properties=sql_interaction_properties(
+                match.group(1),
+                "EXECUTE",
+                "stored_procedure",
+                extra_properties=sql_reference_properties(context, extra_properties),
+            ),
+        )
+        for match in SQL_EXEC_RE.finditer(line)
+    ]
+
+
 def sql_object_read_edges(
     context: FileScanContext,
     line: str,
@@ -180,6 +231,34 @@ def sql_object_read_edges(
             "READS_SQL_OBJECT",
             context.source.name,
             context.rel_path,
+            "sql_reference",
+            to_type="sql_object",
+            line_number=line_number,
+            properties=sql_interaction_properties(
+                match.group("target"),
+                match.group("operation"),
+                "sql_object",
+                extra_properties=sql_reference_properties(context, extra_properties),
+            ),
+        )
+        for match in SQL_READ_REF_RE.finditer(line)
+    ]
+
+
+def sql_object_read_facts(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | EntityFact | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> list[RelationshipFact]:
+    source_ref = entity_reference(from_entity or context.file_entity)
+    return [
+        unresolved_relationship_fact(
+            source_ref,
+            normalize_sql_name(match.group("target")),
+            "READS_SQL_OBJECT",
+            context,
             "sql_reference",
             to_type="sql_object",
             line_number=line_number,
@@ -223,6 +302,34 @@ def sql_object_write_edges(
     ]
 
 
+def sql_object_write_facts(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | EntityFact | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> list[RelationshipFact]:
+    source_ref = entity_reference(from_entity or context.file_entity)
+    return [
+        unresolved_relationship_fact(
+            source_ref,
+            normalize_sql_name(match.group("target")),
+            "WRITES_SQL_OBJECT",
+            context,
+            "sql_reference",
+            to_type="sql_object",
+            line_number=line_number,
+            properties=sql_interaction_properties(
+                match.group("target"),
+                operation,
+                "sql_object",
+                extra_properties=sql_reference_properties(context, extra_properties),
+            ),
+        )
+        for operation, match in sql_write_reference_matches(line)
+    ]
+
+
 def sql_object_schema_reference_edges(
     context: FileScanContext,
     line: str,
@@ -238,6 +345,37 @@ def sql_object_schema_reference_edges(
             "REFERENCES_SQL_OBJECT",
             context.source.name,
             context.rel_path,
+            "sql_reference",
+            to_type="sql_object",
+            line_number=line_number,
+            properties=sql_interaction_properties(
+                match.group("target"),
+                "REFERENCES",
+                "sql_object",
+                dependency_scope="schema",
+                interaction_kind="sql_schema_reference",
+                extra_properties=sql_reference_properties(context, extra_properties),
+            ),
+        )
+        for match in SQL_SCHEMA_REF_RE.finditer(line)
+        if sql_reference_target_is_valid(match.group("target"))
+    ]
+
+
+def sql_object_schema_reference_facts(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: Entity | EntityFact | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> list[RelationshipFact]:
+    source_ref = entity_reference(from_entity or context.file_entity)
+    return [
+        unresolved_relationship_fact(
+            source_ref,
+            normalize_sql_name(match.group("target")),
+            "REFERENCES_SQL_OBJECT",
+            context,
             "sql_reference",
             to_type="sql_object",
             line_number=line_number,
@@ -318,7 +456,7 @@ def sql_reference_properties(
     return properties
 
 
-def source_context_properties(from_entity: Entity | None) -> dict[str, str]:
+def source_context_properties(from_entity: Entity | EntityFact | None) -> dict[str, str]:
     if not from_entity or from_entity.entity_type == "file":
         return {}
     return {

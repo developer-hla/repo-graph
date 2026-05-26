@@ -9,7 +9,9 @@ from repo_graph.extraction.facts import EntityFact, EntityReference, Evidence, R
 from repo_graph.graph import Entity
 
 
-def entity_reference(entity: Entity) -> EntityReference:
+def entity_reference(entity: Entity | EntityFact) -> EntityReference:
+    if isinstance(entity, EntityFact):
+        return entity.reference
     return EntityReference(
         entity_type=entity.entity_type,
         name=entity.name,

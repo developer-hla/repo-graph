@@ -8,26 +8,31 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.legacy_graph_helpers import resolved_edge, unresolved_edge
+from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.fact_helpers import (
+    entity_fact,
+    entity_reference,
+    resolved_relationship_fact,
+    unresolved_relationship_fact,
+)
+from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.scanners.interaction_helpers import (
     HTTP_METHODS,
-    http_edges_for_target,
+    http_facts_for_target,
     http_target,
-    route_entity,
-    route_handler_edge,
+    route_entity_fact,
+    route_handler_fact,
     service_name_from_url,
 )
 from repo_graph.extraction.scanners.package_helpers import normalize_python_package_name
 from repo_graph.extraction.scanners.sql_helpers import (
     source_context_properties,
-    sql_call_edges,
-    sql_object_read_edges,
-    sql_object_schema_reference_edges,
-    sql_object_write_edges,
+    sql_call_facts,
+    sql_object_read_facts,
+    sql_object_schema_reference_facts,
+    sql_object_write_facts,
 )
-from repo_graph.extraction.scanners.symbol_helpers import SymbolCallTarget, symbol_call_edges
-from repo_graph.graph import Edge, Entity
+from repo_graph.extraction.scanners.symbol_helpers import SymbolCallTarget, symbol_call_facts
 
 
 @dataclass(frozen=True)
@@ -42,15 +47,14 @@ class PythonCallableIndex:
         return method_name in self.class_methods.get(class_name, frozenset())
 
 
-def python_import_edge(context: FileScanContext, raw_target: str, level: int, line_number: int) -> Edge:
+def python_import_fact(context: FileScanContext, raw_target: str, level: int, line_number: int) -> RelationshipFact:
     is_relative = level > 0 or raw_target.startswith(".")
     target_name = raw_target if is_relative else normalize_python_package_name(raw_target.split(".", 1)[0])
-    return unresolved_edge(
-        context.file_entity,
+    return unresolved_relationship_fact(
+        entity_reference(context.file_entity),
         target_name,
         "IMPORTS",
-        context.source.name,
-        context.rel_path,
+        context,
         "python_import",
         to_type="module" if is_relative else "package",
         line_number=line_number,
@@ -62,14 +66,14 @@ def python_import_edge(context: FileScanContext, raw_target: str, level: int, li
     )
 
 
-def python_symbol_result(
+def python_symbol_facts(
     context: FileScanContext,
     symbol_kind: str,
     name: str,
     line_number: int,
     class_stack: Sequence[str],
-) -> ScanResult:
-    result = ScanResult()
+) -> FactBatch:
+    facts = FactBatch()
     module_name = python_module_name(context.rel_path)
     parent_name = ".".join(class_stack) or None
     full_name = ".".join(part for part in (module_name, parent_name, name) if part)
@@ -77,11 +81,10 @@ def python_symbol_result(
     aliases = {name, full_name or name}
     if parent_name:
         aliases.add(f"{parent_name}.{name}")
-    symbol = Entity(
+    symbol = entity_fact(
+        context,
         entity_type=entity_type,
         name=full_name or name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         line_number=line_number,
         aliases=aliases,
         properties={
@@ -91,19 +94,18 @@ def python_symbol_result(
             "project": context.project.name if context.project else None,
         },
     )
-    result.entities.append(symbol)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            symbol,
+    facts.entities.append(symbol)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            symbol.reference,
             "DECLARES_SYMBOL",
-            context.source.name,
-            context.rel_path,
+            context,
             "python_symbol",
             line_number,
         )
     )
-    return result
+    return facts
 
 
 def python_module_name(rel_path: str) -> str:
@@ -114,14 +116,14 @@ def python_module_name(rel_path: str) -> str:
     return ".".join(parts)
 
 
-def python_route_result(
+def python_route_facts(
     context: FileScanContext,
     operation_name: str,
     decorators: Sequence[ast.expr],
     line_number: int,
-    handler: Entity | None = None,
-) -> ScanResult:
-    result = ScanResult()
+    handler: EntityFact | None = None,
+) -> FactBatch:
+    facts = FactBatch()
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
             continue
@@ -129,8 +131,8 @@ def python_route_result(
         if not path:
             continue
         for method in python_route_methods(decorator):
-            result.extend(python_add_route(context, method, path, line_number, operation_name, handler))
-    return result
+            facts.extend(python_add_route_facts(context, method, path, line_number, operation_name, handler))
+    return facts
 
 
 def python_route_methods(decorator: ast.Call) -> list[str]:
@@ -143,75 +145,73 @@ def python_route_methods(decorator: ast.Call) -> list[str]:
     return [method.upper() for method in methods] if methods else ["GET"]
 
 
-def python_add_route(
+def python_add_route_facts(
     context: FileScanContext,
     method: str,
     path: str,
     line_number: int,
     operation_name: str,
-    handler: Entity | None = None,
-) -> ScanResult:
-    result = ScanResult()
-    route = route_entity(context, method, path, line_number, "python_route", operation_name)
-    result.entities.append(route)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            route,
+    handler: EntityFact | None = None,
+) -> FactBatch:
+    facts = FactBatch()
+    route = route_entity_fact(context, method, path, line_number, "python_route", operation_name)
+    facts.entities.append(route)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            route.reference,
             "DECLARES_ROUTE",
-            context.source.name,
-            context.rel_path,
+            context,
             "python_route",
             line_number,
         )
     )
     if context.project:
-        result.edges.append(
-            resolved_edge(
-                context.project.entity,
-                route,
+        facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.project.entity),
+                route.reference,
                 "EXPOSES_ROUTE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "python_route",
                 line_number,
             )
         )
     if handler:
-        result.edges.append(route_handler_edge(context, route, handler, "python_route", line_number))
-    return result
+        facts.relationships.append(route_handler_fact(context, route, handler, "python_route", line_number))
+    return facts
 
 
-def python_http_call_edges(
+def python_http_call_facts(
     context: FileScanContext,
     call: ast.Call,
-    from_entity: Entity | None = None,
-) -> list[Edge]:
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
     callee = python_attribute_name(call.func)
     root_name = python_call_root_name(call.func)
     if root_name not in {"httpx", "requests"}:
         return []
     if callee in HTTP_METHODS:
         raw_target = python_string_arg(call, 0) or python_keyword_string(call, "url")
-        return python_http_edges_for_target(context, callee.upper(), raw_target, call.lineno, root_name, from_entity)
+        return python_http_facts_for_target(context, callee.upper(), raw_target, call.lineno, root_name, from_entity)
     if callee == "request":
         method = python_string_arg(call, 0) or python_keyword_string(call, "method") or "GET"
         raw_target = python_string_arg(call, 1) or python_keyword_string(call, "url")
-        return python_http_edges_for_target(context, method.upper(), raw_target, call.lineno, root_name, from_entity)
+        return python_http_facts_for_target(context, method.upper(), raw_target, call.lineno, root_name, from_entity)
     return []
 
 
-def python_http_edges_for_target(
+def python_http_facts_for_target(
     context: FileScanContext,
     method: str,
     raw_target: str | None,
     line_number: int,
     client: str,
-    from_entity: Entity | None = None,
-) -> list[Edge]:
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
     if not raw_target:
         return []
-    source_entity = from_entity or context.file_entity
+    source_ref = entity_reference(from_entity or context.file_entity)
     extra_properties = source_context_properties(from_entity)
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
@@ -220,19 +220,18 @@ def python_http_edges_for_target(
         target["client"] = client
         target.update(extra_properties)
         return [
-            unresolved_edge(
-                source_entity,
+            unresolved_relationship_fact(
+                source_ref,
                 target["service_name"],
                 "CALLS_SERVICE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "python_http",
                 to_type="service",
                 line_number=line_number,
                 properties=target,
             )
         ]
-    return http_edges_for_target(
+    return http_facts_for_target(
         context,
         method,
         raw_target,
@@ -244,11 +243,11 @@ def python_http_edges_for_target(
     )
 
 
-def python_sql_call_edges(
+def python_sql_call_facts(
     context: FileScanContext,
     call: ast.Call,
-    from_entity: Entity | None = None,
-) -> list[Edge]:
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
     callee = python_attribute_name(call.func)
     if callee not in {"execute", "executemany", "exec_driver_sql", "text"}:
         return []
@@ -257,14 +256,14 @@ def python_sql_call_edges(
         return []
     extra_properties = source_context_properties(from_entity)
     return [
-        *sql_call_edges(context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties),
-        *sql_object_read_edges(
+        *sql_call_facts(context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_object_read_facts(
             context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties
         ),
-        *sql_object_write_edges(
+        *sql_object_write_facts(
             context, raw_sql, call.lineno, from_entity=from_entity, extra_properties=extra_properties
         ),
-        *sql_object_schema_reference_edges(
+        *sql_object_schema_reference_facts(
             context,
             raw_sql,
             call.lineno,
@@ -274,17 +273,17 @@ def python_sql_call_edges(
     ]
 
 
-def python_symbol_call_edges(
+def python_symbol_call_facts(
     context: FileScanContext,
     call: ast.Call,
-    from_entity: Entity,
+    from_entity: EntityFact,
     class_stack: Sequence[str],
     callable_index: PythonCallableIndex,
-) -> list[Edge]:
+) -> list[RelationshipFact]:
     target = python_symbol_call_target(call.func, class_stack, callable_index)
     if not target:
         return []
-    return symbol_call_edges(context, from_entity, [target], "python_call", call.lineno)
+    return symbol_call_facts(context, from_entity, [target], "python_call", call.lineno)
 
 
 def python_symbol_call_target(

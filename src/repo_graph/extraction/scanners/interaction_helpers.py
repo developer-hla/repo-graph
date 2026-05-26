@@ -192,6 +192,36 @@ def route_handler_edge(
     )
 
 
+def route_handler_fact(
+    context: FileScanContext,
+    route: EntityFact,
+    handler: EntityFact,
+    parser: str,
+    line_number: int,
+) -> RelationshipFact:
+    return resolved_relationship_fact(
+        route.reference,
+        handler.reference,
+        "HANDLES_ROUTE",
+        context,
+        parser,
+        line_number,
+        properties={
+            key: value
+            for key, value in {
+                "route_method": route.properties.get("method"),
+                "route_path": route.properties.get("path"),
+                "normalized_route_path": route.properties.get("normalized_path"),
+                "operation_name": route.properties.get("operation_name"),
+                "handler_name": handler.name,
+                "handler_type": handler.entity_type,
+                "project": route.properties.get("project"),
+            }.items()
+            if value is not None
+        },
+    )
+
+
 def route_entity(
     context: FileScanContext,
     method: str,
@@ -356,7 +386,7 @@ def http_facts_for_target(
     line_number: int,
     parser: str,
     client: str | None = None,
-    from_entity: Entity | None = None,
+    from_entity: Entity | EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
     source_ref = entity_reference(from_entity or context.file_entity)
