@@ -148,10 +148,12 @@ These edge types represent application-to-application or application-to-database
 - `dotnet_solution`
 - `dotnet_symbol`
 - `filesystem`
+- `javascript_call`
 - `javascript_export`
 - `javascript_http`
 - `javascript_import`
 - `javascript_route`
+- `javascript_symbol`
 - `kubernetes_container`
 - `kubernetes_deployment`
 - `kubernetes_env`

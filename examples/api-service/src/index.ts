@@ -9,8 +9,10 @@ export async function loadThing(id: string) {
   return response.json();
 }
 
-server.get("/things/:id", async request => {
+async function thingsRoute(request) {
   const query = "EXEC dbo.get_thing_by_id";
   await loadThing("42");
   return formatThing(query);
-});
+}
+
+server.get("/things/:id", thingsRoute);

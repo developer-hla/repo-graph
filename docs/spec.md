@@ -357,7 +357,8 @@ Start with parsers that are useful across many codebases:
   application symbols, plus conservative local function and method calls
 - Kubernetes services, deployments, containers, ingress routes, and
   service-selection topology
-- TypeScript and JavaScript imports, exports, and route declarations
+- TypeScript and JavaScript imports, exports, route declarations, named route
+  handlers, and conservative same-file function calls
 - HTTP calls from `fetch` and common client libraries
 - SQL tables, views, functions, and stored procedures
 - SQL references from application code

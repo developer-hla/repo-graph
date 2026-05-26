@@ -34,6 +34,13 @@ ROUTE_RE = re.compile(
 )
 
 
+ROUTE_HANDLER_RE = re.compile(
+    r"\b(?:app|router|server|fastify)\s*\.\s*(?:get|post|put|patch|delete|options|head)\s*\("
+    r"\s*[\"'][^\"']+[\"']\s*,\s*(?P<handler>[A-Za-z_$][\w$]*)",
+    re.IGNORECASE,
+)
+
+
 NEST_ROUTE_RE = re.compile(
     r"@(Get|Post|Put|Patch|Delete|Options|Head)\s*\(\s*(?:[\"']([^\"']+)[\"'])?",
     re.IGNORECASE,
@@ -91,10 +98,25 @@ def import_facts(context: FileScanContext, line: str, line_number: int) -> list[
     return facts
 
 
-def route_facts(context: FileScanContext, line: str, line_number: int) -> FactBatch:
+def route_facts(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    handler_by_name: dict[str, EntityFact] | None = None,
+) -> FactBatch:
     facts = FactBatch()
     for match in ROUTE_RE.finditer(line):
-        facts.extend(add_route_facts(context, match.group(1).upper(), match.group(2), line_number, "javascript_route"))
+        handler = javascript_route_handler(line, handler_by_name)
+        facts.extend(
+            add_route_facts(
+                context,
+                match.group(1).upper(),
+                match.group(2),
+                line_number,
+                "javascript_route",
+                handler=handler,
+            )
+        )
     for match in NEST_ROUTE_RE.finditer(line):
         facts.extend(
             add_route_facts(context, match.group(1).upper(), match.group(2) or "/", line_number, "nestjs_route")
@@ -102,7 +124,14 @@ def route_facts(context: FileScanContext, line: str, line_number: int) -> FactBa
     return facts
 
 
-def add_route_facts(context: FileScanContext, method: str, path: str, line_number: int, parser: str) -> FactBatch:
+def add_route_facts(
+    context: FileScanContext,
+    method: str,
+    path: str,
+    line_number: int,
+    parser: str,
+    handler: EntityFact | None = None,
+) -> FactBatch:
     facts = FactBatch()
     route = route_entity_fact(context, method, path, line_number, parser, operation_name=None)
     facts.entities.append(route)
@@ -127,6 +156,8 @@ def add_route_facts(context: FileScanContext, method: str, path: str, line_numbe
                 line_number,
             )
         )
+    if handler:
+        facts.relationships.append(route_handler_fact(context, route, handler, parser, line_number))
     return facts
 
 
@@ -222,12 +253,35 @@ def exported_symbols(line: str) -> Iterable[tuple[str, str]]:
         yield "function", match.group(1)
 
 
-def http_call_facts(context: FileScanContext, line: str, line_number: int) -> list[RelationshipFact]:
+def javascript_route_handler(line: str, handler_by_name: dict[str, EntityFact] | None) -> EntityFact | None:
+    if not handler_by_name:
+        return None
+    for match in ROUTE_HANDLER_RE.finditer(line):
+        handler = handler_by_name.get(match.group("handler"))
+        if handler:
+            return handler
+    return None
+
+
+def http_call_facts(
+    context: FileScanContext,
+    line: str,
+    line_number: int,
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
     facts: list[RelationshipFact] = []
     for match in FETCH_RE.finditer(line):
         method = fetch_method(match.group("args"))
         facts.extend(
-            http_facts_for_target(context, method, match.group(2), line_number, "javascript_http", client="fetch")
+            http_facts_for_target(
+                context,
+                method,
+                match.group(2),
+                line_number,
+                "javascript_http",
+                client="fetch",
+                from_entity=from_entity,
+            )
         )
     for match in AXIOS_RE.finditer(line):
         facts.extend(
@@ -238,6 +292,7 @@ def http_call_facts(context: FileScanContext, line: str, line_number: int) -> li
                 line_number,
                 "javascript_http",
                 client="axios",
+                from_entity=from_entity,
             )
         )
     return facts

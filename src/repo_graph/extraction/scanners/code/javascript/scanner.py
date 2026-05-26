@@ -5,28 +5,68 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.facts import FactBatch
+from repo_graph.extraction.facts import EntityFact, FactBatch
+from repo_graph.extraction.scanners.code.javascript.helpers import (
+    javascript_function_scope_state,
+    javascript_symbol_call_facts,
+    javascript_symbol_facts,
+    javascript_symbol_index,
+)
 from repo_graph.extraction.scanners.interaction_helpers import (
-    export_symbol_facts,
     http_call_facts,
     import_facts,
     route_facts,
 )
+from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_line
 
 
 class JavaScriptExtractor:
     name = "javascript"
     target_patterns = ("*.js", "*.jsx", "*.ts", "*.tsx")
-    parser_ids = ("javascript_export", "javascript_http", "javascript_import", "javascript_route")
+    parser_ids = (
+        "javascript_call",
+        "javascript_export",
+        "javascript_http",
+        "javascript_import",
+        "javascript_route",
+        "javascript_symbol",
+        "sql_reference",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".js", ".jsx", ".ts", ".tsx"}
 
     def extract(self, context: FileScanContext, content: str) -> FactBatch:
         facts = FactBatch()
+        symbol_index = javascript_symbol_index(context, content)
+        current_function: EntityFact | None = None
+        current_function_brace_depth = 0
+        current_function_seen_body = False
         for line_number, line in enumerate(content.splitlines(), start=1):
             facts.relationships.extend(import_facts(context, line, line_number))
-            facts.extend(route_facts(context, line, line_number))
-            facts.extend(export_symbol_facts(context, line, line_number))
+            facts.extend(route_facts(context, line, line_number, symbol_index.functions_by_name))
+            for declaration in symbol_index.declarations_by_line.get(line_number, ()):
+                facts.extend(javascript_symbol_facts(context, declaration))
+            function_at_line = symbol_index.function_by_line.get(line_number)
+            if function_at_line:
+                current_function = function_at_line
+                current_function_brace_depth = 0
+                current_function_seen_body = False
             facts.relationships.extend(http_call_facts(context, line, line_number))
+            if current_function:
+                facts.relationships.extend(http_call_facts(context, line, line_number, from_entity=current_function))
+                facts.relationships.extend(sql_reference_facts_for_line(context, line, line_number, current_function))
+                facts.relationships.extend(
+                    javascript_symbol_call_facts(context, line, line_number, current_function, symbol_index)
+                )
+                current_function_brace_depth, current_function_seen_body = javascript_function_scope_state(
+                    line,
+                    current_function_brace_depth,
+                    current_function_seen_body,
+                )
+                if current_function_seen_body:
+                    if current_function_brace_depth <= 0:
+                        current_function = None
+                else:
+                    current_function = None
         return facts

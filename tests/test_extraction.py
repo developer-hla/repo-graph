@@ -297,6 +297,10 @@ export async function loadThing(id: string) {
   await fetch(`/things/${id}`);
   await fetch(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
   await axios.post(`${process.env.INVENTORY_SERVICE_URL}/inventory/${id}`);
+  await db.query('EXEC dbo.load_thing');
+}
+function handler(request, reply) {
+  return loadThing(request.params.id);
 }
 server.get('/things/:id', handler);
 """,
@@ -338,6 +342,8 @@ sources:
         self.assertIn("DECLARES_SYMBOL", graph_data["edge_counts"])
         self.assertIn("CALLS_HTTP", graph_data["edge_counts"])
         self.assertIn("CALLS_SERVICE", graph_data["edge_counts"])
+        self.assertIn("HANDLES_ROUTE", graph_data["edge_counts"])
+        self.assertIn("CALLS_SYMBOL", graph_data["edge_counts"])
         self.assertTrue(
             any(
                 edge["edge_type"] == "IMPORTS" and edge["to_name"] == "@example/lib" and edge["resolved"]
@@ -362,6 +368,37 @@ sources:
                 for edge in graph_data["edges"]
             )
         )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "HANDLES_ROUTE"
+                and edge["from_type"] == "api_route"
+                and edge["from_name"] == "GET /things/:id"
+                and edge["to_type"] == "function"
+                and edge["to_name"] == "handler"
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SYMBOL"
+                and edge["from_type"] == "function"
+                and edge["from_name"] == "handler"
+                and edge["to_type"] == "function"
+                and edge["to_name"] == "loadThing"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["from_type"] == "function"
+                and edge["from_name"] == "loadThing"
+                and edge["to_name"] == "dbo.load_thing"
+                and edge["properties"].get("source_context_type") == "function"
+                for edge in graph_data["edges"]
+            )
+        )
         inventory_service_edges = [
             edge
             for edge in graph_data["edges"]
@@ -371,6 +408,11 @@ sources:
         ]
         self.assertTrue(any(edge["properties"].get("client") == "fetch" for edge in inventory_service_edges))
         self.assertTrue(any(edge["properties"].get("client") == "axios" for edge in inventory_service_edges))
+        self.assertTrue(
+            any(
+                edge["from_type"] == "function" and edge["from_name"] == "loadThing" for edge in inventory_service_edges
+            )
+        )
         self.assertTrue(
             all(
                 edge["properties"].get("target_boundary") == "application"

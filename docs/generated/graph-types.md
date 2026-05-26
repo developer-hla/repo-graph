@@ -5,9 +5,9 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents the graph types exercised by the synthetic examples, not a private source set.
 
 - Graph schema version: `0.1`
-- Entity count: `90`
-- Edge count: `179`
-- Resolved edge count: `162`
+- Entity count: `91`
+- Edge count: `185`
+- Resolved edge count: `168`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -22,7 +22,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `container` | 1 |
 | `deployment` | 1 |
 | `file` | 26 |
-| `function` | 10 |
+| `function` | 11 |
 | `ingress` | 1 |
 | `package` | 8 |
 | `project` | 9 |
@@ -36,10 +36,10 @@ It documents the graph types exercised by the synthetic examples, not a private 
 
 | Edge Type | Example Count |
 | --- | ---: |
-| `CALLS_HTTP` | 1 |
-| `CALLS_SERVICE` | 9 |
-| `CALLS_SQL` | 7 |
-| `CALLS_SYMBOL` | 4 |
+| `CALLS_HTTP` | 2 |
+| `CALLS_SERVICE` | 10 |
+| `CALLS_SQL` | 8 |
+| `CALLS_SYMBOL` | 5 |
 | `CONFIGURES_SERVICE` | 3 |
 | `CONTAINS_FILE` | 51 |
 | `CONTAINS_PROJECT` | 11 |
@@ -52,12 +52,12 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `DECLARES_ROUTE` | 8 |
 | `DECLARES_SERVICE` | 1 |
 | `DECLARES_SOLUTION` | 1 |
-| `DECLARES_SYMBOL` | 14 |
+| `DECLARES_SYMBOL` | 15 |
 | `DEFINES` | 5 |
 | `DEPENDS_ON_PACKAGE` | 12 |
 | `DEPENDS_ON_PROJECT` | 1 |
 | `EXPOSES_ROUTE` | 8 |
-| `HANDLES_ROUTE` | 3 |
+| `HANDLES_ROUTE` | 4 |
 | `IMPORTS` | 9 |
 | `READS_SQL_OBJECT` | 1 |
 | `REFERENCES_SQL_OBJECT` | 1 |
@@ -80,10 +80,12 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `dotnet_solution` | 3 |
 | `dotnet_symbol` | 3 |
 | `filesystem` | 51 |
+| `javascript_call` | 1 |
 | `javascript_export` | 2 |
-| `javascript_http` | 2 |
+| `javascript_http` | 4 |
 | `javascript_import` | 3 |
-| `javascript_route` | 4 |
+| `javascript_route` | 5 |
+| `javascript_symbol` | 1 |
 | `kubernetes_container` | 1 |
 | `kubernetes_deployment` | 1 |
 | `kubernetes_env` | 2 |
@@ -103,7 +105,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `python_symbol` | 6 |
 | `requirements` | 1 |
 | `sql` | 5 |
-| `sql_reference` | 8 |
+| `sql_reference` | 9 |
 | `vb_call` | 1 |
 | `vb_config_service` | 2 |
 | `vb_contract_route` | 3 |
@@ -115,5 +117,5 @@ It documents the graph types exercised by the synthetic examples, not a private 
 
 | Confidence | Example Edge Count |
 | --- | ---: |
-| `high` | 127 |
-| `medium` | 52 |
+| `high` | 129 |
+| `medium` | 56 |

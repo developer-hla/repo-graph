@@ -4,8 +4,8 @@
 This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
-- Parser count: `40`
-- Edge count: `179`
+- Parser count: `42`
+- Edge count: `185`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -22,10 +22,12 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `dotnet_solution` | 3 | 2 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
 | `dotnet_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `dotnet-service` |
 | `filesystem` | 51 | 0 | `CONTAINS_FILE` | `project`, `repository` | `file` | `api-service`, `database-project`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
+| `javascript_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `api-service` |
 | `javascript_export` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service`, `shared-library` |
-| `javascript_http` | 2 | 0 | `CALLS_HTTP`, `CALLS_SERVICE` | `file` | `api_route`, `service` | `api-service` |
+| `javascript_http` | 4 | 0 | `CALLS_HTTP`, `CALLS_SERVICE` | `file`, `function` | `api_route`, `service` | `api-service` |
 | `javascript_import` | 3 | 2 | `IMPORTS` | `file` | `package` | `api-service`, `inventory-service` |
-| `javascript_route` | 4 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `api-service`, `inventory-service` |
+| `javascript_route` | 5 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `api-service`, `inventory-service` |
+| `javascript_symbol` | 1 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service` |
 | `kubernetes_container` | 1 | 0 | `RUNS_CONTAINER` | `deployment` | `container` | `inventory-service` |
 | `kubernetes_deployment` | 1 | 0 | `DECLARES_DEPLOYMENT` | `file` | `deployment` | `inventory-service` |
 | `kubernetes_env` | 2 | 0 | `CONFIGURES_SERVICE`, `DECLARES_CONFIG` | `config_value`, `container` | `config_value`, `service` | `inventory-service` |
@@ -45,7 +47,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `python_symbol` | 6 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
 | `sql` | 5 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
-| `sql_reference` | 8 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `function`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
+| `sql_reference` | 9 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `function`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
 | `vb_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `legacy-vb-service` |
 | `vb_config_service` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
 | `vb_contract_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `legacy-vb-service` |

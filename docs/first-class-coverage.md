@@ -31,8 +31,8 @@ evidence.
 | Application HTTP calls | `CALLS_HTTP`, `CALLS_SERVICE` | Covered for common JavaScript, Python, .NET, and VB forms. |
 | Service configuration | `CONFIGURES_SERVICE` | Covered for environment values, Web.config/App.config, and WCF-style endpoints. |
 | Deployment routing | `DECLARES_SERVICE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `ROUTES_TO_SERVICE`, `RUNS_CONTAINER`, `SELECTS_DEPLOYMENT` | Covered for Kubernetes manifests. |
-| API routes | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | Route declarations are covered for common JavaScript, Python, .NET, and legacy VB route forms. Route-to-handler edges are covered when Python decorators, .NET controller actions, or legacy VB contract methods expose a clear handler function. |
-| Internal code delegation | `CALLS_SYMBOL` | Covered for Python local functions and class/instance method calls, C# same-class or explicit class calls, and legacy VB same-class or explicit module/class calls when the parser can identify a discovered callable target without obvious third-party noise. |
+| API routes | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | Route declarations are covered for common JavaScript, Python, .NET, and legacy VB route forms. Route-to-handler edges are covered when JavaScript route registrations, Python decorators, .NET controller actions, or legacy VB contract methods expose a clear handler function. |
+| Internal code delegation | `CALLS_SYMBOL` | Covered for JavaScript same-file functions, Python local functions and class/instance method calls, C# same-class or explicit class calls, and legacy VB same-class or explicit module/class calls when the parser can identify a discovered callable target without obvious third-party noise. |
 | Packages and project structure | `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, containment/declaration edges | Covered for supported package and project manifests. |
 | Application-to-database calls | `CALLS_SQL` | Covered for application stored procedure calls in supported languages, with function-level context when the parser can identify the enclosing handler or method. |
 | Database object reads | `READS_SQL_OBJECT` | Covered for SQL object reads from SQL definitions and application SQL snippets, with function-level context when available. |
@@ -69,10 +69,10 @@ shortcuts.
    evidence.
 3. Improve execution context. In progress.
    SQL and service calls now attach to functions or route handlers where the
-   Python, .NET controller, and legacy VB parsers can do this safely. Python,
-   C#, and legacy VB now emit `CALLS_SYMBOL` for conservative local callable
-   delegation. Next, extend `CALLS_SYMBOL` to JavaScript, safe imported Python
-   symbols, and dependency-injected service calls when target identity is
+   JavaScript, Python, .NET controller, and legacy VB parsers can do this
+   safely. JavaScript, Python, C#, and legacy VB now emit `CALLS_SYMBOL` for
+   conservative local callable delegation. Next, extend this to safe imported
+   Python symbols and dependency-injected service calls when target identity is
    available.
 4. Add messaging boundaries.
    Keep Kafka, RabbitMQ, Azure Service Bus, SQS, and similar client libraries as
