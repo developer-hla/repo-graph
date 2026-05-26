@@ -75,6 +75,10 @@ scanners instead of constructing scanner families directly.
 Registry order must stay deterministic because parser fingerprints, snapshot
 status, and generated parser coverage depend on it.
 
+`pixi run architecture-boundary-check` enforces that code outside
+`repo_graph.extraction.scanners` imports scanner family package roots instead of
+internal modules such as `code.python.helpers` or `manifests.pyproject`.
+
 ## Scanner Output
 
 Scanners return `FactBatch` with typed facts and local issues. Scanner modules

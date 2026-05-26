@@ -17,6 +17,7 @@ docker-build = "docker compose build"
 docker-up = "docker compose up --build"
 docker-down = "docker compose down"
 docker-context-check = "python scripts/check-docker-context.py"
+architecture-boundary-check = "python scripts/check_architecture_boundaries.py"
 docker-smoke = "bash scripts/docker-smoke.sh"
 generate-docs = "python scripts/generate-docs.py"
 generated-docs-check = "python scripts/generate-docs.py --check"
@@ -31,7 +32,7 @@ ui-check = "node --check src/repo_graph/ui/app.js"
 fix = "ruff check --fix src tests scripts && ruff format src tests scripts"
 pre-commit = "pre-commit run --all-files"
 setup = "pre-commit install"
-audit = { depends-on = ["check", "lint", "format-check", "test", "build-example-strict", "docker-context-check", "public-boundary-check", "generated-docs-check", "ui-check"] }
+audit = { depends-on = ["check", "lint", "format-check", "test", "build-example-strict", "docker-context-check", "architecture-boundary-check", "public-boundary-check", "generated-docs-check", "ui-check"] }
 
 [dependencies]
 pre-commit = ">=4,<5"
