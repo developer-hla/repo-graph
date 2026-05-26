@@ -11,6 +11,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.fact_helpers import entity_fact, unresolved_relationship_fact
+from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.interaction_helpers import (
@@ -562,13 +564,12 @@ def csharp_scope_code(line: str) -> str:
     return re.sub(r'"(?:\\.|[^"\\])*"', '""', line)
 
 
-def config_file_entity(context: FileScanContext, config_kind: str) -> Entity:
+def config_file_fact(context: FileScanContext, config_kind: str) -> EntityFact:
     name = Path(context.rel_path).name
-    return Entity(
+    return entity_fact(
+        context,
         entity_type="config_file",
         name=name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases={name, context.rel_path},
         properties={
             "config_kind": config_kind,
@@ -579,7 +580,7 @@ def config_file_entity(context: FileScanContext, config_kind: str) -> Entity:
     )
 
 
-def framework_config_values(context: FileScanContext, root: ET.Element) -> Iterable[Entity]:
+def framework_config_value_facts(context: FileScanContext, root: ET.Element) -> Iterable[EntityFact]:
     for section in root.iter():
         section_name = xml_local_name(section.tag)
         if section_name == "appSettings":
@@ -587,7 +588,7 @@ def framework_config_values(context: FileScanContext, root: ET.Element) -> Itera
                 if xml_local_name(child.tag) == "add":
                     key = string_value(child.attrib.get("key"))
                     if key:
-                        yield config_value_entity(
+                        yield config_value_fact(
                             context,
                             key,
                             "app_setting",
@@ -602,7 +603,7 @@ def framework_config_values(context: FileScanContext, root: ET.Element) -> Itera
                 if xml_local_name(child.tag) == "add":
                     name = string_value(child.attrib.get("name"))
                     if name:
-                        yield config_value_entity(
+                        yield config_value_fact(
                             context,
                             name,
                             "connection_string",
@@ -618,7 +619,7 @@ def framework_config_values(context: FileScanContext, root: ET.Element) -> Itera
                     name = string_value(child.attrib.get("name")) or string_value(child.attrib.get("contract"))
                     address = url_value(child.attrib.get("address"))
                     if name or address:
-                        yield config_value_entity(
+                        yield config_value_fact(
                             context,
                             name or address or "endpoint",
                             "wcf_endpoint",
@@ -631,18 +632,17 @@ def framework_config_values(context: FileScanContext, root: ET.Element) -> Itera
                         )
 
 
-def config_value_entity(
+def config_value_fact(
     context: FileScanContext,
     name: str,
     value_kind: str,
     properties: dict[str, Any],
-) -> Entity:
+) -> EntityFact:
     entity_name = f"{value_kind}:{name}"
-    return Entity(
+    return entity_fact(
+        context,
         entity_type="config_value",
         name=entity_name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases={name, entity_name},
         properties={
             "display_name": name,
@@ -653,7 +653,11 @@ def config_value_entity(
     )
 
 
-def config_service_edge(config_value: Entity, context: FileScanContext, parser: str) -> Edge | None:
+def config_service_fact(
+    config_value: EntityFact,
+    context: FileScanContext,
+    parser: str,
+) -> RelationshipFact | None:
     raw_target = config_value.properties.get("target_url")
     if not isinstance(raw_target, str):
         return None
@@ -664,12 +668,11 @@ def config_service_edge(config_value: Entity, context: FileScanContext, parser: 
     target["dependency_scope"] = "configuration"
     target["interaction_kind"] = "service_configuration"
     target["service_name"] = service_name
-    return unresolved_edge(
-        config_value,
+    return unresolved_relationship_fact(
+        config_value.reference,
         service_name,
         "CONFIGURES_SERVICE",
-        context.source.name,
-        context.rel_path,
+        context,
         parser,
         to_type="service",
         properties=target,

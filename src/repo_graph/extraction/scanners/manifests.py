@@ -9,21 +9,23 @@ from pathlib import Path
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
 from repo_graph.extraction.fact_helpers import (
     declares_package_facts,
+    entity_fact,
     entity_reference,
     package_dependency_fact,
     package_entity_fact,
+    resolved_relationship_fact,
+    unresolved_relationship_fact,
 )
-from repo_graph.extraction.legacy_graph_helpers import resolved_edge, unresolved_edge
 from repo_graph.extraction.scanners.common import read_yaml_object, string_value
 from repo_graph.extraction.scanners.dotnet_helpers import (
     DOTNET_BUILD_SUFFIXES,
     DOTNET_PROJECT_SUFFIXES,
-    config_file_entity,
-    config_service_edge,
+    config_file_fact,
+    config_service_fact,
     dotnet_package_references,
     dotnet_project_metadata_from_root,
     dotnet_project_references,
-    framework_config_values,
+    framework_config_value_facts,
     packages_config_references,
     solution_project_reference,
     xml_root,
@@ -37,7 +39,6 @@ from repo_graph.extraction.scanners.package_helpers import (
     python_import_name,
     requirement_dependency,
 )
-from repo_graph.graph import Entity
 
 
 class PackageJsonExtractor:
@@ -240,13 +241,12 @@ class DotnetProjectExtractor:
                 )
             )
         for reference in dotnet_project_references(root):
-            result.edges.append(
-                unresolved_edge(
-                    context.project.entity if context.project else context.file_entity,
+            result.facts.relationships.append(
+                unresolved_relationship_fact(
+                    entity_reference(context.project.entity if context.project else context.file_entity),
                     reference["name"],
                     "DEPENDS_ON_PROJECT",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                     to_type="project",
                     properties=reference,
@@ -264,15 +264,14 @@ class DotnetPackagesConfigExtractor:
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
         root = xml_root(content, context)
-        config_entity = config_file_entity(context, "packages_config")
-        result.entities.append(config_entity)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                config_entity,
+        config_fact = config_file_fact(context, "packages_config")
+        result.facts.entities.append(config_fact)
+        result.facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                config_fact.reference,
                 "DECLARES_CONFIG_FILE",
-                context.source.name,
-                context.rel_path,
+                context,
                 self.name,
             )
         )
@@ -302,33 +301,31 @@ class DotnetFrameworkConfigExtractor:
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
         root = xml_root(content, context)
-        config_entity = config_file_entity(context, "dotnet_framework_config")
-        result.entities.append(config_entity)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                config_entity,
+        config_fact = config_file_fact(context, "dotnet_framework_config")
+        result.facts.entities.append(config_fact)
+        result.facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                config_fact.reference,
                 "DECLARES_CONFIG_FILE",
-                context.source.name,
-                context.rel_path,
+                context,
                 self.name,
             )
         )
-        for config_value in framework_config_values(context, root):
-            result.entities.append(config_value)
-            result.edges.append(
-                resolved_edge(
-                    config_entity,
-                    config_value,
+        for config_value in framework_config_value_facts(context, root):
+            result.facts.entities.append(config_value)
+            result.facts.relationships.append(
+                resolved_relationship_fact(
+                    config_fact.reference,
+                    config_value.reference,
                     "DECLARES_CONFIG",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                 )
             )
-            service_edge = config_service_edge(config_value, context, self.name)
-            if service_edge:
-                result.edges.append(service_edge)
+            service_fact = config_service_fact(config_value, context, self.name)
+            if service_fact:
+                result.facts.relationships.append(service_fact)
         return result
 
 
@@ -345,11 +342,10 @@ class DotnetBuildConfigExtractor:
         if root is None:
             return result
 
-        config_entity = Entity(
+        config_fact = entity_fact(
+            context,
             entity_type="build_config",
             name=Path(context.rel_path).name,
-            source_name=context.source.name,
-            file_path=context.rel_path,
             aliases={Path(context.rel_path).name},
             properties={
                 "ecosystem": "dotnet",
@@ -357,21 +353,20 @@ class DotnetBuildConfigExtractor:
                 "project": context.project.name if context.project else None,
             },
         )
-        result.entities.append(config_entity)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                config_entity,
+        result.facts.entities.append(config_fact)
+        result.facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                config_fact.reference,
                 "DECLARES_BUILD_CONFIG",
-                context.source.name,
-                context.rel_path,
+                context,
                 self.name,
             )
         )
         for dependency in dotnet_package_references(root):
             result.facts.relationships.append(
                 package_dependency_fact(
-                    entity_reference(config_entity),
+                    config_fact.reference,
                     dependency["name"],
                     "dotnet",
                     "PackageReference",
@@ -392,11 +387,10 @@ class DotnetSolutionExtractor:
 
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
-        solution = Entity(
+        solution_fact = entity_fact(
+            context,
             entity_type="solution",
             name=Path(context.rel_path).stem,
-            source_name=context.source.name,
-            file_path=context.rel_path,
             aliases={Path(context.rel_path).stem},
             properties={
                 "ecosystem": "dotnet",
@@ -404,14 +398,13 @@ class DotnetSolutionExtractor:
                 "project": context.project.name if context.project else None,
             },
         )
-        result.entities.append(solution)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                solution,
+        result.facts.entities.append(solution_fact)
+        result.facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                solution_fact.reference,
                 "DECLARES_SOLUTION",
-                context.source.name,
-                context.rel_path,
+                context,
                 self.name,
             )
         )
@@ -419,13 +412,12 @@ class DotnetSolutionExtractor:
             reference = solution_project_reference(line)
             if not reference:
                 continue
-            result.edges.append(
-                unresolved_edge(
-                    solution,
+            result.facts.relationships.append(
+                unresolved_relationship_fact(
+                    solution_fact.reference,
                     reference["name"],
                     "CONTAINS_PROJECT",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                     to_type="project",
                     line_number=line_number,
@@ -445,11 +437,10 @@ class PnpmWorkspaceExtractor:
         result = ScanResult()
         data = read_yaml_object(content)
         package_patterns = data.get("packages") if data else None
-        workspace = Entity(
+        workspace_fact = entity_fact(
+            context,
             entity_type="workspace",
             name=f"{context.source.name} workspace",
-            source_name=context.source.name,
-            file_path=context.rel_path,
             aliases={context.source.name},
             properties={
                 "ecosystem": "javascript",
@@ -457,14 +448,13 @@ class PnpmWorkspaceExtractor:
                 "package_patterns": package_patterns if isinstance(package_patterns, list) else [],
             },
         )
-        result.entities.append(workspace)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                workspace,
+        result.facts.entities.append(workspace_fact)
+        result.facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                workspace_fact.reference,
                 "DECLARES_WORKSPACE",
-                context.source.name,
-                context.rel_path,
+                context,
                 self.name,
             )
         )

@@ -34,6 +34,26 @@ def source_evidence(
     )
 
 
+def entity_fact(
+    context: FileScanContext,
+    entity_type: str,
+    name: str,
+    aliases: set[str] | None = None,
+    properties: dict[str, Any] | None = None,
+    line_number: int | None = None,
+    file_path: str | None = None,
+) -> EntityFact:
+    return EntityFact(
+        entity_type=entity_type,
+        name=name,
+        source_name=context.source.name,
+        file_path=context.rel_path if file_path is None else file_path,
+        line_number=line_number,
+        aliases=frozenset(aliases or set()),
+        properties=properties or {},
+    )
+
+
 def package_entity_fact(
     context: FileScanContext,
     name: str,
@@ -68,6 +88,26 @@ def resolved_relationship_fact(
         evidence=source_evidence(context, parser, line_number=line_number, confidence="high"),
         properties=properties or {},
         resolved=True,
+    )
+
+
+def unresolved_relationship_fact(
+    from_ref: EntityReference,
+    to_name: str,
+    edge_type: str,
+    context: FileScanContext,
+    parser: str,
+    to_type: str,
+    line_number: int | None = None,
+    properties: dict[str, Any] | None = None,
+) -> RelationshipFact:
+    return RelationshipFact(
+        from_ref=from_ref,
+        to_ref=EntityReference(entity_type=to_type, name=to_name),
+        edge_type=edge_type,
+        evidence=source_evidence(context, parser, line_number=line_number),
+        properties=properties or {},
+        resolved=False,
     )
 
 
@@ -127,9 +167,11 @@ def package_dependency_fact(
 
 __all__ = [
     "declares_package_facts",
+    "entity_fact",
     "entity_reference",
     "package_dependency_fact",
     "package_entity_fact",
     "resolved_relationship_fact",
     "source_evidence",
+    "unresolved_relationship_fact",
 ]
