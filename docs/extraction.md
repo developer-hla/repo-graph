@@ -86,6 +86,9 @@ scaffolding. `FileScanContext` carries `EntityFact` values, so scanner code can
 reference the current repository, project, or file without importing the graph
 model. Source scanning returns `SourceScanResult` with a `FactBatch` and
 `files_scanned`; orchestration applies those facts to the graph constructor.
+Database introspection returns `DatabaseScanResult` with the same `FactBatch`
+shape. Database adapters may resolve relationships within their metadata
+snapshot, but they still emit fact records instead of graph records.
 
 Use `repo_graph.extraction.fact_helpers` for common fact patterns and
 `repo_graph.extraction.interaction_properties` for structured interaction

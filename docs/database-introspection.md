@@ -152,7 +152,7 @@ is missing, the connection environment variable is absent, or
 materialized view status are preserved in properties while agents and users
 still see generic database entities and dependency edges.
 
-## Graph Facts
+## Database Facts
 
 Introspected entities should use the existing SQL vocabulary where possible:
 
@@ -180,8 +180,9 @@ metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`,
 `graph_from_sqlserver_metadata()` and
 `graph_from_postgres_metadata()` remain direct pure adapter entry points.
 `graph_from_database_source()` is the live source entry point. These functions
-convert metadata rows into normal `Entity` and `Edge` facts without writing
-secrets to graph output.
+return `DatabaseScanResult` with a `FactBatch` of `EntityFact` and
+`RelationshipFact` records. Orchestration passes those facts through the graph
+builder; database adapters do not create graph `Entity` or `Edge` records.
 
 Introspected relationships should reuse the same interaction vocabulary:
 

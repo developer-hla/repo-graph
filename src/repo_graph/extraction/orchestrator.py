@@ -6,7 +6,7 @@ import re
 from dataclasses import replace
 
 from repo_graph.config import RepoGraphConfig, Source
-from repo_graph.database import DatabaseGraphFacts, DatabaseSourceRequest, graph_from_database_source
+from repo_graph.database import DatabaseScanResult, DatabaseSourceRequest, graph_from_database_source
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.source_scanner import SourceScanResult, scan_source, source_to_dict
@@ -78,12 +78,8 @@ def add_extraction_facts(graph: Graph, facts: FactBatch) -> None:
     add_facts_to_graph(graph, facts)
 
 
-def add_database_facts(graph: Graph, facts: DatabaseGraphFacts) -> None:
-    graph.errors.extend(facts.errors)
-    for entity in facts.entities:
-        graph.add_entity(entity)
-    for edge in facts.edges:
-        graph.add_edge(edge)
+def add_database_facts(graph: Graph, result: DatabaseScanResult) -> None:
+    add_extraction_facts(graph, result.facts)
 
 
 def database_source_request(source: Source) -> DatabaseSourceRequest:

@@ -6,9 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from repo_graph.config import load_config
-from repo_graph.database import DatabaseGraphFacts
+from repo_graph.database import DatabaseScanResult
 from repo_graph.extraction.cached_builds import build_cached_graph
-from repo_graph.graph import Entity
+from repo_graph.extraction.facts import EntityFact
 
 
 class CachedBuildTests(unittest.TestCase):
@@ -61,9 +61,9 @@ class CachedBuildTests(unittest.TestCase):
             root = Path(tmpdir)
             write_workspace(root)
             config = load_config(write_config(root, include_database=True))
-            facts = DatabaseGraphFacts(
+            facts = DatabaseScanResult(
                 entities=[
-                    Entity(
+                    EntityFact(
                         entity_type="sql_table",
                         name="dbo.Customers",
                         source_name="current-db",

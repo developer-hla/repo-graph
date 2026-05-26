@@ -29,7 +29,8 @@ from repo_graph.database import (
     graph_from_sqlserver_source,
     supported_database_engines,
 )
-from repo_graph.graph import Edge, Graph
+from repo_graph.extraction.facts import RelationshipFact
+from repo_graph.graph import Graph, add_facts_to_graph
 
 
 class DatabaseMetadataGraphTests(unittest.TestCase):
@@ -325,14 +326,10 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         )
 
         graph = Graph(scope_name="test", sources=[])
-        for entity in facts.entities:
-            graph.add_entity(entity)
-        for edge in facts.edges:
-            graph.add_edge(edge)
+        add_facts_to_graph(graph, facts.facts)
 
         self.assertEqual(facts.errors, [])
         self.assertEqual(len(facts.edges), 2)
-        self.assertEqual(len({edge.edge_id for edge in facts.edges}), 2)
         self.assertEqual(len(graph.edges), 2)
 
     def test_missing_foreign_key_target_stays_unresolved(self) -> None:
@@ -552,7 +549,7 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         )
 
 
-def single_edge(edges: list[Edge]) -> Edge:
+def single_edge(edges: list[RelationshipFact]) -> RelationshipFact:
     if len(edges) != 1:
         raise AssertionError(f"Expected exactly one edge, found {len(edges)}.")
     return edges[0]

@@ -54,6 +54,38 @@ class RelationshipFact:
     properties: dict[str, Any] = field(default_factory=dict)
     resolved: bool | None = None
 
+    @property
+    def from_name(self) -> str:
+        return self.from_ref.name
+
+    @property
+    def from_type(self) -> str:
+        return self.from_ref.entity_type
+
+    @property
+    def to_name(self) -> str:
+        return self.to_ref.name
+
+    @property
+    def to_type(self) -> str:
+        return self.to_ref.entity_type
+
+    @property
+    def to_entity_id(self) -> str | None:
+        return self.to_ref.entity_id
+
+    @property
+    def source_name(self) -> str:
+        return self.evidence.source_name
+
+    @property
+    def parser(self) -> str:
+        return self.evidence.parser
+
+    @property
+    def confidence(self) -> str:
+        return self.evidence.confidence
+
 
 @dataclass(frozen=True)
 class ScanIssue:

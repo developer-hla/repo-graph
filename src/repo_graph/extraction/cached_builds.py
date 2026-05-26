@@ -12,6 +12,7 @@ from repo_graph.config import RepoGraphConfig
 from repo_graph.database import graph_from_database_source
 from repo_graph.extraction.orchestrator import (
     MAX_FILE_BYTES,
+    add_database_facts,
     apply_dependency_filter,
     config_without_unsupported_sources,
     database_source_dicts,
@@ -75,11 +76,7 @@ def scan_cached_database_sources(config: RepoGraphConfig, graph: Graph) -> list[
     for source in config.sources:
         if source.source_type == "database":
             facts = graph_from_database_source(database_source_request(source))
-            graph.errors.extend(facts.errors)
-            for entity in facts.entities:
-                graph.add_entity(entity)
-            for edge in facts.edges:
-                graph.add_edge(edge)
+            add_database_facts(graph, facts)
             items.append(
                 {
                     "source_name": source.name,

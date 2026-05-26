@@ -36,3 +36,8 @@ class ExtractionContractTests(unittest.TestCase):
             if "repo_graph.graph" in path.read_text(encoding="utf-8")
         ]
         self.assertEqual(offenders, [])
+
+    def test_database_metadata_module_does_not_import_graph_model(self) -> None:
+        database_module = Path(__file__).resolve().parents[1] / "src" / "repo_graph" / "database" / "_metadata.py"
+
+        self.assertNotIn("repo_graph.graph", database_module.read_text(encoding="utf-8"))

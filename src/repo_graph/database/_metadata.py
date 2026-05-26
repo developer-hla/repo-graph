@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from repo_graph.graph import Edge, Entity, normalize_key, resolution_entity_types
+from repo_graph.extraction.facts import EntityFact, EntityReference, Evidence, FactBatch, RelationshipFact, ScanIssue
 
 SQLSERVER_METADATA_PARSER = "sqlserver_metadata"
 POSTGRES_METADATA_PARSER = "postgres_metadata"
@@ -89,12 +89,12 @@ POSTGRES_DEFAULT_INCLUDE_OBJECT_TYPES = ("function", "stored_procedure", "table"
 
 
 class DatabaseMetadataAdapter(Protocol):
-    """Converts engine-specific metadata rows into graph facts."""
+    """Converts engine-specific metadata rows into typed facts."""
 
     engine: str
     metadata_parser: str
 
-    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseGraphFacts:
+    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
         """Convert engine metadata rows into RepoGraph facts."""
         ...
 
@@ -222,13 +222,72 @@ class PostgresMetadata:
     dependencies: tuple[PostgresDependencyRow, ...] = ()
 
 
-@dataclass
-class DatabaseGraphFacts:
-    """Graph facts emitted from a database metadata source."""
+class DatabaseScanResult:
+    """Typed facts emitted from a database metadata source."""
 
-    entities: list[Entity] = field(default_factory=list)
-    edges: list[Edge] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
+    def __init__(
+        self,
+        facts: FactBatch | None = None,
+        entities: list[EntityFact] | None = None,
+        edges: list[RelationshipFact] | None = None,
+        errors: list[str] | None = None,
+    ) -> None:
+        self.facts = facts or FactBatch()
+        if entities:
+            self.facts.entities.extend(entities)
+        if edges:
+            self.facts.relationships.extend(edges)
+        if errors:
+            self.extend_errors(errors)
+
+    @property
+    def entities(self) -> list[EntityFact]:
+        return self.facts.entities
+
+    @entities.setter
+    def entities(self, value: list[EntityFact]) -> None:
+        self.facts.entities = value
+
+    @property
+    def edges(self) -> list[RelationshipFact]:
+        return self.facts.relationships
+
+    @edges.setter
+    def edges(self, value: list[RelationshipFact]) -> None:
+        self.facts.relationships = value
+
+    @property
+    def errors(self) -> list[str]:
+        return [issue.message for issue in self.facts.issues]
+
+    def add_error(
+        self,
+        message: str,
+        source_name: str = "database",
+        parser: str = "database_metadata",
+        metadata_source: str | None = None,
+    ) -> None:
+        self.facts.issues.append(
+            ScanIssue(
+                message=message,
+                evidence=Evidence(
+                    source_name=source_name,
+                    parser=parser,
+                    file_path=metadata_source,
+                    confidence="high",
+                ),
+            )
+        )
+
+    def extend_errors(
+        self,
+        errors: list[str],
+        source_name: str = "database",
+        parser: str = "database_metadata",
+        metadata_source: str | None = None,
+    ) -> None:
+        for error in errors:
+            self.add_error(error, source_name=source_name, parser=parser, metadata_source=metadata_source)
 
 
 @dataclass(frozen=True)
@@ -279,7 +338,7 @@ class DatabaseGraphError:
 class EdgeBuildResult:
     """One attempted metadata relationship conversion."""
 
-    edge: Edge | None = None
+    edge: RelationshipFact | None = None
     error: DatabaseGraphError | None = None
 
 
@@ -287,8 +346,8 @@ class EdgeBuildResult:
 class EntityMatch:
     """Entity resolution result for metadata rows."""
 
-    entity: Entity | None = None
-    candidates: tuple[Entity, ...] = ()
+    entity: EntityFact | None = None
+    candidates: tuple[EntityFact, ...] = ()
 
     @property
     def is_ambiguous(self) -> bool:
@@ -302,7 +361,7 @@ class SqlServerMetadataAdapter:
     engine: str = SQLSERVER_ENGINE
     metadata_parser: str = SQLSERVER_METADATA_PARSER
 
-    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseGraphFacts:
+    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
         if not isinstance(metadata, SqlServerMetadata):
             raise TypeError("SQL Server metadata adapter requires SqlServerMetadata.")
         return graph_from_sqlserver_metadata(source_name, metadata)
@@ -315,7 +374,7 @@ class PostgresMetadataAdapter:
     engine: str = POSTGRES_ENGINE
     metadata_parser: str = POSTGRES_METADATA_PARSER
 
-    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseGraphFacts:
+    def graph_from_metadata(self, source_name: str, metadata: object) -> DatabaseScanResult:
         if not isinstance(metadata, PostgresMetadata):
             raise TypeError("PostgreSQL metadata adapter requires PostgresMetadata.")
         return graph_from_postgres_metadata(source_name, metadata)
@@ -343,7 +402,7 @@ def database_metadata_adapter(engine: str) -> DatabaseMetadataAdapter:
     return adapter
 
 
-def graph_from_database_metadata(source_name: str, engine: str, metadata: object) -> DatabaseGraphFacts:
+def graph_from_database_metadata(source_name: str, engine: str, metadata: object) -> DatabaseScanResult:
     """Convert metadata rows for any supported database engine into graph facts."""
 
     return database_metadata_adapter(engine).graph_from_metadata(source_name, metadata)
@@ -363,7 +422,7 @@ def database_connector_unavailable_message(source_name: str, engine: str | None)
     return f"Database source '{source_name}' is missing a database engine."
 
 
-def graph_from_database_source(_request: DatabaseSourceRequest) -> DatabaseGraphFacts:
+def graph_from_database_source(_request: DatabaseSourceRequest) -> DatabaseScanResult:
     """Live database connector entry point."""
 
     engine = normalize_database_engine(_request.engine)
@@ -371,13 +430,13 @@ def graph_from_database_source(_request: DatabaseSourceRequest) -> DatabaseGraph
         return graph_from_sqlserver_source(_request)
     if engine == POSTGRES_ENGINE:
         return graph_from_postgres_source(_request)
-    return DatabaseGraphFacts(errors=[database_connector_unavailable_message(_request.source_name, engine)])
+    return DatabaseScanResult(errors=[database_connector_unavailable_message(_request.source_name, engine)])
 
 
 def graph_from_sqlserver_source(
     request: DatabaseSourceRequest,
     connect: Callable[[str, int], Any] | None = None,
-) -> DatabaseGraphFacts:
+) -> DatabaseScanResult:
     """Read SQL Server catalog metadata and convert it into graph facts."""
 
     connection_string, connection_error = database_connection_string(request)
@@ -385,7 +444,7 @@ def graph_from_sqlserver_source(
         return connection_error
     assert connection_string is not None
     if connect is None and not sqlserver_driver_available():
-        return DatabaseGraphFacts(
+        return DatabaseScanResult(
             errors=[
                 "SQL Server connector requires optional dependency 'pyodbc' and a SQL Server ODBC driver "
                 f"for database source '{request.source_name}'."
@@ -400,7 +459,7 @@ def graph_from_sqlserver_source(
             else connect_to_sqlserver(connection_string, timeout)
         )
     except Exception as exc:
-        return DatabaseGraphFacts(
+        return DatabaseScanResult(
             errors=[
                 f"SQL Server metadata connection failed for '{request.source_name}': "
                 f"{safe_database_error_text(exc, connection_string)}"
@@ -410,7 +469,7 @@ def graph_from_sqlserver_source(
     try:
         metadata_result = read_sqlserver_metadata(connection, request)
     except Exception as exc:
-        return DatabaseGraphFacts(
+        return DatabaseScanResult(
             errors=[
                 f"SQL Server metadata read failed for '{request.source_name}': "
                 f"{safe_database_error_text(exc, connection_string)}"
@@ -420,14 +479,14 @@ def graph_from_sqlserver_source(
         close_database_connection(connection)
 
     facts = graph_from_sqlserver_metadata(request.source_name, metadata_result.metadata)
-    facts.errors.extend(metadata_result.errors)
+    facts.extend_errors(metadata_result.errors, source_name=request.source_name, parser=SQLSERVER_METADATA_PARSER)
     return facts
 
 
 def graph_from_postgres_source(
     request: DatabaseSourceRequest,
     connect: Callable[[str, int], Any] | None = None,
-) -> DatabaseGraphFacts:
+) -> DatabaseScanResult:
     """Read PostgreSQL catalog metadata and convert it into graph facts."""
 
     connection_string, connection_error = database_connection_string(request)
@@ -435,7 +494,7 @@ def graph_from_postgres_source(
         return connection_error
     assert connection_string is not None
     if connect is None and not postgres_driver_available():
-        return DatabaseGraphFacts(
+        return DatabaseScanResult(
             errors=[
                 "PostgreSQL connector requires optional dependency 'psycopg' "
                 f"for database source '{request.source_name}'."
@@ -450,7 +509,7 @@ def graph_from_postgres_source(
             else connect_to_postgres(connection_string, timeout)
         )
     except Exception as exc:
-        return DatabaseGraphFacts(
+        return DatabaseScanResult(
             errors=[
                 f"PostgreSQL metadata connection failed for '{request.source_name}': "
                 f"{safe_database_error_text(exc, connection_string)}"
@@ -460,7 +519,7 @@ def graph_from_postgres_source(
     try:
         metadata_result = read_postgres_metadata(connection, request)
     except Exception as exc:
-        return DatabaseGraphFacts(
+        return DatabaseScanResult(
             errors=[
                 f"PostgreSQL metadata read failed for '{request.source_name}': "
                 f"{safe_database_error_text(exc, connection_string)}"
@@ -470,19 +529,19 @@ def graph_from_postgres_source(
         close_database_connection(connection)
 
     facts = graph_from_postgres_metadata(request.source_name, metadata_result.metadata)
-    facts.errors.extend(metadata_result.errors)
+    facts.extend_errors(metadata_result.errors, source_name=request.source_name, parser=POSTGRES_METADATA_PARSER)
     return facts
 
 
-def database_connection_string(request: DatabaseSourceRequest) -> tuple[str | None, DatabaseGraphFacts | None]:
+def database_connection_string(request: DatabaseSourceRequest) -> tuple[str | None, DatabaseScanResult | None]:
     connection_env = request.connection_env.strip()
     if not connection_env:
-        return None, DatabaseGraphFacts(
+        return None, DatabaseScanResult(
             errors=[f"Database source '{request.source_name}' connection_env is not configured."]
         )
     connection_string = os.environ.get(connection_env)
     if not connection_string:
-        return None, DatabaseGraphFacts(
+        return None, DatabaseScanResult(
             errors=[f"Database source '{request.source_name}' connection_env is not set in the runtime environment."]
         )
     return connection_string, None
@@ -1251,17 +1310,17 @@ def normalize_database_engine(engine: str) -> str:
     return required_text(engine, "database engine").lower()
 
 
-def graph_from_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata) -> DatabaseGraphFacts:
+def graph_from_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata) -> DatabaseScanResult:
     """Convert SQL Server catalog metadata rows into RepoGraph facts."""
 
     source_name = required_text(source_name, "source_name")
-    result = DatabaseGraphFacts()
+    result = DatabaseScanResult()
 
-    entities_by_id: dict[str, Entity] = {}
+    entities_by_ref: dict[EntityReference, EntityFact] = {}
     for entity_type, rows in sqlserver_object_groups(metadata):
         for row in rows:
             add_entity(
-                entities_by_id,
+                entities_by_ref,
                 sqlserver_object_entity(
                     source_name=source_name,
                     entity_type=entity_type,
@@ -1270,9 +1329,9 @@ def graph_from_sqlserver_metadata(source_name: str, metadata: SqlServerMetadata)
                 ),
             )
     for row in metadata.triggers:
-        add_entity(entities_by_id, sqlserver_trigger_entity(source_name, row))
+        add_entity(entities_by_ref, sqlserver_trigger_entity(source_name, row))
 
-    result.entities = list(entities_by_id.values())
+    result.entities = list(entities_by_ref.values())
     entity_index = build_entity_index(result.entities)
 
     for row in metadata.foreign_keys:
@@ -1306,7 +1365,7 @@ def sqlserver_object_entity(
     entity_type: str,
     row: SqlServerObjectRow,
     metadata_source: str,
-) -> Entity:
+) -> EntityFact:
     return database_object_entity(
         source_name=source_name,
         database_engine=SQLSERVER_ENGINE,
@@ -1317,17 +1376,17 @@ def sqlserver_object_entity(
     )
 
 
-def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -> DatabaseGraphFacts:
+def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -> DatabaseScanResult:
     """Convert PostgreSQL catalog metadata rows into RepoGraph facts."""
 
     source_name = required_text(source_name, "source_name")
-    result = DatabaseGraphFacts()
+    result = DatabaseScanResult()
 
-    entities_by_id: dict[str, Entity] = {}
+    entities_by_ref: dict[EntityReference, EntityFact] = {}
     for entity_type, rows, metadata_source, extra_properties in postgres_object_groups(metadata):
         for row in rows:
             add_entity(
-                entities_by_id,
+                entities_by_ref,
                 postgres_object_entity(
                     source_name=source_name,
                     entity_type=entity_type,
@@ -1337,9 +1396,9 @@ def graph_from_postgres_metadata(source_name: str, metadata: PostgresMetadata) -
                 ),
             )
     for row in metadata.triggers:
-        add_entity(entities_by_id, postgres_trigger_entity(source_name, row))
+        add_entity(entities_by_ref, postgres_trigger_entity(source_name, row))
 
-    result.entities = list(entities_by_id.values())
+    result.entities = list(entities_by_ref.values())
     entity_index = build_entity_index(result.entities)
 
     for row in metadata.foreign_keys:
@@ -1378,7 +1437,7 @@ def postgres_object_entity(
     row: PostgresObjectRow,
     metadata_source: str,
     extra_properties: dict[str, Any],
-) -> Entity:
+) -> EntityFact:
     return database_object_entity(
         source_name=source_name,
         database_engine=POSTGRES_ENGINE,
@@ -1390,7 +1449,7 @@ def postgres_object_entity(
     )
 
 
-def sqlserver_trigger_entity(source_name: str, row: SqlServerTriggerRow) -> Entity:
+def sqlserver_trigger_entity(source_name: str, row: SqlServerTriggerRow) -> EntityFact:
     return database_trigger_entity(
         source_name=source_name,
         database_engine=SQLSERVER_ENGINE,
@@ -1404,7 +1463,7 @@ def sqlserver_trigger_entity(source_name: str, row: SqlServerTriggerRow) -> Enti
     )
 
 
-def postgres_trigger_entity(source_name: str, row: PostgresTriggerRow) -> Entity:
+def postgres_trigger_entity(source_name: str, row: PostgresTriggerRow) -> EntityFact:
     return database_trigger_entity(
         source_name=source_name,
         database_engine=POSTGRES_ENGINE,
@@ -1436,7 +1495,7 @@ def database_trigger_entity(
     events: tuple[str, ...],
     is_enabled: bool | None,
     extra_properties: dict[str, Any] | None = None,
-) -> Entity:
+) -> EntityFact:
     trigger_name = normalize_sql_identifier(name)
     table_full_name = database_full_name(table_schema, table)
     full_name = database_trigger_full_name(table_schema, table, trigger_name)
@@ -1452,15 +1511,17 @@ def database_trigger_entity(
         "trigger_enabled": is_enabled,
         **(extra_properties or {}),
     }
-    return Entity(
+    return EntityFact(
         entity_type="sql_trigger",
         name=full_name,
         source_name=source_name,
-        aliases={
-            trigger_name,
-            database_full_name(schema, trigger_name),
-            trigger_source_name(table, trigger_name),
-        },
+        aliases=frozenset(
+            {
+                trigger_name,
+                database_full_name(schema, trigger_name),
+                trigger_source_name(table, trigger_name),
+            }
+        ),
         properties={key: value for key, value in trigger_properties.items() if value is not None},
     )
 
@@ -1473,14 +1534,14 @@ def database_object_entity(
     name: str,
     metadata_source: str,
     extra_properties: dict[str, Any] | None = None,
-) -> Entity:
+) -> EntityFact:
     full_name = database_full_name(schema, name)
     schema, short_name = split_sql_name(full_name)
-    return Entity(
+    return EntityFact(
         entity_type=entity_type,
         name=full_name,
         source_name=source_name,
-        aliases={short_name},
+        aliases=frozenset({short_name}),
         properties={
             "schema": schema,
             "object_name": short_name,
@@ -1496,7 +1557,7 @@ def database_object_entity(
 def foreign_key_edge(
     source_name: str,
     row: SqlServerForeignKeyRow,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     source_full_name = sqlserver_full_name(row.schema, row.table)
     target_full_name = sqlserver_full_name(row.referenced_schema, row.referenced_table)
@@ -1536,7 +1597,7 @@ def foreign_key_edge(
 def sqlserver_trigger_edge(
     source_name: str,
     row: SqlServerTriggerRow,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     return trigger_edge(
         engine_label="SQL Server",
@@ -1557,7 +1618,7 @@ def sqlserver_trigger_edge(
 def postgres_trigger_edge(
     source_name: str,
     row: PostgresTriggerRow,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     return trigger_edge(
         engine_label="PostgreSQL",
@@ -1602,7 +1663,7 @@ def trigger_edge(
     table_name: str,
     events: tuple[str, ...],
     is_enabled: bool | None,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     trigger_full_name = database_trigger_full_name(table_schema, table_name, trigger_name)
     table_full_name = database_full_name(table_schema, table_name)
@@ -1652,7 +1713,7 @@ def missing_source_error(
     relationship_name: str,
     source_object: str,
     target_object: str,
-    candidates: tuple[Entity, ...],
+    candidates: tuple[EntityFact, ...],
 ) -> DatabaseGraphError:
     if candidates:
         message = f"Ambiguous source entity for {engine_label} {relationship_name}: {source_object}"
@@ -1673,7 +1734,7 @@ def missing_source_error(
 def dependency_edge(
     source_name: str,
     row: SqlServerDependencyRow,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     source_full_name = sqlserver_full_name(row.from_schema, row.from_name)
     target_full_name = sqlserver_full_name(row.to_schema, row.to_name)
@@ -1727,7 +1788,7 @@ def dependency_edge(
 def postgres_foreign_key_edge(
     source_name: str,
     row: PostgresForeignKeyRow,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     source_full_name = postgres_full_name(row.schema, row.table)
     target_full_name = postgres_full_name(row.referenced_schema, row.referenced_table)
@@ -1769,7 +1830,7 @@ def postgres_foreign_key_edge(
 def postgres_dependency_edge(
     source_name: str,
     row: PostgresDependencyRow,
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
 ) -> EdgeBuildResult:
     source_full_name = postgres_full_name(row.from_schema, row.from_name)
     target_full_name = postgres_full_name(row.to_schema, row.to_name)
@@ -1823,7 +1884,7 @@ def postgres_dependency_edge(
 
 
 def sqlserver_metadata_edge(
-    source_entity: Entity,
+    source_entity: EntityFact,
     target_match: EntityMatch,
     target_name: str,
     target_type: str,
@@ -1836,7 +1897,7 @@ def sqlserver_metadata_edge(
     metadata_source: str,
     identity_key: str,
     extra_properties: dict[str, Any] | None = None,
-) -> Edge:
+) -> RelationshipFact:
     return database_metadata_edge(
         source_entity=source_entity,
         target_match=target_match,
@@ -1857,7 +1918,7 @@ def sqlserver_metadata_edge(
 
 
 def database_metadata_edge(
-    source_entity: Entity,
+    source_entity: EntityFact,
     target_match: EntityMatch,
     target_name: str,
     target_type: str,
@@ -1872,7 +1933,7 @@ def database_metadata_edge(
     database_engine: str,
     parser: str,
     extra_properties: dict[str, Any] | None = None,
-) -> Edge:
+) -> RelationshipFact:
     properties = database_interaction_properties(
         raw_target=target_name,
         operation=operation,
@@ -1887,20 +1948,14 @@ def database_metadata_edge(
         properties["resolution_status"] = "ambiguous"
         properties["resolution_candidates"] = resolution_candidate_properties(target_match.candidates)
     target_entity = target_match.entity
-    return Edge(
-        from_entity_id=source_entity.entity_id,
-        from_name=source_entity.name,
-        from_type=source_entity.entity_type,
-        to_name=target_entity.name if target_entity else target_name,
-        to_type=target_entity.entity_type if target_entity else target_type,
-        to_entity_id=target_entity.entity_id if target_entity else None,
-        resolved=target_entity is not None,
+    return RelationshipFact(
+        from_ref=source_entity.reference,
+        to_ref=target_entity.reference if target_entity else EntityReference(entity_type=target_type, name=target_name),
         edge_type=edge_type,
-        source_name=source_name,
+        evidence=Evidence(source_name=source_name, parser=parser, confidence="high"),
         identity_key=identity_key,
-        confidence="high",
-        parser=parser,
         properties=properties,
+        resolved=target_entity is not None,
     )
 
 
@@ -1951,24 +2006,38 @@ def database_interaction_properties(
     }
 
 
-def add_entity(entities_by_id: dict[str, Entity], entity: Entity) -> None:
-    existing = entities_by_id.get(entity.entity_id)
+def add_entity(entities_by_ref: dict[EntityReference, EntityFact], entity: EntityFact) -> None:
+    existing = entities_by_ref.get(entity.reference)
     if existing is None:
-        entities_by_id[entity.entity_id] = entity
+        entities_by_ref[entity.reference] = entity
         return
-    existing.aliases.update(entity.aliases)
-    existing.properties.update({key: value for key, value in entity.properties.items() if value is not None})
+    entities_by_ref[entity.reference] = EntityFact(
+        entity_type=existing.entity_type,
+        name=existing.name,
+        source_name=existing.source_name,
+        file_path=existing.file_path,
+        line_number=existing.line_number,
+        aliases=existing.aliases | entity.aliases,
+        properties={
+            **existing.properties,
+            **{key: value for key, value in entity.properties.items() if value is not None},
+        },
+    )
 
 
-def append_edge_result(result: DatabaseGraphFacts, edge_result: EdgeBuildResult) -> None:
+def append_edge_result(result: DatabaseScanResult, edge_result: EdgeBuildResult) -> None:
     if edge_result.edge is not None:
         result.edges.append(edge_result.edge)
     if edge_result.error is not None:
-        result.errors.append(edge_result.error.to_message())
+        result.add_error(
+            edge_result.error.to_message(),
+            source_name=edge_result.error.source_name,
+            metadata_source=edge_result.error.metadata_source,
+        )
 
 
-def build_entity_index(entities: list[Entity]) -> dict[tuple[str | None, str], list[Entity]]:
-    lookup: dict[tuple[str | None, str], list[Entity]] = {}
+def build_entity_index(entities: list[EntityFact]) -> dict[tuple[str | None, str], list[EntityFact]]:
+    lookup: dict[tuple[str | None, str], list[EntityFact]] = {}
     for entity in entities:
         keys = {entity.name, *entity.aliases}
         full_name = entity.properties.get("full_name")
@@ -1978,40 +2047,51 @@ def build_entity_index(entities: list[Entity]) -> dict[tuple[str | None, str], l
         if isinstance(schema, str) and schema:
             keys.add(f"{schema}.{entity.name}")
         for key in keys:
-            normalized = normalize_key(key)
+            normalized = normalize_resolution_key(key)
             lookup.setdefault((entity.entity_type, normalized), []).append(entity)
             lookup.setdefault((None, normalized), []).append(entity)
     return lookup
 
 
 def find_entity(
-    entity_index: dict[tuple[str | None, str], list[Entity]],
+    entity_index: dict[tuple[str | None, str], list[EntityFact]],
     target_type: str | None,
     target_name: str,
 ) -> EntityMatch:
-    normalized_target = normalize_key(target_name)
-    candidates: dict[str, Entity] = {}
-    for entity_type in resolution_entity_types(target_type):
+    normalized_target = normalize_resolution_key(target_name)
+    candidates: dict[EntityReference, EntityFact] = {}
+    for entity_type in database_resolution_entity_types(target_type):
         for candidate in entity_index.get((entity_type, normalized_target), []):
-            candidates[candidate.entity_id] = candidate
+            candidates[candidate.reference] = candidate
     if not candidates:
         for candidate in entity_index.get((None, normalized_target), []):
-            candidates[candidate.entity_id] = candidate
+            candidates[candidate.reference] = candidate
     if len(candidates) == 1:
         return EntityMatch(entity=next(iter(candidates.values())))
     return EntityMatch(candidates=tuple(candidates.values()))
 
 
-def resolution_candidate_properties(candidates: tuple[Entity, ...]) -> list[dict[str, str]]:
+def resolution_candidate_properties(candidates: tuple[EntityFact, ...]) -> list[dict[str, str]]:
     return [
         {
-            "entity_id": candidate.entity_id,
             "entity_type": candidate.entity_type,
             "name": candidate.name,
             "source_name": candidate.source_name,
         }
         for candidate in candidates[:25]
     ]
+
+
+def normalize_resolution_key(value: str) -> str:
+    return value.strip().strip("[]`\"'").lower()
+
+
+def database_resolution_entity_types(target_type: str | None) -> list[str | None]:
+    if target_type == "sql_object":
+        return ["sql_table", "sql_view", "sql_function", "sql_trigger", "stored_procedure"]
+    if target_type:
+        return [target_type]
+    return [None]
 
 
 def metadata_identity_key(*parts: str | None) -> str:
