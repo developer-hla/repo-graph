@@ -49,6 +49,8 @@ config
 
 Directory and file structure are part of the architecture. A package should
 make ownership obvious before a contributor reads implementation details.
+Use [modularity.md](modularity.md) for the file-shape and package-surface
+rules that guide architecture cleanup.
 
 Each layer may have complex internals, but it should expose a small, regular
 public surface. For example, a Python scanner package can contain AST visitors,
@@ -324,7 +326,11 @@ repo_graph/
     _neo4j.py
   reports/
     __init__.py
-    _builders.py
+    _common.py
+    blast_radius.py
+    database_reconciliation.py
+    interactions.py
+    unresolved.py
   api.py
   cli.py
 ```

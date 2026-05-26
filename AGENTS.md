@@ -185,6 +185,9 @@ inside scanners. The target architecture is defined in
   expose stable contracts, not implementation details.
 - Do not import private implementation modules across layer boundaries when a
   public package surface exists.
+- Split modules by ownership when they grow large enough that a small change
+  requires reading unrelated behavior. Follow `docs/modularity.md` for
+  file-shape and package-surface rules.
 - Use early returns to avoid deep nesting.
 - Avoid broad `Any` unless parsing untyped external data.
 - Avoid inline comments unless they explain non-obvious behavior.
