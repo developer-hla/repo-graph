@@ -6,10 +6,10 @@ from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
 from repo_graph.extraction.scanners.interaction_helpers import (
-    export_entities_and_edges,
-    http_call_edges,
-    import_edges,
-    route_entities_and_edges,
+    export_symbol_facts,
+    http_call_facts,
+    import_facts,
+    route_facts,
 )
 
 
@@ -22,8 +22,8 @@ class JavaScriptExtractor:
     def extract(self, context: FileScanContext, content: str) -> ScanResult:
         result = ScanResult()
         for line_number, line in enumerate(content.splitlines(), start=1):
-            result.edges.extend(import_edges(context, line, line_number))
-            result.extend(route_entities_and_edges(context, line, line_number))
-            result.extend(export_entities_and_edges(context, line, line_number))
-            result.edges.extend(http_call_edges(context, line, line_number))
+            result.facts.relationships.extend(import_facts(context, line, line_number))
+            result.facts.extend(route_facts(context, line, line_number))
+            result.facts.extend(export_symbol_facts(context, line, line_number))
+            result.facts.relationships.extend(http_call_facts(context, line, line_number))
         return result

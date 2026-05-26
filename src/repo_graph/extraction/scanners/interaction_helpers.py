@@ -8,6 +8,13 @@ from typing import Any
 from urllib.parse import urlparse
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.fact_helpers import (
+    entity_fact,
+    entity_reference,
+    resolved_relationship_fact,
+    unresolved_relationship_fact,
+)
+from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.package_helpers import import_target_name
@@ -60,19 +67,18 @@ ENV_URL_RE = re.compile(r"(?:process\.env\.|import\.meta\.env\.)([A-Z][A-Z0-9_]*
 ENV_NAME_RE = re.compile(r"\b([A-Z][A-Z0-9_]*(?:URL|URI|ENDPOINT|HOST))\b")
 
 
-def import_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
-    edges: list[Edge] = []
+def import_facts(context: FileScanContext, line: str, line_number: int) -> list[RelationshipFact]:
+    facts: list[RelationshipFact] = []
     for match in IMPORT_RE.finditer(line):
         raw_target = match.group(1)
         target_name = import_target_name(raw_target)
         is_package = not raw_target.startswith(".")
-        edges.append(
-            unresolved_edge(
-                context.file_entity,
+        facts.append(
+            unresolved_relationship_fact(
+                entity_reference(context.file_entity),
                 target_name,
                 "IMPORTS",
-                context.source.name,
-                context.rel_path,
+                context,
                 "javascript_import",
                 to_type="package" if is_package else "module",
                 line_number=line_number,
@@ -83,16 +89,18 @@ def import_edges(context: FileScanContext, line: str, line_number: int) -> list[
                 },
             )
         )
-    return edges
+    return facts
 
 
-def route_entities_and_edges(context: FileScanContext, line: str, line_number: int) -> ScanResult:
-    result = ScanResult()
+def route_facts(context: FileScanContext, line: str, line_number: int) -> FactBatch:
+    facts = FactBatch()
     for match in ROUTE_RE.finditer(line):
-        result.extend(add_route(context, match.group(1).upper(), match.group(2), line_number, "javascript_route"))
+        facts.extend(add_route_facts(context, match.group(1).upper(), match.group(2), line_number, "javascript_route"))
     for match in NEST_ROUTE_RE.finditer(line):
-        result.extend(add_route(context, match.group(1).upper(), match.group(2) or "/", line_number, "nestjs_route"))
-    return result
+        facts.extend(
+            add_route_facts(context, match.group(1).upper(), match.group(2) or "/", line_number, "nestjs_route")
+        )
+    return facts
 
 
 def add_route(context: FileScanContext, method: str, path: str, line_number: int, parser: str) -> ScanResult:
@@ -123,6 +131,34 @@ def add_route(context: FileScanContext, method: str, path: str, line_number: int
             )
         )
     return result
+
+
+def add_route_facts(context: FileScanContext, method: str, path: str, line_number: int, parser: str) -> FactBatch:
+    facts = FactBatch()
+    route = route_entity_fact(context, method, path, line_number, parser, operation_name=None)
+    facts.entities.append(route)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            route.reference,
+            "DECLARES_ROUTE",
+            context,
+            parser,
+            line_number,
+        )
+    )
+    if context.project:
+        facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.project.entity),
+                route.reference,
+                "EXPOSES_ROUTE",
+                context,
+                parser,
+                line_number,
+            )
+        )
+    return facts
 
 
 def route_handler_edge(
@@ -185,31 +221,57 @@ def route_entity(
     )
 
 
-def export_entities_and_edges(context: FileScanContext, line: str, line_number: int) -> ScanResult:
-    result = ScanResult()
+def route_entity_fact(
+    context: FileScanContext,
+    method: str,
+    path: str,
+    line_number: int,
+    parser: str,
+    operation_name: str | None,
+) -> EntityFact:
+    normalized_path = normalize_route_path(path)
+    properties = {
+        "method": method,
+        "path": path,
+        "normalized_path": normalized_path,
+        "project": context.project.name if context.project else None,
+        "parser": parser,
+    }
+    if operation_name:
+        properties["operation_name"] = operation_name
+    return entity_fact(
+        context,
+        entity_type="api_route",
+        name=f"{method} {path}",
+        line_number=line_number,
+        aliases={f"{method} {normalized_path}", normalized_path, path},
+        properties=properties,
+    )
+
+
+def export_symbol_facts(context: FileScanContext, line: str, line_number: int) -> FactBatch:
+    facts = FactBatch()
     for entity_type, name in exported_symbols(line):
-        symbol = Entity(
+        symbol = entity_fact(
+            context,
             entity_type=entity_type,
             name=name,
-            source_name=context.source.name,
-            file_path=context.rel_path,
             line_number=line_number,
             aliases={name},
             properties={"project": context.project.name if context.project else None},
         )
-        result.entities.append(symbol)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                symbol,
+        facts.entities.append(symbol)
+        facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                symbol.reference,
                 "DECLARES_SYMBOL",
-                context.source.name,
-                context.rel_path,
+                context,
                 "javascript_export",
                 line_number,
             )
         )
-    return result
+    return facts
 
 
 def exported_symbols(line: str) -> Iterable[tuple[str, str]]:
@@ -221,16 +283,16 @@ def exported_symbols(line: str) -> Iterable[tuple[str, str]]:
         yield "function", match.group(1)
 
 
-def http_call_edges(context: FileScanContext, line: str, line_number: int) -> list[Edge]:
-    edges: list[Edge] = []
+def http_call_facts(context: FileScanContext, line: str, line_number: int) -> list[RelationshipFact]:
+    facts: list[RelationshipFact] = []
     for match in FETCH_RE.finditer(line):
         method = fetch_method(match.group("args"))
-        edges.extend(
-            http_edges_for_target(context, method, match.group(2), line_number, "javascript_http", client="fetch")
+        facts.extend(
+            http_facts_for_target(context, method, match.group(2), line_number, "javascript_http", client="fetch")
         )
     for match in AXIOS_RE.finditer(line):
-        edges.extend(
-            http_edges_for_target(
+        facts.extend(
+            http_facts_for_target(
                 context,
                 match.group(1).upper(),
                 match.group(3),
@@ -239,7 +301,7 @@ def http_call_edges(context: FileScanContext, line: str, line_number: int) -> li
                 client="axios",
             )
         )
-    return edges
+    return facts
 
 
 def http_edges_for_target(
@@ -279,6 +341,49 @@ def http_edges_for_target(
             "CALLS_HTTP",
             context.source.name,
             context.rel_path,
+            parser,
+            to_type="api_route",
+            line_number=line_number,
+            properties=target,
+        )
+    ]
+
+
+def http_facts_for_target(
+    context: FileScanContext,
+    method: str,
+    raw_target: str,
+    line_number: int,
+    parser: str,
+    client: str | None = None,
+    from_entity: Entity | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> list[RelationshipFact]:
+    source_ref = entity_reference(from_entity or context.file_entity)
+    target = http_target(raw_target, method)
+    if client:
+        target["client"] = client
+    if extra_properties:
+        target.update(extra_properties)
+    if target.get("service_name"):
+        return [
+            unresolved_relationship_fact(
+                source_ref,
+                target["service_name"],
+                "CALLS_SERVICE",
+                context,
+                parser,
+                to_type="service",
+                line_number=line_number,
+                properties=target,
+            )
+        ]
+    return [
+        unresolved_relationship_fact(
+            source_ref,
+            target["route_name"],
+            "CALLS_HTTP",
+            context,
             parser,
             to_type="api_route",
             line_number=line_number,
