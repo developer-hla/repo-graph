@@ -79,6 +79,8 @@ The largest runtime files should be addressed in this order:
    query/report response builders, and route registration. Done.
 5. UI runtime: split router, API client, views, components, and formatters.
    Done.
+6. .NET scanner helpers: split C# syntax, C# symbols, C# routes, C#
+   interactions, VB syntax, VB symbols, VB routes, and VB interactions. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -89,21 +91,56 @@ After the report, database, storage, API, and UI splits, the remaining runtime
 hotspots are narrower. The next candidates should be handled as separate
 slices:
 
-1. Scanner helper internals: split
-   `extraction/scanners/code/dotnet/helpers.py` by symbol extraction,
-   interaction extraction, project metadata, and Visual Basic compatibility.
-   This is the only remaining runtime source file well above 600 lines.
-2. Database reconciliation report: split `reports/database_reconciliation.py`
+1. Database reconciliation report: split `reports/database_reconciliation.py`
    into classification, summary, grouping, and public builder modules. This is
    just above the soft limit and should be handled before it grows.
-3. Source resolver: split `sources/_resolver.py` into local path resolution,
+2. Source resolver: split `sources/_resolver.py` into local path resolution,
    Git/GitHub sync, source status payloads, and shared source metadata helpers.
    It is just below the soft limit but mixes provider and status concerns.
-4. Scanner shared helpers: review Python scanner helpers, interaction helpers,
+3. Scanner shared helpers: review Python scanner helpers, interaction helpers,
    deployment helpers, and SQL helpers for focused package-local boundaries.
 
 Large test files and generated documentation scripts can be split later, but
 runtime package boundaries should stay the priority.
+
+## .NET Scanner Package Target
+
+The .NET scanner package supports both modern C# and legacy VB. `scanner.py`
+owns the scan loop and scanner registration. Language-specific parsing details
+live in focused helpers so a route change does not require reading symbol
+resolution, SQL extraction, and legacy HTTP logic.
+
+```text
+repo_graph/extraction/scanners/code/dotnet/
+  __init__.py
+  scanner.py
+  helpers.py
+  csharp_syntax.py
+  csharp_symbols.py
+  csharp_routes.py
+  csharp_interactions.py
+  vb_syntax.py
+  vb_symbols.py
+  vb_routes.py
+  vb_interactions.py
+```
+
+`helpers.py` is a compatibility facade for the existing package surface. New
+code should import from the focused module that owns the behavior unless it is
+intentionally preserving the legacy facade.
+
+Responsibilities:
+
+- `scanner.py`: line iteration, project context, scope state, and scanner
+  registration.
+- `csharp_syntax.py` and `vb_syntax.py`: language syntax regexes, scope text,
+  attributes, and string normalization.
+- `csharp_symbols.py` and `vb_symbols.py`: symbol declarations and local call
+  relationships.
+- `csharp_routes.py` and `vb_routes.py`: endpoint declarations and route
+  handler links.
+- `csharp_interactions.py` and `vb_interactions.py`: application-to-application
+  and application-to-database interaction facts found in code.
 
 ## Reports Package Target
 

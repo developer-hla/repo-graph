@@ -311,6 +311,14 @@ repo_graph/
           __init__.py
           scanner.py
           helpers.py
+          csharp_interactions.py
+          csharp_routes.py
+          csharp_symbols.py
+          csharp_syntax.py
+          vb_interactions.py
+          vb_routes.py
+          vb_symbols.py
+          vb_syntax.py
         javascript/
           __init__.py
           scanner.py
