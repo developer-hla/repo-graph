@@ -6,9 +6,7 @@ complete until code, examples, tests, and generated references all agree.
 Parser work must also follow the architecture boundary in
 [architecture.md](architecture.md): scanners extract typed facts with evidence;
 graph construction converts those facts into graph entities, edges, IDs,
-resolution, and export shape. Current code still has legacy direct
-`Entity`/`Edge` emission in places, so refactors should move toward the
-architecture spec rather than expanding that coupling.
+resolution, and export shape.
 
 ## Add A Parser Slice
 
@@ -33,18 +31,16 @@ architecture spec rather than expanding that coupling.
    Each extractor should define a stable `name`, a narrow `can_process`
    predicate, and an extraction method that returns scanner output. Put the
    implementation in the relevant `repo_graph.extraction.scanners` family
-   module and keep cross-family registration in `registry.py`. Long-term,
-   scanner output should be typed extracted facts, not graph objects.
+   module and keep cross-family registration in `registry.py`. Scanner output
+   should be typed extracted facts, not graph objects.
 
 6. Emit semantic facts with source provenance.
-   While legacy code still emits `Entity` and `Edge` directly, use
-   `repo_graph.extraction.legacy_graph_helpers` consistently. File-derived
-   facts should include `file_path`, `line_number` when available, parser name,
-   and confidence. New refactors should prefer typed fact drafts from
-   `repo_graph.extraction.facts` and append them to `ScanResult.facts`; the
-   graph builder converts those facts into graph objects. Use
-   `repo_graph.extraction.fact_helpers` for common patterns before hand-building
-   `RelationshipFact` or `EntityFact` objects in scanner code.
+   File-derived facts should include `file_path`, `line_number` when available,
+   parser name, and confidence. Append typed fact drafts from
+   `repo_graph.extraction.facts` to `ScanResult.facts`; the graph builder
+   converts those facts into graph objects. Use `repo_graph.extraction.fact_helpers`
+   for common patterns before hand-building `RelationshipFact` or `EntityFact`
+   objects in scanner code.
 
 7. Keep the graph vocabulary semantic. If a parser discovers an HTTP call,
    emit `CALLS_SERVICE` or `CALLS_HTTP` and record library-specific evidence
@@ -62,8 +58,9 @@ architecture spec rather than expanding that coupling.
    [first-class coverage](first-class-coverage.md) before deciding whether to
    add graph vocabulary or reuse an existing edge type.
    For interaction edge types listed in `repo_graph.vocabulary.INTERACTION_EDGE_TYPES`,
-   use the scanner `interaction_properties` helper or an equivalent wrapper so
-   `target_boundary`, `dependency_scope`, and `interaction_kind` are present.
+   use `repo_graph.extraction.interaction_properties.interaction_properties`
+   or an equivalent wrapper so `target_boundary`, `dependency_scope`, and
+   `interaction_kind` are present.
 
 8. Register the extractor in the scanner registry.
    The registry order should stay deterministic.

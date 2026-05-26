@@ -165,10 +165,6 @@ def iter_scannable_files(config: RepoGraphConfig, root: Path, max_file_bytes: in
 
 
 def apply_scan_result(graph: Graph, result: ScanResult) -> None:
-    for entity in result.entities:
-        graph.add_entity(entity)
-    for edge_item in result.edges:
-        graph.add_edge(edge_item)
     add_facts_to_graph(graph, result.facts)
     graph.errors.extend(result.errors)
 

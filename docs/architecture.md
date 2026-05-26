@@ -201,8 +201,8 @@ helpers can be added when they reduce parser complexity without hiding the
 underlying evidence.
 
 The graph constructor decides whether those facts become entities, edges,
-unresolved targets, warnings, or report inputs. During the legacy migration,
-`ScanResult` may contain both typed facts and direct graph records.
+unresolved targets, warnings, or report inputs. `ScanResult` contains typed
+facts and local scanner errors; scanners must not emit graph records directly.
 
 ## Graph Constructor Contract
 
@@ -237,7 +237,7 @@ Rules:
 - Scanners may import scanner contracts, fact model types, vocabulary constants,
   and parser-local helpers.
 - Scanners must not import storage, API, UI, report builders, or Neo4j code.
-- Long-term, scanners should not import `repo_graph.graph.Entity` or
+- Scanners should not import `repo_graph.graph.Entity` or
   `repo_graph.graph.Edge`; they should emit fact drafts instead.
 - The graph constructor may import the fact model and graph model.
 - Storage adapters may import graph records, but not scanner modules.
@@ -264,7 +264,7 @@ repo_graph/
     cached_builds.py
     fact_helpers.py
     facts.py
-    legacy_graph_helpers.py
+    interaction_properties.py
     project_discovery.py
     registry.py
     snapshots.py

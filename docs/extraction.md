@@ -27,7 +27,6 @@ The extraction package owns:
 - scanner contracts
 - scanner registry order
 - scanner invocation and local scanner errors
-- temporary legacy conversion from scanner results into graph objects
 
 The extraction package does not own:
 
@@ -49,23 +48,22 @@ Target module responsibilities:
   local scan issues.
 - `fact_helpers.py`: small helper functions for common typed fact patterns,
   such as package declarations and package dependency relationships.
+- `interaction_properties.py`: common structured evidence for application and
+  database interaction relationships.
 - `source_scanner.py`: source file walking, scanner invocation, and local
   scanner error collection.
 - `registry.py`: deterministic default scanner registration.
-- `legacy_graph_helpers.py`: temporary helpers for legacy scanners that still
-  emit `Entity` and `Edge` objects.
 - `project_discovery.py`: repository/project boundary discovery from manifests.
 - `scanners/`: scanner family implementations. Current families are
   `manifests.py`, `python.py`, `dotnet.py`, `javascript.py`, `sql.py`, and
   `deployment.py`.
-- `scanners/*_helpers.py`: domain-specific legacy scanner helpers while
-  scanner families still emit graph objects directly. Shared helpers should be
-  split by domain instead of collected in one large module.
+- `scanners/*_helpers.py`: domain-specific scanner helpers. Shared helpers
+  should be split by domain instead of collected in one large module.
 
 New parser work should add or update the relevant scanner family module, emit
-typed facts when practical, and register through `registry.py`. Do not add new
-scanner behavior to orchestration, source walking, API, CLI, reports, storage,
-or graph resolution modules.
+typed facts, and register through `registry.py`. Do not add new scanner
+behavior to orchestration, source walking, API, CLI, reports, storage, or graph
+resolution modules.
 
 ## Scanner Registry
 
@@ -76,27 +74,26 @@ scanners instead of constructing scanner families directly.
 Registry order must stay deterministic because parser fingerprints, snapshot
 status, and generated parser coverage depend on it.
 
-## Legacy Graph Helpers
+## Scanner Output
 
-Until scanners emit typed facts, legacy scanners may use shared helpers to
-create graph objects. This is temporary compatibility inside extraction only.
+Scanners return `ScanResult` with typed facts and local errors. Scanner modules
+must not emit graph `Entity` or `Edge` records directly. The graph constructor
+owns conversion from facts into graph records, stable IDs, resolution, summary
+counts, and export shape.
 
-Allowed legacy helpers:
-
-- `resolved_edge`
-- `unresolved_edge`
-- `interaction_properties`
-
-New code should prefer typed facts when the fact model exists. Do not add new
-graph-construction policy to scanner family modules.
+Use `repo_graph.extraction.fact_helpers` for common fact patterns and
+`repo_graph.extraction.interaction_properties` for structured interaction
+evidence. Scanner helper modules may create `EntityFact`, `RelationshipFact`,
+and `FactBatch` values when a shared helper does not fit.
 
 ## Refactor Path
 
 1. Keep scanner-family modules behind the registry and keep domain helper
    modules small enough that ownership stays obvious.
-2. Migrate scanner families from direct `Entity` and `Edge` emission to typed
-   facts, one family at a time.
-3. Remove direct scanner emission of `Entity` and `Edge`.
+2. Keep scanner output fact-only and make graph construction the only place
+   that creates graph records.
+3. Move shared scanner contracts and helpers into small modules when a scanner
+   family becomes hard to follow.
 
 Each slice should preserve generated graph output unless the spec explicitly
 changes behavior.
