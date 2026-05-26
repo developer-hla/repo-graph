@@ -3,6 +3,11 @@
 RepoGraph parser work should follow one repeatable path. A parser slice is not
 complete until code, examples, tests, and generated references all agree.
 
+If you are deciding whether a change belongs in a scanner, graph vocabulary,
+storage, reports, API, or UI, start with
+[extension-author-guide.md](extension-author-guide.md). This page covers the
+parser-specific workflow after the owning layer is clear.
+
 Parser work must also follow the architecture boundary in
 [architecture.md](architecture.md): scanners extract typed facts with evidence;
 graph construction converts those facts into graph entities, edges, IDs,

@@ -142,6 +142,8 @@ coverage from those examples, see
 [docs/generated/parser-coverage.md](docs/generated/parser-coverage.md).
 For scanner registration order, target patterns, and parser IDs, see
 [docs/generated/scanner-catalog.md](docs/generated/scanner-catalog.md).
+For the extension workflow, see
+[docs/extension-author-guide.md](docs/extension-author-guide.md).
 
 ## Scanning Your Own Repositories
 
@@ -316,6 +318,7 @@ docs/spec-driven-development.md Spec-first workflow for meaningful changes
 docs/extraction.md      Extraction layer contract and refactor path
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
+docs/extension-author-guide.md One obvious extension path for contributors
 docs/extending-parsers.md Parser extension workflow
 docs/database-introspection.md Planned read-only database source design
 docs/first-class-coverage.md First-class graph coverage audit
