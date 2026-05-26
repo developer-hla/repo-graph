@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact
-from repo_graph.extraction.legacy_graph_helpers import resolved_edge
 from repo_graph.extraction.scanners.dotnet_helpers import (
     CS_METHOD_RE,
     CS_NAMESPACE_RE,
@@ -34,7 +34,7 @@ from repo_graph.extraction.scanners.dotnet_helpers import (
     vb_symbol_call_facts,
     vb_symbol_facts,
 )
-from repo_graph.extraction.scanners.interaction_helpers import route_entity
+from repo_graph.extraction.scanners.interaction_helpers import route_entity_fact
 from repo_graph.extraction.scanners.sql_helpers import sql_reference_facts_for_line
 
 
@@ -49,27 +49,25 @@ class LegacyDotnetEndpointExtractor:
         suffix = Path(context.rel_path).suffix.lower()
         framework = "asmx" if suffix == ".asmx" else "wcf"
         path = "/" + context.rel_path.replace("\\", "/")
-        route = route_entity(context, "POST", path, 1, framework, operation_name=None)
-        result.entities.append(route)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                route,
+        route = route_entity_fact(context, "POST", path, 1, framework, operation_name=None)
+        result.facts.entities.append(route)
+        result.facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                route.reference,
                 "DECLARES_ROUTE",
-                context.source.name,
-                context.rel_path,
+                context,
                 self.name,
                 1,
             )
         )
         if context.project:
-            result.edges.append(
-                resolved_edge(
-                    context.project.entity,
-                    route,
+            result.facts.relationships.append(
+                resolved_relationship_fact(
+                    entity_reference(context.project.entity),
+                    route.reference,
                     "EXPOSES_ROUTE",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     self.name,
                     1,
                 )
