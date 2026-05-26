@@ -366,6 +366,21 @@ repo_graph/
     routes.py
     settings.py
     source_files.py
+  ui/
+    index.html
+    styles.css
+    actions.js
+    api-client.js
+    app.js
+    components.js
+    events.js
+    formatters.js
+    markup.js
+    operations-markup.js
+    relationship-markup.js
+    report-markup.js
+    routing.js
+    views.js
   api.py
   cli.py
 ```

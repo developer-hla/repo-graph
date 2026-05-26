@@ -78,6 +78,7 @@ The largest runtime files should be addressed in this order:
 4. API runtime: split request models, runtime settings, workflow handlers,
    query/report response builders, and route registration. Done.
 5. UI runtime: split router, API client, views, components, and formatters.
+   Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -230,3 +231,44 @@ Responsibilities:
 
 Tests should patch the owning implementation module, not `repo_graph.api`, when
 they need to replace storage, config, refresh, or build dependencies.
+
+## UI Runtime Target
+
+The browser UI is served as static assets. It should remain build-tool-free for
+now, but the runtime should still be split by responsibility so UI changes are
+easy to review and syntax-check.
+
+```text
+repo_graph/ui/
+  index.html
+  styles.css
+  actions.js
+  api-client.js
+  app.js
+  components.js
+  events.js
+  formatters.js
+  markup.js
+  operations-markup.js
+  relationship-markup.js
+  report-markup.js
+  routing.js
+  views.js
+```
+
+Responsibilities:
+
+- `app.js`: state initialization, route table, DOM bindings, and boot.
+- `api-client.js`: HTTP helpers and API error shaping.
+- `views.js`: top-level view renderers.
+- `actions.js`: async workflow actions that update result panels.
+- `events.js`: document click and submit delegation.
+- `routing.js`: hash route writing and route parameter serialization.
+- `components.js`: generic HTML controls and containers.
+- `formatters.js`: escaping, dates, values, status labels, and small row
+  formatters.
+- `markup.js`, `relationship-markup.js`, `operations-markup.js`, and
+  `report-markup.js`: domain-specific HTML projections.
+
+All UI JavaScript files must pass `pixi run ui-check`; do not add a new UI
+script without making it part of the static shell and syntax check.

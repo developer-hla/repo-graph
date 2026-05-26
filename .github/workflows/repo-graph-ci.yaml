@@ -32,4 +32,4 @@ jobs:
       - name: Run audit
         run: pixi run audit
       - name: Check UI JavaScript syntax
-        run: node --check src/repo_graph/ui/app.js
+        run: pixi run ui-check

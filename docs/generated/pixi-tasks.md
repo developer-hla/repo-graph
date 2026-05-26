@@ -30,4 +30,4 @@ This file is generated from `pixi.toml`.
 | `serve` | `python -m repo_graph.cli serve --host 0.0.0.0 --port 8000 --config config/local-example.yaml` |
 | `setup` | `pre-commit install` |
 | `test` | `python -m unittest discover -s tests -p 'test_*.py'` |
-| `ui-check` | `node --check src/repo_graph/ui/app.js` |
+| `ui-check` | `bash -c 'for file in src/repo_graph/ui/*.js; do node --check "$file"; done'` |
