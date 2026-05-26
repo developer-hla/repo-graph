@@ -11,10 +11,10 @@ from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.deployment_helpers import (
     KubernetesDeployment,
     KubernetesService,
-    kubernetes_deployment_result,
-    kubernetes_ingress_result,
-    kubernetes_selector_edges,
-    kubernetes_service_result,
+    kubernetes_deployment_facts,
+    kubernetes_ingress_facts,
+    kubernetes_selector_facts,
+    kubernetes_service_facts,
 )
 
 
@@ -40,17 +40,17 @@ class KubernetesManifestExtractor:
         for document in documents:
             kind = string_value(document.get("kind"))
             if kind == "Service":
-                service = kubernetes_service_result(context, document)
+                service = kubernetes_service_facts(context, document)
                 if service:
-                    result.extend(service[0])
+                    result.facts.extend(service[0])
                     services.append(service[1])
             elif kind == "Deployment":
-                deployment = kubernetes_deployment_result(context, document)
+                deployment = kubernetes_deployment_facts(context, document)
                 if deployment:
-                    result.extend(deployment[0])
+                    result.facts.extend(deployment[0])
                     deployments.append(deployment[1])
             elif kind == "Ingress":
-                result.extend(kubernetes_ingress_result(context, document))
+                result.facts.extend(kubernetes_ingress_facts(context, document))
 
-        result.edges.extend(kubernetes_selector_edges(context, services, deployments))
+        result.facts.relationships.extend(kubernetes_selector_facts(context, services, deployments))
         return result

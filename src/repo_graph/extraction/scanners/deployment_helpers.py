@@ -3,39 +3,45 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
-from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
+from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.fact_helpers import (
+    entity_fact,
+    entity_reference,
+    resolved_relationship_fact,
+    unresolved_relationship_fact,
+)
+from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
+from repo_graph.extraction.legacy_graph_helpers import interaction_properties
 from repo_graph.extraction.scanners.common import object_mapping, string_value
 from repo_graph.extraction.scanners.interaction_helpers import (
     ENV_NAME_RE,
     http_target,
-    route_entity,
+    route_entity_fact,
     service_name_from_env,
     service_name_from_url,
     url_value,
 )
-from repo_graph.graph import Edge, Entity
 
 
 @dataclass(frozen=True)
 class KubernetesService:
-    entity: Entity
+    entity: EntityFact
     selector: dict[str, str]
 
 
 @dataclass(frozen=True)
 class KubernetesDeployment:
-    entity: Entity
+    entity: EntityFact
     pod_labels: dict[str, str]
 
 
-def kubernetes_service_result(
+def kubernetes_service_facts(
     context: FileScanContext,
     document: dict[str, Any],
-) -> tuple[ScanResult, KubernetesService] | None:
+) -> tuple[FactBatch, KubernetesService] | None:
     name = kubernetes_resource_name(document)
     if not name:
         return None
@@ -43,11 +49,10 @@ def kubernetes_service_result(
     spec = object_mapping(document.get("spec"))
     namespace = kubernetes_namespace(metadata)
     selector = string_dict(spec.get("selector"))
-    service = Entity(
+    service = entity_fact(
+        context,
         entity_type="service",
         name=name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases=kubernetes_scoped_aliases(name, namespace),
         properties={
             "ecosystem": "kubernetes",
@@ -59,26 +64,25 @@ def kubernetes_service_result(
             "project": context.project.name if context.project else None,
         },
     )
-    result = ScanResult(
+    facts = FactBatch(
         entities=[service],
-        edges=[
-            resolved_edge(
-                context.file_entity,
-                service,
+        relationships=[
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                service.reference,
                 "DECLARES_SERVICE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "kubernetes_service",
             )
         ],
     )
-    return result, KubernetesService(service, selector)
+    return facts, KubernetesService(service, selector)
 
 
-def kubernetes_deployment_result(
+def kubernetes_deployment_facts(
     context: FileScanContext,
     document: dict[str, Any],
-) -> tuple[ScanResult, KubernetesDeployment] | None:
+) -> tuple[FactBatch, KubernetesDeployment] | None:
     name = kubernetes_resource_name(document)
     if not name:
         return None
@@ -89,11 +93,10 @@ def kubernetes_deployment_result(
     pod_spec = object_mapping(template.get("spec"))
     namespace = kubernetes_namespace(metadata)
     pod_labels = string_dict(pod_metadata.get("labels"))
-    deployment = Entity(
+    deployment = entity_fact(
+        context,
         entity_type="deployment",
         name=name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases=kubernetes_scoped_aliases(name, namespace),
         properties={
             "ecosystem": "kubernetes",
@@ -106,40 +109,38 @@ def kubernetes_deployment_result(
             "project": context.project.name if context.project else None,
         },
     )
-    result = ScanResult(
+    facts = FactBatch(
         entities=[deployment],
-        edges=[
-            resolved_edge(
-                context.file_entity,
-                deployment,
+        relationships=[
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                deployment.reference,
                 "DECLARES_DEPLOYMENT",
-                context.source.name,
-                context.rel_path,
+                context,
                 "kubernetes_deployment",
             )
         ],
     )
     for container in mapping_list(pod_spec.get("containers")):
-        result.extend(kubernetes_container_result(context, deployment, namespace, container))
-    return result, KubernetesDeployment(deployment, pod_labels)
+        facts.extend(kubernetes_container_facts(context, deployment, namespace, container))
+    return facts, KubernetesDeployment(deployment, pod_labels)
 
 
-def kubernetes_container_result(
+def kubernetes_container_facts(
     context: FileScanContext,
-    deployment: Entity,
+    deployment: EntityFact,
     namespace: str,
     container: dict[str, Any],
-) -> ScanResult:
-    result = ScanResult()
+) -> FactBatch:
+    facts = FactBatch()
     container_name = string_value(container.get("name"))
     if not container_name:
-        return result
+        return facts
     image = string_value(container.get("image"))
-    container_entity = Entity(
+    container_entity = entity_fact(
+        context,
         entity_type="container",
         name=f"{deployment.name}:{container_name}",
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases={container_name, *(set() if not image else {image})},
         properties={
             "ecosystem": "kubernetes",
@@ -154,39 +155,37 @@ def kubernetes_container_result(
             "project": context.project.name if context.project else None,
         },
     )
-    result.entities.append(container_entity)
-    result.edges.append(
-        resolved_edge(
-            deployment,
-            container_entity,
+    facts.entities.append(container_entity)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            deployment.reference,
+            container_entity.reference,
             "RUNS_CONTAINER",
-            context.source.name,
-            context.rel_path,
+            context,
             "kubernetes_container",
         )
     )
     for env in mapping_list(container.get("env")):
-        result.extend(kubernetes_env_result(context, container_entity, deployment.name, env))
-    return result
+        facts.extend(kubernetes_env_facts(context, container_entity, deployment.name, env))
+    return facts
 
 
-def kubernetes_env_result(
+def kubernetes_env_facts(
     context: FileScanContext,
-    container: Entity,
+    container: EntityFact,
     deployment_name: str,
     env: dict[str, Any],
-) -> ScanResult:
-    result = ScanResult()
+) -> FactBatch:
+    facts = FactBatch()
     env_name = string_value(env.get("name"))
     if not env_name:
-        return result
+        return facts
     env_value = string_value(env.get("value"))
     target_url = url_value(env_value)
-    config_value = Entity(
+    config_value = entity_fact(
+        context,
         entity_type="config_value",
         name=f"env:{deployment_name}:{container.name.rsplit(':', 1)[-1]}:{env_name}",
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases={env_name},
         properties={
             "display_name": env_name,
@@ -199,24 +198,23 @@ def kubernetes_env_result(
             "deployment": deployment_name,
         },
     )
-    result.entities.append(config_value)
-    result.edges.append(
-        resolved_edge(
-            container,
-            config_value,
+    facts.entities.append(config_value)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            container.reference,
+            config_value.reference,
             "DECLARES_CONFIG",
-            context.source.name,
-            context.rel_path,
+            context,
             "kubernetes_env",
         )
     )
-    service_edge = kubernetes_env_service_edge(config_value, context)
-    if service_edge:
-        result.edges.append(service_edge)
-    return result
+    service_fact = kubernetes_env_service_fact(config_value, context)
+    if service_fact:
+        facts.relationships.append(service_fact)
+    return facts
 
 
-def kubernetes_env_service_edge(config_value: Entity, context: FileScanContext) -> Edge | None:
+def kubernetes_env_service_fact(config_value: EntityFact, context: FileScanContext) -> RelationshipFact | None:
     key = config_value.properties.get("key")
     raw_target = config_value.properties.get("target_url")
     service_name: str | None = None
@@ -232,31 +230,29 @@ def kubernetes_env_service_edge(config_value: Entity, context: FileScanContext) 
     target["interaction_kind"] = "service_configuration"
     target["config_key"] = key
     target["service_name"] = service_name
-    return unresolved_edge(
-        config_value,
+    return unresolved_relationship_fact(
+        config_value.reference,
         service_name,
         "CONFIGURES_SERVICE",
-        context.source.name,
-        context.rel_path,
+        context,
         "kubernetes_env",
         to_type="service",
         properties=target,
     )
 
 
-def kubernetes_ingress_result(context: FileScanContext, document: dict[str, Any]) -> ScanResult:
-    result = ScanResult()
+def kubernetes_ingress_facts(context: FileScanContext, document: dict[str, Any]) -> FactBatch:
+    facts = FactBatch()
     name = kubernetes_resource_name(document)
     if not name:
-        return result
+        return facts
     metadata = object_mapping(document.get("metadata"))
     spec = object_mapping(document.get("spec"))
     namespace = kubernetes_namespace(metadata)
-    ingress = Entity(
+    ingress = entity_fact(
+        context,
         entity_type="ingress",
         name=name,
-        source_name=context.source.name,
-        file_path=context.rel_path,
         aliases=kubernetes_scoped_aliases(name, namespace),
         properties={
             "ecosystem": "kubernetes",
@@ -266,65 +262,64 @@ def kubernetes_ingress_result(context: FileScanContext, document: dict[str, Any]
             "project": context.project.name if context.project else None,
         },
     )
-    result.entities.append(ingress)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            ingress,
+    facts.entities.append(ingress)
+    facts.relationships.append(
+        resolved_relationship_fact(
+            entity_reference(context.file_entity),
+            ingress.reference,
             "DECLARES_INGRESS",
-            context.source.name,
-            context.rel_path,
+            context,
             "kubernetes_ingress",
         )
     )
     for rule in mapping_list(spec.get("rules")):
-        result.extend(kubernetes_ingress_rule_result(context, ingress, rule))
-    return result
+        facts.extend(kubernetes_ingress_rule_facts(context, ingress, rule))
+    return facts
 
 
-def kubernetes_ingress_rule_result(context: FileScanContext, ingress: Entity, rule: dict[str, Any]) -> ScanResult:
-    result = ScanResult()
+def kubernetes_ingress_rule_facts(context: FileScanContext, ingress: EntityFact, rule: dict[str, Any]) -> FactBatch:
+    facts = FactBatch()
     host = string_value(rule.get("host"))
     http = object_mapping(rule.get("http"))
     for path_item in mapping_list(http.get("paths")):
         path = string_value(path_item.get("path")) or "/"
-        route = route_entity(context, "ANY", path, 1, "kubernetes_ingress_route", operation_name=None)
+        route = route_entity_fact(context, "ANY", path, 1, "kubernetes_ingress_route", operation_name=None)
+        route_aliases = set(route.aliases)
+        route_properties = dict(route.properties)
         if host:
-            route.aliases.add(f"{host}{path}")
-            route.properties["host"] = host
-        route.properties["path_type"] = string_value(path_item.get("pathType"))
-        result.entities.append(route)
-        result.edges.append(
-            resolved_edge(
-                context.file_entity,
-                route,
+            route_aliases.add(f"{host}{path}")
+            route_properties["host"] = host
+        route_properties["path_type"] = string_value(path_item.get("pathType"))
+        route = replace(route, aliases=frozenset(route_aliases), properties=route_properties)
+        facts.entities.append(route)
+        facts.relationships.append(
+            resolved_relationship_fact(
+                entity_reference(context.file_entity),
+                route.reference,
                 "DECLARES_ROUTE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "kubernetes_ingress_route",
                 1,
             )
         )
-        result.edges.append(
-            resolved_edge(
-                ingress,
-                route,
+        facts.relationships.append(
+            resolved_relationship_fact(
+                ingress.reference,
+                route.reference,
                 "EXPOSES_ROUTE",
-                context.source.name,
-                context.rel_path,
+                context,
                 "kubernetes_ingress_route",
                 1,
             )
         )
         service_name = kubernetes_ingress_backend_service_name(path_item.get("backend"))
         if service_name:
-            result.edges.append(
-                unresolved_edge(
-                    route,
+            facts.relationships.append(
+                unresolved_relationship_fact(
+                    route.reference,
                     service_name,
                     "ROUTES_TO_SERVICE",
-                    context.source.name,
-                    context.rel_path,
+                    context,
                     "kubernetes_ingress_route",
                     to_type="service",
                     line_number=1,
@@ -339,31 +334,30 @@ def kubernetes_ingress_rule_result(context: FileScanContext, ingress: Entity, ru
                     ),
                 )
             )
-    return result
+    return facts
 
 
-def kubernetes_selector_edges(
+def kubernetes_selector_facts(
     context: FileScanContext,
     services: Sequence[KubernetesService],
     deployments: Sequence[KubernetesDeployment],
-) -> list[Edge]:
-    edges: list[Edge] = []
+) -> list[RelationshipFact]:
+    facts: list[RelationshipFact] = []
     for service in services:
         if not service.selector:
             continue
         for deployment in deployments:
             if labels_match_selector(deployment.pod_labels, service.selector):
-                edges.append(
-                    resolved_edge(
-                        service.entity,
-                        deployment.entity,
+                facts.append(
+                    resolved_relationship_fact(
+                        service.entity.reference,
+                        deployment.entity.reference,
                         "SELECTS_DEPLOYMENT",
-                        context.source.name,
-                        context.rel_path,
+                        context,
                         "kubernetes_selector",
                     )
                 )
-    return edges
+    return facts
 
 
 def labels_match_selector(labels: dict[str, str], selector: dict[str, str]) -> bool:
