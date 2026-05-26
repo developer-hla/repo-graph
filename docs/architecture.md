@@ -357,7 +357,13 @@ repo_graph/
     __init__.py
     _common.py
     blast_radius.py
-    database_reconciliation.py
+    database_reconciliation/
+      __init__.py
+      _builder.py
+      _constants.py
+      _groups.py
+      _normalization.py
+      _summaries.py
     interactions.py
     unresolved.py
   api_runtime/

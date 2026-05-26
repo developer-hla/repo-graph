@@ -81,6 +81,8 @@ The largest runtime files should be addressed in this order:
    Done.
 6. .NET scanner helpers: split C# syntax, C# symbols, C# routes, C#
    interactions, VB syntax, VB symbols, VB routes, and VB interactions. Done.
+7. Database reconciliation report: split collection, grouping, summaries,
+   constants, and SQL item normalization. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -91,13 +93,10 @@ After the report, database, storage, API, and UI splits, the remaining runtime
 hotspots are narrower. The next candidates should be handled as separate
 slices:
 
-1. Database reconciliation report: split `reports/database_reconciliation.py`
-   into classification, summary, grouping, and public builder modules. This is
-   just above the soft limit and should be handled before it grows.
-2. Source resolver: split `sources/_resolver.py` into local path resolution,
+1. Source resolver: split `sources/_resolver.py` into local path resolution,
    Git/GitHub sync, source status payloads, and shared source metadata helpers.
    It is just below the soft limit but mixes provider and status concerns.
-3. Scanner shared helpers: review Python scanner helpers, interaction helpers,
+2. Scanner shared helpers: review Python scanner helpers, interaction helpers,
    deployment helpers, and SQL helpers for focused package-local boundaries.
 
 Large test files and generated documentation scripts can be split later, but
@@ -155,7 +154,13 @@ repo_graph/reports/
   __init__.py
   _common.py
   blast_radius.py
-  database_reconciliation.py
+  database_reconciliation/
+    __init__.py
+    _builder.py
+    _constants.py
+    _groups.py
+    _normalization.py
+    _summaries.py
   interactions.py
   unresolved.py
 ```
@@ -163,6 +168,12 @@ repo_graph/reports/
 `repo_graph.reports` remains the public import surface for CLI and API code.
 The focused modules own report-specific grouping, filtering, examples,
 hotspots, and summary calculations.
+
+The database reconciliation report is a package because it combines multiple
+classification workflows. `_builder.py` owns the public report shape,
+`_groups.py` owns classification accumulation, `_summaries.py` owns totals and
+hotspots, `_normalization.py` owns SQL entity and edge normalization, and
+`_constants.py` owns classification vocabulary.
 
 ## Database Package Target
 
