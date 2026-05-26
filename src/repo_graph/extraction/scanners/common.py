@@ -9,13 +9,7 @@ from typing import Any
 
 import yaml
 
-from repo_graph.extraction.contracts import ScanResult
-from repo_graph.graph import Entity
 from repo_graph.sources import ResolvedSource
-
-
-def first_entity(result: ScanResult) -> Entity | None:
-    return result.entities[0] if result.entities else None
 
 
 def read_json_object(path: Path) -> dict[str, Any] | None:

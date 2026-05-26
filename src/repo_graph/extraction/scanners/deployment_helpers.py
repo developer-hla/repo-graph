@@ -14,7 +14,7 @@ from repo_graph.extraction.fact_helpers import (
     unresolved_relationship_fact,
 )
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
-from repo_graph.extraction.legacy_graph_helpers import interaction_properties
+from repo_graph.extraction.interaction_properties import interaction_properties
 from repo_graph.extraction.scanners.common import object_mapping, string_value
 from repo_graph.extraction.scanners.interaction_helpers import (
     ENV_NAME_RE,

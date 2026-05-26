@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from repo_graph.extraction.contracts import FileScanContext, ScanResult
+from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import (
     entity_fact,
     entity_reference,
@@ -15,10 +15,12 @@ from repo_graph.extraction.fact_helpers import (
     unresolved_relationship_fact,
 )
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
-from repo_graph.extraction.legacy_graph_helpers import interaction_properties, resolved_edge, unresolved_edge
+from repo_graph.extraction.interaction_properties import interaction_properties
 from repo_graph.extraction.scanners.common import string_value
 from repo_graph.extraction.scanners.package_helpers import import_target_name
-from repo_graph.graph import Edge, Entity
+
+if TYPE_CHECKING:
+    from repo_graph.graph import Entity
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 
@@ -103,36 +105,6 @@ def route_facts(context: FileScanContext, line: str, line_number: int) -> FactBa
     return facts
 
 
-def add_route(context: FileScanContext, method: str, path: str, line_number: int, parser: str) -> ScanResult:
-    result = ScanResult()
-    route = route_entity(context, method, path, line_number, parser, operation_name=None)
-    result.entities.append(route)
-    result.edges.append(
-        resolved_edge(
-            context.file_entity,
-            route,
-            "DECLARES_ROUTE",
-            context.source.name,
-            context.rel_path,
-            parser,
-            line_number,
-        )
-    )
-    if context.project:
-        result.edges.append(
-            resolved_edge(
-                context.project.entity,
-                route,
-                "EXPOSES_ROUTE",
-                context.source.name,
-                context.rel_path,
-                parser,
-                line_number,
-            )
-        )
-    return result
-
-
 def add_route_facts(context: FileScanContext, method: str, path: str, line_number: int, parser: str) -> FactBatch:
     facts = FactBatch()
     route = route_entity_fact(context, method, path, line_number, parser, operation_name=None)
@@ -159,37 +131,6 @@ def add_route_facts(context: FileScanContext, method: str, path: str, line_numbe
             )
         )
     return facts
-
-
-def route_handler_edge(
-    context: FileScanContext,
-    route: Entity,
-    handler: Entity,
-    parser: str,
-    line_number: int,
-) -> Edge:
-    return resolved_edge(
-        route,
-        handler,
-        "HANDLES_ROUTE",
-        context.source.name,
-        context.rel_path,
-        parser,
-        line_number,
-        properties={
-            key: value
-            for key, value in {
-                "route_method": route.properties.get("method"),
-                "route_path": route.properties.get("path"),
-                "normalized_route_path": route.properties.get("normalized_path"),
-                "operation_name": route.properties.get("operation_name"),
-                "handler_name": handler.name,
-                "handler_type": handler.entity_type,
-                "project": route.properties.get("project"),
-            }.items()
-            if value is not None
-        },
-    )
 
 
 def route_handler_fact(
@@ -219,35 +160,6 @@ def route_handler_fact(
             }.items()
             if value is not None
         },
-    )
-
-
-def route_entity(
-    context: FileScanContext,
-    method: str,
-    path: str,
-    line_number: int,
-    parser: str,
-    operation_name: str | None,
-) -> Entity:
-    normalized_path = normalize_route_path(path)
-    properties = {
-        "method": method,
-        "path": path,
-        "normalized_path": normalized_path,
-        "project": context.project.name if context.project else None,
-        "parser": parser,
-    }
-    if operation_name:
-        properties["operation_name"] = operation_name
-    return Entity(
-        entity_type="api_route",
-        name=f"{method} {path}",
-        source_name=context.source.name,
-        file_path=context.rel_path,
-        line_number=line_number,
-        aliases={f"{method} {normalized_path}", normalized_path, path},
-        properties=properties,
     )
 
 
@@ -332,51 +244,6 @@ def http_call_facts(context: FileScanContext, line: str, line_number: int) -> li
             )
         )
     return facts
-
-
-def http_edges_for_target(
-    context: FileScanContext,
-    method: str,
-    raw_target: str,
-    line_number: int,
-    parser: str,
-    client: str | None = None,
-    from_entity: Entity | None = None,
-    extra_properties: dict[str, Any] | None = None,
-) -> list[Edge]:
-    source_entity = from_entity or context.file_entity
-    target = http_target(raw_target, method)
-    if client:
-        target["client"] = client
-    if extra_properties:
-        target.update(extra_properties)
-    if target.get("service_name"):
-        return [
-            unresolved_edge(
-                source_entity,
-                target["service_name"],
-                "CALLS_SERVICE",
-                context.source.name,
-                context.rel_path,
-                parser,
-                to_type="service",
-                line_number=line_number,
-                properties=target,
-            )
-        ]
-    return [
-        unresolved_edge(
-            source_entity,
-            target["route_name"],
-            "CALLS_HTTP",
-            context.source.name,
-            context.rel_path,
-            parser,
-            to_type="api_route",
-            line_number=line_number,
-            properties=target,
-        )
-    ]
 
 
 def http_facts_for_target(
