@@ -16,7 +16,7 @@ from repo_graph.extraction.scanners.common import (
     safe_relative_path,
     string_value,
 )
-from repo_graph.extraction.scanners.dotnet_helpers import DOTNET_PROJECT_SUFFIXES, dotnet_project_metadata
+from repo_graph.extraction.scanners.manifest_dotnet_helpers import DOTNET_PROJECT_SUFFIXES, dotnet_project_metadata
 from repo_graph.extraction.scanners.manifest_helpers import is_project_manifest, is_requirements_file
 from repo_graph.extraction.scanners.package_helpers import (
     normalize_python_package_name,

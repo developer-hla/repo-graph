@@ -58,7 +58,9 @@ Target module responsibilities:
   `manifests.py`, `python.py`, `javascript.py`, `sql.py`, `deployment.py`, and
   `code/dotnet`.
 - `scanners/*_helpers.py`: domain-specific scanner helpers. Shared helpers
-  should be split by domain instead of collected in one large module.
+  should be split by domain instead of collected in one large module. For
+  example, .NET code helpers live under `code/dotnet`, while .NET manifest and
+  config helpers live in `manifest_dotnet_helpers.py`.
 
 New parser work should add or update the relevant scanner family module, emit
 typed facts, and register through `registry.py`. Do not add new scanner

@@ -7,7 +7,7 @@ from pathlib import Path
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.dotnet_helpers import (
+from repo_graph.extraction.scanners.code.dotnet.helpers import (
     CS_METHOD_RE,
     CS_NAMESPACE_RE,
     CS_TYPE_RE,

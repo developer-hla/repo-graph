@@ -19,7 +19,7 @@ from repo_graph.extraction.fact_helpers import (
 )
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.common import read_yaml_object, string_value
-from repo_graph.extraction.scanners.dotnet_helpers import (
+from repo_graph.extraction.scanners.manifest_dotnet_helpers import (
     DOTNET_BUILD_SUFFIXES,
     DOTNET_PROJECT_SUFFIXES,
     config_file_fact,
