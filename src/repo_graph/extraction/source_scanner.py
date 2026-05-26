@@ -8,7 +8,8 @@ from pathlib import Path
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo, ScanResult
-from repo_graph.extraction.legacy_graph_helpers import resolved_edge
+from repo_graph.extraction.fact_helpers import entity_reference, resolved_source_relationship_fact
+from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.project_discovery import discover_projects
 from repo_graph.extraction.scanners.common import safe_relative_path
 from repo_graph.extraction.scanners.manifest_helpers import is_scannable_file
@@ -53,17 +54,19 @@ def scan_source(
 
     repo_entity = graph.add_entity(repository_entity(source))
     projects = discover_projects(config, source, repo_entity)
+    project_facts = FactBatch()
     for project in projects:
         graph.add_entity(project.entity)
-        graph.add_edge(
-            resolved_edge(
-                repo_entity,
-                project.entity,
+        project_facts.relationships.append(
+            resolved_source_relationship_fact(
+                entity_reference(repo_entity),
+                entity_reference(project.entity),
                 "CONTAINS_PROJECT",
                 source.name,
                 parser="project_discovery",
             )
         )
+    add_facts_to_graph(graph, project_facts)
 
     for file_path in iter_scannable_files(config, source.path, max_file_bytes=max_file_bytes):
         scan_file_path(graph, source, repo_entity, projects, file_path, extractors)
@@ -91,9 +94,29 @@ def scan_file_path(
             },
         )
     )
-    graph.add_edge(resolved_edge(repo_entity, file_entity, "CONTAINS_FILE", source.name, rel_path, "filesystem"))
+    containment_facts = FactBatch()
+    containment_facts.relationships.append(
+        resolved_source_relationship_fact(
+            entity_reference(repo_entity),
+            entity_reference(file_entity),
+            "CONTAINS_FILE",
+            source.name,
+            "filesystem",
+            file_path=rel_path,
+        )
+    )
     if project:
-        graph.add_edge(resolved_edge(project.entity, file_entity, "CONTAINS_FILE", source.name, rel_path, "filesystem"))
+        containment_facts.relationships.append(
+            resolved_source_relationship_fact(
+                entity_reference(project.entity),
+                entity_reference(file_entity),
+                "CONTAINS_FILE",
+                source.name,
+                "filesystem",
+                file_path=rel_path,
+            )
+        )
+    add_facts_to_graph(graph, containment_facts)
     graph.files_scanned += 1
 
     try:

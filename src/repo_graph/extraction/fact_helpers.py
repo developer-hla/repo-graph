@@ -25,10 +25,26 @@ def source_evidence(
     line_number: int | None = None,
     confidence: str = "medium",
 ) -> Evidence:
-    return Evidence(
-        source_name=context.source.name,
-        parser=parser,
+    return evidence(
+        context.source.name,
+        parser,
         file_path=context.rel_path,
+        line_number=line_number,
+        confidence=confidence,
+    )
+
+
+def evidence(
+    source_name: str,
+    parser: str,
+    file_path: str | None = None,
+    line_number: int | None = None,
+    confidence: str = "medium",
+) -> Evidence:
+    return Evidence(
+        source_name=source_name,
+        parser=parser,
+        file_path=file_path,
         line_number=line_number,
         confidence=confidence,
     )
@@ -86,6 +102,32 @@ def resolved_relationship_fact(
         to_ref=to_ref,
         edge_type=edge_type,
         evidence=source_evidence(context, parser, line_number=line_number, confidence="high"),
+        properties=properties or {},
+        resolved=True,
+    )
+
+
+def resolved_source_relationship_fact(
+    from_ref: EntityReference,
+    to_ref: EntityReference,
+    edge_type: str,
+    source_name: str,
+    parser: str,
+    file_path: str | None = None,
+    line_number: int | None = None,
+    properties: dict[str, Any] | None = None,
+) -> RelationshipFact:
+    return RelationshipFact(
+        from_ref=from_ref,
+        to_ref=to_ref,
+        edge_type=edge_type,
+        evidence=evidence(
+            source_name,
+            parser,
+            file_path=file_path,
+            line_number=line_number,
+            confidence="high",
+        ),
         properties=properties or {},
         resolved=True,
     )
@@ -169,9 +211,11 @@ __all__ = [
     "declares_package_facts",
     "entity_fact",
     "entity_reference",
+    "evidence",
     "package_dependency_fact",
     "package_entity_fact",
     "resolved_relationship_fact",
+    "resolved_source_relationship_fact",
     "source_evidence",
     "unresolved_relationship_fact",
 ]
