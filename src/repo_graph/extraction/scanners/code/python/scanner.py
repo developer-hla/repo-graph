@@ -8,7 +8,7 @@ from pathlib import Path
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import scan_issue
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.python_helpers import (
+from repo_graph.extraction.scanners.code.python.helpers import (
     PythonCallableIndex,
     python_http_call_facts,
     python_import_fact,

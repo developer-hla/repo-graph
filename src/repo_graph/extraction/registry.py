@@ -8,6 +8,7 @@ from repo_graph.extraction.scanners.code.dotnet import (
     LegacyDotnetEndpointExtractor,
     VbCodeExtractor,
 )
+from repo_graph.extraction.scanners.code.python import PythonCodeExtractor
 from repo_graph.extraction.scanners.deployment import KubernetesManifestExtractor
 from repo_graph.extraction.scanners.javascript import JavaScriptExtractor
 from repo_graph.extraction.scanners.manifests import (
@@ -21,7 +22,6 @@ from repo_graph.extraction.scanners.manifests import (
     PythonProjectExtractor,
     PythonRequirementsExtractor,
 )
-from repo_graph.extraction.scanners.python import PythonCodeExtractor
 from repo_graph.extraction.scanners.sql import (
     SqlExtractor,
     SqlReferenceExtractor,
