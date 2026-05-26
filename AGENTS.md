@@ -153,6 +153,8 @@ inside scanners. The target architecture is defined in
 - Source discovery should also emit `EntityFact` and `RelationshipFact` records
   for repository, project, and file scaffolding. Keep graph record creation in
   `repo_graph.graph.builder`.
+- Source scanning should return facts and scan counts. Do not pass `Graph`
+  objects into source scanners or parser code.
 - Use `repo_graph.extraction.fact_helpers` for common typed fact patterns before
   hand-building fact objects in scanner code.
 - Parsers should tolerate partial failures and record errors rather than

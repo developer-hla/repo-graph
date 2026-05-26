@@ -7,9 +7,11 @@ from dataclasses import replace
 
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.database import DatabaseGraphFacts, DatabaseSourceRequest, graph_from_database_source
+from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.registry import default_extractors
-from repo_graph.extraction.source_scanner import scan_source, source_to_dict
+from repo_graph.extraction.source_scanner import SourceScanResult, scan_source, source_to_dict
 from repo_graph.graph import Edge, Graph
+from repo_graph.graph.builder import add_facts_to_graph
 from repo_graph.sources import resolve_sources, sync_sources
 
 MAX_FILE_BYTES = 1_000_000
@@ -29,7 +31,10 @@ def build_graph(
     )
     extractors = default_extractors()
     for source in sources:
-        scan_source(config, graph, source, max_file_bytes=max_file_bytes, extractors=extractors)
+        add_source_scan_result(
+            graph,
+            scan_source(config, source, max_file_bytes=max_file_bytes, extractors=extractors),
+        )
     scan_database_sources(config, graph)
     if strict and graph.errors:
         error_summary = "; ".join(graph.errors[:5])
@@ -62,6 +67,15 @@ def scan_database_sources(config: RepoGraphConfig, graph: Graph) -> None:
     for source in config.sources:
         if source.source_type == "database":
             add_database_facts(graph, graph_from_database_source(database_source_request(source)))
+
+
+def add_source_scan_result(graph: Graph, result: SourceScanResult) -> None:
+    add_extraction_facts(graph, result.facts)
+    graph.files_scanned += result.files_scanned
+
+
+def add_extraction_facts(graph: Graph, facts: FactBatch) -> None:
+    add_facts_to_graph(graph, facts)
 
 
 def add_database_facts(graph: Graph, facts: DatabaseGraphFacts) -> None:

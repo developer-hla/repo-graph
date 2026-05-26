@@ -204,7 +204,8 @@ The graph constructor decides whether those facts become entities, edges,
 unresolved targets, warnings, or report inputs. `FactBatch` contains typed
 facts and local scanner issues; scanners and source discovery must not emit
 graph records directly. Repository, project, and file scaffolding should use
-the same fact path as language scanner output.
+the same fact path as language scanner output. Source scans should return facts
+and counts; orchestration owns applying those facts to the graph model.
 
 ## Graph Constructor Contract
 

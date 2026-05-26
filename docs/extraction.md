@@ -43,15 +43,15 @@ Target module responsibilities:
 
 - `orchestrator.py`: build flow, database-source handoff, dependency filtering,
   source-level graph build orchestration.
-- `contracts.py`: public scanner protocol and scan result types.
+- `contracts.py`: public file-scanner protocol and scan context types.
 - `facts.py`: typed scanner fact contracts, evidence, entity references, and
   local scan issues.
 - `fact_helpers.py`: small helper functions for common typed fact patterns,
   such as package declarations and package dependency relationships.
 - `interaction_properties.py`: common structured evidence for application and
   database interaction relationships.
-- `source_scanner.py`: source file walking, scanner invocation, and local
-  scanner error collection.
+- `source_scanner.py`: source file walking, scanner invocation, local scanner
+  error collection, and `SourceScanResult` creation.
 - `registry.py`: deterministic default scanner registration.
 - `project_discovery.py`: repository/project boundary discovery from manifests.
 - `scanners/`: scanner family implementations. Current families are
@@ -84,7 +84,8 @@ counts, and export shape.
 Source discovery uses the same contract for repository, project, and file
 scaffolding. `FileScanContext` carries `EntityFact` values, so scanner code can
 reference the current repository, project, or file without importing the graph
-model.
+model. Source scanning returns `SourceScanResult` with a `FactBatch` and
+`files_scanned`; orchestration applies those facts to the graph constructor.
 
 Use `repo_graph.extraction.fact_helpers` for common fact patterns and
 `repo_graph.extraction.interaction_properties` for structured interaction

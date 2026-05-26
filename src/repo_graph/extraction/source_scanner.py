@@ -4,20 +4,25 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_graph.config import RepoGraphConfig
 from repo_graph.extraction.contracts import FileExtractor, FileScanContext, ProjectInfo
-from repo_graph.extraction.fact_helpers import entity_reference, resolved_source_relationship_fact, scan_issue
-from repo_graph.extraction.facts import EntityFact, FactBatch
+from repo_graph.extraction.fact_helpers import entity_reference, evidence, resolved_source_relationship_fact, scan_issue
+from repo_graph.extraction.facts import EntityFact, FactBatch, ScanIssue
 from repo_graph.extraction.project_discovery import discover_projects
 from repo_graph.extraction.scanners.common import safe_relative_path
 from repo_graph.extraction.scanners.manifest_helpers import is_scannable_file
 from repo_graph.extraction.source_facts import file_fact, repository_fact
-from repo_graph.graph import Graph
-from repo_graph.graph.builder import add_facts_to_graph
 from repo_graph.sources import ResolvedSource
 from repo_graph.validation import positive_int
+
+
+@dataclass(frozen=True)
+class SourceScanResult:
+    facts: FactBatch
+    files_scanned: int = 0
 
 
 def source_to_dict(source: ResolvedSource) -> dict[str, str | None]:
@@ -50,14 +55,12 @@ def scan_file_content(context: FileScanContext, content: str, extractors: Sequen
 
 def scan_source(
     config: RepoGraphConfig,
-    graph: Graph,
     source: ResolvedSource,
     max_file_bytes: int,
     extractors: Sequence[FileExtractor],
-) -> None:
+) -> SourceScanResult:
     if not source.path.exists():
-        graph.errors.append(f"Missing source path: {source.path}")
-        return
+        return SourceScanResult(FactBatch(issues=[source_issue(source, f"Missing source path: {source.path}")]))
 
     repo_entity = repository_fact(source)
     projects = discover_projects(config, source, repo_entity)
@@ -73,20 +76,23 @@ def scan_source(
                 parser="project_discovery",
             )
         )
-    add_facts_to_graph(graph, source_facts)
 
+    files_scanned = 0
     for file_path in iter_scannable_files(config, source.path, max_file_bytes=max_file_bytes):
-        scan_file_path(graph, source, repo_entity, projects, file_path, extractors)
+        file_result = scan_file_path(source, repo_entity, projects, file_path, extractors)
+        source_facts.extend(file_result.facts)
+        files_scanned += file_result.files_scanned
+
+    return SourceScanResult(source_facts, files_scanned)
 
 
 def scan_file_path(
-    graph: Graph,
     source: ResolvedSource,
     repo_entity: EntityFact,
     projects: Sequence[ProjectInfo],
     file_path: Path,
     extractors: Sequence[FileExtractor],
-) -> None:
+) -> SourceScanResult:
     rel_path = safe_relative_path(source.path, file_path)
     project = project_for_file(projects, file_path)
     file_entity = file_fact(source, rel_path, file_path.suffix.lower(), project.name if project else None)
@@ -112,18 +118,22 @@ def scan_file_path(
                 file_path=rel_path,
             )
         )
-    add_facts_to_graph(graph, containment_facts)
-    graph.files_scanned += 1
 
     try:
         content = file_path.read_text(encoding="utf-8", errors="ignore")
     except OSError as exc:
-        graph.errors.append(f"Could not read {file_path}: {exc}")
-        return
+        containment_facts.issues.append(
+            ScanIssue(
+                message=f"Could not read {file_path}: {exc}",
+                evidence=evidence(source.name, "filesystem", file_path=rel_path, confidence="high"),
+            )
+        )
+        return SourceScanResult(containment_facts, files_scanned=1)
 
     context = FileScanContext(source, repo_entity, file_entity, file_path, rel_path, project)
     facts = scan_file_content(context, content, extractors)
-    apply_file_facts(graph, facts)
+    containment_facts.extend(facts)
+    return SourceScanResult(containment_facts, files_scanned=1)
 
 
 def project_for_file(projects: Sequence[ProjectInfo], file_path: Path) -> ProjectInfo | None:
@@ -160,5 +170,8 @@ def iter_scannable_files(config: RepoGraphConfig, root: Path, max_file_bytes: in
             yield file_path
 
 
-def apply_file_facts(graph: Graph, facts: FactBatch) -> None:
-    add_facts_to_graph(graph, facts)
+def source_issue(source: ResolvedSource, message: str) -> ScanIssue:
+    return ScanIssue(
+        message=message,
+        evidence=evidence(source.name, "source_scanner", file_path=str(source.path), confidence="high"),
+    )

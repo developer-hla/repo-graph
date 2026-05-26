@@ -22,3 +22,17 @@ class ExtractionContractTests(unittest.TestCase):
             if "repo_graph.graph" in path.read_text(encoding="utf-8")
         ]
         self.assertEqual(offenders, [])
+
+    def test_source_discovery_modules_do_not_import_graph_model(self) -> None:
+        extraction_root = Path(__file__).resolve().parents[1] / "src" / "repo_graph" / "extraction"
+        source_modules = [
+            extraction_root / "source_scanner.py",
+            extraction_root / "project_discovery.py",
+            extraction_root / "source_facts.py",
+        ]
+        offenders = [
+            path.relative_to(extraction_root).as_posix()
+            for path in source_modules
+            if "repo_graph.graph" in path.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(offenders, [])

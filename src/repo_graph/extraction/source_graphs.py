@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.config import RepoGraphConfig
-from repo_graph.extraction.orchestrator import MAX_FILE_BYTES, config_without_unsupported_sources
+from repo_graph.extraction.orchestrator import (
+    MAX_FILE_BYTES,
+    add_source_scan_result,
+    config_without_unsupported_sources,
+)
 from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.snapshots import (
     parser_fingerprint,
@@ -86,7 +90,10 @@ def build_source_graph(
     max_file_bytes: int = MAX_FILE_BYTES,
 ) -> Graph:
     graph = Graph(scope_name=config.name, sources=[source_to_dict(source)])
-    scan_source(config, graph, source, max_file_bytes=max_file_bytes, extractors=default_extractors())
+    add_source_scan_result(
+        graph,
+        scan_source(config, source, max_file_bytes=max_file_bytes, extractors=default_extractors()),
+    )
     return graph
 
 
