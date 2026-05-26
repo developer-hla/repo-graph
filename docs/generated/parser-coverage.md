@@ -4,8 +4,8 @@
 This file is generated from a strict scan of `config/local-example.yaml`.
 It documents parser coverage exercised by synthetic examples, not every supported language feature.
 
-- Parser count: `50`
-- Edge count: `201`
+- Parser count: `56`
+- Edge count: `220`
 - Unresolved edge count: `17`
 
 ## Coverage By Parser
@@ -13,6 +13,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | Parser | Edge Count | Unresolved | Edge Types | From Types | To Types | Sources |
 | --- | ---: | ---: | --- | --- | --- | --- |
 | `dotnet_build_config` | 2 | 1 | `DECLARES_BUILD_CONFIG`, `DEPENDS_ON_PACKAGE` | `build_config`, `file` | `build_config`, `package` | `dotnet-service` |
+| `dotnet_cache` | 2 | 0 | `WRITES_CACHE_KEY` | `file`, `function` | `cache_key` | `dotnet-service` |
 | `dotnet_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `dotnet-service` |
 | `dotnet_controller_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `dotnet-service` |
 | `dotnet_framework_config` | 6 | 0 | `CONFIGURES_SERVICE`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE` | `config_file`, `config_value`, `file` | `config_file`, `config_value`, `service` | `legacy-vb-service` |
@@ -24,14 +25,16 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `dotnet_storage` | 2 | 0 | `WRITES_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `dotnet-service` |
 | `dotnet_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `dotnet-service` |
 | `filesystem` | 51 | 0 | `CONTAINS_FILE` | `project`, `repository` | `file` | `api-service`, `database-project`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
+| `javascript_cache` | 2 | 0 | `WRITES_CACHE_KEY` | `file`, `function` | `cache_key` | `api-service` |
 | `javascript_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `api-service` |
 | `javascript_export` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service`, `shared-library` |
 | `javascript_http` | 4 | 0 | `CALLS_HTTP`, `CALLS_SERVICE` | `file`, `function` | `api_route`, `service` | `api-service` |
 | `javascript_import` | 3 | 2 | `IMPORTS` | `file` | `package` | `api-service`, `inventory-service` |
+| `javascript_job` | 3 | 0 | `DECLARES_JOB`, `RUNS_JOB`, `SCHEDULES_JOB` | `file`, `project`, `scheduled_job` | `function`, `scheduled_job` | `api-service` |
 | `javascript_message` | 2 | 0 | `PUBLISHES_MESSAGE` | `file`, `function` | `message_topic` | `api-service` |
 | `javascript_route` | 5 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `api-service`, `inventory-service` |
 | `javascript_storage` | 2 | 0 | `WRITES_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `api-service` |
-| `javascript_symbol` | 1 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service` |
+| `javascript_symbol` | 2 | 0 | `DECLARES_SYMBOL` | `file` | `function` | `api-service` |
 | `kubernetes_container` | 1 | 0 | `RUNS_CONTAINER` | `deployment` | `container` | `inventory-service` |
 | `kubernetes_deployment` | 1 | 0 | `DECLARES_DEPLOYMENT` | `file` | `deployment` | `inventory-service` |
 | `kubernetes_env` | 2 | 0 | `CONFIGURES_SERVICE`, `DECLARES_CONFIG` | `config_value`, `container` | `config_value`, `service` | `inventory-service` |
@@ -44,16 +47,19 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `packages_config` | 2 | 1 | `DECLARES_CONFIG_FILE`, `DEPENDS_ON_PACKAGE` | `file`, `project` | `config_file`, `package` | `legacy-vb-service` |
 | `project_discovery` | 9 | 0 | `CONTAINS_PROJECT` | `repository` | `project` | `api-service`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |
 | `pyproject` | 9 | 4 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE` | `file`, `package`, `project` | `package` | `python-shared`, `python-worker` |
-| `python_call` | 2 | 0 | `CALLS_SYMBOL` | `function` | `function` | `python-shared`, `python-worker` |
+| `python_cache` | 2 | 0 | `READS_CACHE_KEY` | `file`, `function` | `cache_key` | `python-worker` |
+| `python_call` | 3 | 0 | `CALLS_SYMBOL` | `function` | `function` | `python-shared`, `python-worker` |
 | `python_http` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `python-worker` |
 | `python_import` | 6 | 4 | `IMPORTS` | `file` | `package` | `python-shared`, `python-worker` |
+| `python_job` | 3 | 0 | `DECLARES_JOB`, `RUNS_JOB`, `SCHEDULES_JOB` | `file`, `project`, `scheduled_job` | `function`, `scheduled_job` | `python-worker` |
 | `python_message` | 2 | 0 | `CONSUMES_MESSAGE` | `file`, `function` | `message_topic` | `python-worker` |
 | `python_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `python-worker` |
 | `python_storage` | 2 | 0 | `READS_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `python-worker` |
-| `python_symbol` | 6 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
+| `python_symbol` | 9 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `python-shared`, `python-worker` |
 | `requirements` | 1 | 1 | `DEPENDS_ON_PACKAGE` | `project` | `package` | `python-worker` |
 | `sql` | 5 | 0 | `DEFINES` | `file` | `sql_table`, `stored_procedure` | `database-project`, `legacy-vb-service` |
 | `sql_reference` | 9 | 0 | `CALLS_SQL`, `READS_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, `WRITES_SQL_OBJECT` | `file`, `function`, `sql_table`, `stored_procedure` | `sql_table`, `stored_procedure` | `api-service`, `database-project`, `dotnet-service`, `python-worker` |
+| `vb_cache` | 2 | 0 | `READS_CACHE_KEY` | `file`, `function` | `cache_key` | `legacy-vb-service` |
 | `vb_call` | 1 | 0 | `CALLS_SYMBOL` | `function` | `function` | `legacy-vb-service` |
 | `vb_config_service` | 2 | 0 | `CALLS_SERVICE` | `file`, `function` | `service` | `legacy-vb-service` |
 | `vb_contract_route` | 3 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE`, `HANDLES_ROUTE` | `api_route`, `file`, `project` | `api_route`, `function` | `legacy-vb-service` |

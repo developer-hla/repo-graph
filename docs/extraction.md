@@ -49,7 +49,7 @@ Target module responsibilities:
 - `fact_helpers.py`: small helper functions for common typed fact patterns,
   such as package declarations and package dependency relationships.
 - `interaction_properties.py`: common structured evidence for application,
-  messaging, storage, and database interaction relationships.
+  messaging, storage, cache, and database interaction relationships.
 - `source_scanner.py`: source file walking, scanner invocation, local scanner
   error collection, and `SourceScanResult` creation.
 - `registry.py`: deterministic default scanner registration.
@@ -59,8 +59,8 @@ Target module responsibilities:
   `code/dotnet`.
 - scanner helper modules: domain-specific helpers should stay near the scanner
   package that owns them. Shared helpers such as manifest, package,
-  interaction, messaging, storage, and symbol helpers stay at the scanner root
-  when multiple families use them.
+  interaction, messaging, storage, cache, scheduled-job, and symbol helpers
+  stay at the scanner root when multiple families use them.
 
 New parser work should add or update the relevant scanner family module, emit
 typed facts, and register through `registry.py`. Do not add new scanner

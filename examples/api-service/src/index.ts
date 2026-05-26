@@ -11,10 +11,15 @@ export async function loadThing(id: string) {
   return response.json();
 }
 
+async function refreshThingCache() {
+  await redis.set("thing:latest", "42");
+}
+
 async function thingsRoute(request) {
   const query = "EXEC dbo.get_thing_by_id";
   await loadThing("42");
   return formatThing(query);
 }
 
+cron.schedule("0 * * * *", refreshThingCache);
 server.get("/things/:id", thingsRoute);

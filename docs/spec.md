@@ -362,6 +362,8 @@ Start with parsers that are useful across many codebases:
 - HTTP calls from `fetch` and common client libraries
 - messaging publish and consume calls for topics, queues, and event contracts
 - shared storage reads and writes for paths, buckets, blobs, and file drops
+- cache key reads and writes
+- scheduled job declarations with handler links when available
 - SQL tables, views, functions, and stored procedures
 - SQL references from application code
 
@@ -375,7 +377,6 @@ Future parser slices should add:
 - deeper database metadata such as computed dependencies and richer trigger body impact
 - route/function/query context so endpoint impact paths do not stop at file
   ownership
-- cache and scheduled-job boundaries when stable target naming rules are clear
 - deeper MSBuild metadata
 - optional LLM-assisted documentation discovery that emits evidence-backed
   candidate entities and edges

@@ -7,6 +7,7 @@ from pathlib import Path
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch
+from repo_graph.extraction.scanners.cache_helpers import cache_facts_for_line
 from repo_graph.extraction.scanners.code.dotnet.helpers import (
     CS_METHOD_RE,
     CS_NAMESPACE_RE,
@@ -84,6 +85,7 @@ class CSharpCodeExtractor:
     target_patterns = ("*.cs",)
     parser_ids = (
         "dotnet_call",
+        "dotnet_cache",
         "dotnet_controller_route",
         "dotnet_http",
         "dotnet_minimal_route",
@@ -108,10 +110,14 @@ class CSharpCodeExtractor:
         pending_attributes: list[CSharpAttribute] = []
         for line_number, line in enumerate(content.splitlines(), start=1):
             facts.extend(csharp_minimal_route_facts(context, line, line_number))
+            facts.relationships.extend(cache_facts_for_line(context, line, line_number, "dotnet_cache"))
             facts.relationships.extend(csharp_http_call_facts(context, line, line_number))
             facts.relationships.extend(message_facts_for_line(context, line, line_number, "dotnet_message"))
             facts.relationships.extend(storage_facts_for_line(context, line, line_number, "dotnet_storage"))
             if current_function:
+                facts.relationships.extend(
+                    cache_facts_for_line(context, line, line_number, "dotnet_cache", from_entity=current_function)
+                )
                 facts.relationships.extend(
                     csharp_http_call_facts(context, line, line_number, from_entity=current_function)
                 )
@@ -217,6 +223,7 @@ class VbCodeExtractor:
     target_patterns = ("*.vb",)
     parser_ids = (
         "vb_call",
+        "vb_cache",
         "vb_config_service",
         "vb_contract_route",
         "vb_http",
@@ -274,11 +281,15 @@ class VbCodeExtractor:
                 )
                 pending_attributes = []
 
+            facts.relationships.extend(cache_facts_for_line(context, line, line_number, "vb_cache"))
             facts.relationships.extend(vb_service_call_facts(context, line, line_number))
             facts.relationships.extend(message_facts_for_line(context, line, line_number, "vb_message"))
             facts.relationships.extend(storage_facts_for_line(context, line, line_number, "vb_storage"))
             facts.relationships.extend(vb_sql_command_facts(context, line, line_number))
             if current_function:
+                facts.relationships.extend(
+                    cache_facts_for_line(context, line, line_number, "vb_cache", from_entity=current_function)
+                )
                 facts.relationships.extend(
                     vb_service_call_facts(context, line, line_number, from_entity=current_function)
                 )

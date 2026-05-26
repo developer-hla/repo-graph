@@ -7,6 +7,8 @@ from dataclasses import dataclass
 ENTITY_TYPES = (
     "api_route",
     "build_config",
+    "cache_key",
+    "cache_store",
     "class",
     "config_file",
     "config_value",
@@ -26,6 +28,7 @@ ENTITY_TYPES = (
     "service",
     "solution",
     "storage_location",
+    "scheduled_job",
     "sql_function",
     "sql_table",
     "sql_trigger",
@@ -50,6 +53,7 @@ EDGE_TYPES = (
     "DECLARES_CONFIG_FILE",
     "DECLARES_DEPLOYMENT",
     "DECLARES_INGRESS",
+    "DECLARES_JOB",
     "DECLARES_PACKAGE",
     "DECLARES_ROUTE",
     "DECLARES_SERVICE",
@@ -63,15 +67,19 @@ EDGE_TYPES = (
     "HANDLES_ROUTE",
     "IMPORTS",
     "PUBLISHES_MESSAGE",
+    "READS_CACHE_KEY",
     "READS_SQL_OBJECT",
     "READS_STORAGE_OBJECT",
     "REFERENCES_SQL_OBJECT",
     "ROUTES_TO_SERVICE",
     "RUNS_CONTAINER",
+    "RUNS_JOB",
+    "SCHEDULES_JOB",
     "SELECTS_DEPLOYMENT",
     "TRIGGERS_ON_SQL_OBJECT",
     "WRITES_SQL_OBJECT",
     "WRITES_STORAGE_OBJECT",
+    "WRITES_CACHE_KEY",
 )
 SQL_EDGE_TYPES = frozenset(
     {"CALLS_SQL", "READS_SQL_OBJECT", "REFERENCES_SQL_OBJECT", "TRIGGERS_ON_SQL_OBJECT", "WRITES_SQL_OBJECT"}
@@ -84,6 +92,7 @@ INTERACTION_EDGE_TYPES = frozenset(
         "CONFIGURES_SERVICE",
         "CONSUMES_MESSAGE",
         "PUBLISHES_MESSAGE",
+        "READS_CACHE_KEY",
         "READS_SQL_OBJECT",
         "READS_STORAGE_OBJECT",
         "REFERENCES_SQL_OBJECT",
@@ -91,6 +100,7 @@ INTERACTION_EDGE_TYPES = frozenset(
         "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
         "WRITES_STORAGE_OBJECT",
+        "WRITES_CACHE_KEY",
     }
 )
 INTERACTION_EVIDENCE_KEYS = (
@@ -100,6 +110,7 @@ INTERACTION_EVIDENCE_KEYS = (
 )
 INTERACTION_TARGET_BOUNDARIES = (
     "application",
+    "cache",
     "database",
     "messaging",
     "storage",
@@ -113,6 +124,8 @@ INTERACTION_DEPENDENCY_SCOPES = (
 INTERACTION_KINDS = (
     "http_call",
     "ingress_route",
+    "cache_read",
+    "cache_write",
     "message_consume",
     "message_publish",
     "service_call",
@@ -130,6 +143,7 @@ PARSER_IDS = (
     "dotnet_controller_route",
     "dotnet_framework_config",
     "dotnet_http",
+    "dotnet_cache",
     "dotnet_minimal_route",
     "dotnet_message",
     "dotnet_project",
@@ -138,12 +152,14 @@ PARSER_IDS = (
     "dotnet_symbol",
     "filesystem",
     "javascript_call",
+    "javascript_cache",
     "javascript_export",
     "javascript_http",
     "javascript_import",
     "javascript_message",
     "javascript_route",
     "javascript_storage",
+    "javascript_job",
     "javascript_symbol",
     "kubernetes_container",
     "kubernetes_deployment",
@@ -160,17 +176,20 @@ PARSER_IDS = (
     "project_discovery",
     "pyproject",
     "python_call",
+    "python_cache",
     "python_http",
     "python_import",
     "python_message",
     "python_route",
     "python_storage",
+    "python_job",
     "python_symbol",
     "requirements",
     "sql",
     "sql_reference",
     "sqlserver_metadata",
     "vb_call",
+    "vb_cache",
     "vb_config_service",
     "vb_contract_route",
     "vb_http",
@@ -193,6 +212,7 @@ IMPACT_EDGE_TYPES = frozenset(
         "HANDLES_ROUTE",
         "IMPORTS",
         "PUBLISHES_MESSAGE",
+        "READS_CACHE_KEY",
         "READS_SQL_OBJECT",
         "READS_STORAGE_OBJECT",
         "REFERENCES_SQL_OBJECT",
@@ -201,6 +221,9 @@ IMPACT_EDGE_TYPES = frozenset(
         "TRIGGERS_ON_SQL_OBJECT",
         "WRITES_SQL_OBJECT",
         "WRITES_STORAGE_OBJECT",
+        "WRITES_CACHE_KEY",
+        "RUNS_JOB",
+        "SCHEDULES_JOB",
     }
 )
 STRUCTURAL_EDGE_TYPES = frozenset(
@@ -212,6 +235,7 @@ STRUCTURAL_EDGE_TYPES = frozenset(
         "DECLARES_CONFIG_FILE",
         "DECLARES_DEPLOYMENT",
         "DECLARES_INGRESS",
+        "DECLARES_JOB",
         "DECLARES_PACKAGE",
         "DECLARES_ROUTE",
         "DECLARES_SERVICE",
@@ -272,6 +296,8 @@ MISSING_SOURCE_TARGET_TYPES = frozenset(
         "message_contract",
         "message_queue",
         "message_topic",
+        "cache_key",
+        "cache_store",
         "sql_function",
         "sql_object",
         "sql_table",
@@ -284,6 +310,7 @@ MISSING_SOURCE_TARGET_TYPES = frozenset(
 
 MESSAGE_ENTITY_TYPES = frozenset({"message_contract", "message_queue", "message_topic"})
 STORAGE_ENTITY_TYPES = frozenset({"storage_location"})
+CACHE_ENTITY_TYPES = frozenset({"cache_key", "cache_store"})
 PARSER_GAP_TARGET_TYPES = frozenset(
     {
         "api_route",

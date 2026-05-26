@@ -67,6 +67,10 @@ resolution, and export shape.
    `READS_STORAGE_OBJECT` or `WRITES_STORAGE_OBJECT` with library-specific
    evidence in properties. The destination should be a generic
    `storage_location` target.
+   Cache clients should emit `READS_CACHE_KEY` or `WRITES_CACHE_KEY`; the
+   destination should be a generic `cache_key` target. Schedulers should emit
+   `DECLARES_JOB` and link to handler functions with `RUNS_JOB` when the
+   handler can be identified.
    For interaction edge types listed in `repo_graph.vocabulary.INTERACTION_EDGE_TYPES`,
    use `repo_graph.extraction.interaction_properties.interaction_properties`
    or an equivalent wrapper so `target_boundary`, `dependency_scope`, and
@@ -101,13 +105,13 @@ resolution, and export shape.
 - Promote important integration boundaries to first-class graph facts when
   they are stable, discoverable, and useful for blast-radius analysis. Use
   `docs/first-class-coverage.md` as the checklist.
-- Use interaction evidence for app-to-app, messaging, storage, and app-to-database relationships:
+- Use interaction evidence for app-to-app, messaging, storage, cache, and app-to-database relationships:
   `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
   `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`, `READS_STORAGE_OBJECT`,
-  `WRITES_STORAGE_OBJECT`, `CALLS_SQL`, `READS_SQL_OBJECT`,
-  `WRITES_SQL_OBJECT`, and `REFERENCES_SQL_OBJECT`. Do not use interaction
-  evidence for containment, declaration, or ownership edges such as
-  `CONTAINS_FILE`, `DECLARES_SYMBOL`, or `DEFINES`.
+  `WRITES_STORAGE_OBJECT`, `READS_CACHE_KEY`, `WRITES_CACHE_KEY`, `CALLS_SQL`,
+  `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, and `REFERENCES_SQL_OBJECT`. Do not
+  use interaction evidence for containment, declaration, or ownership edges
+  such as `CONTAINS_FILE`, `DECLARES_SYMBOL`, or `DEFINES`.
 - SQL parsers should preserve schema provenance. Migration or revision files are
   historical evidence, not proof of current database state. Prefer
   `schema_state=current_schema`, `historical`, `unknown`, or

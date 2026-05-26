@@ -10,8 +10,10 @@ from repo_graph.extraction.fact_helpers import scan_issue
 from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.code.python.helpers import (
     PythonCallableIndex,
+    python_cache_facts,
     python_http_call_facts,
     python_import_fact,
+    python_job_facts,
     python_message_facts,
     python_route_facts,
     python_sql_call_facts,
@@ -26,11 +28,13 @@ class PythonCodeExtractor:
     target_patterns = ("*.py",)
     parser_ids = (
         "python_call",
+        "python_cache",
         "python_http",
         "python_import",
         "python_message",
         "python_route",
         "python_storage",
+        "python_job",
         "python_symbol",
         "sql_reference",
     )
@@ -90,6 +94,7 @@ class PythonAstVisitor(ast.NodeVisitor):
         self.facts.extend(
             python_route_facts(self.context, node.name, node.decorator_list, node.lineno, function_entity)
         )
+        self.facts.extend(python_job_facts(self.context, node.decorator_list, node.lineno, function_entity))
         if function_entity:
             self.function_stack.append(function_entity)
         self.generic_visit(node)
@@ -98,12 +103,14 @@ class PythonAstVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         self.facts.relationships.extend(python_http_call_facts(self.context, node))
+        self.facts.relationships.extend(python_cache_facts(self.context, node))
         self.facts.relationships.extend(python_message_facts(self.context, node))
         self.facts.relationships.extend(python_sql_call_facts(self.context, node))
         self.facts.relationships.extend(python_storage_facts(self.context, node))
         if self.function_stack:
             function_entity = self.function_stack[-1]
             self.facts.relationships.extend(python_http_call_facts(self.context, node, from_entity=function_entity))
+            self.facts.relationships.extend(python_cache_facts(self.context, node, from_entity=function_entity))
             self.facts.relationships.extend(python_message_facts(self.context, node, from_entity=function_entity))
             self.facts.relationships.extend(python_sql_call_facts(self.context, node, from_entity=function_entity))
             self.facts.relationships.extend(python_storage_facts(self.context, node, from_entity=function_entity))

@@ -7,6 +7,8 @@ This file is generated from `repo_graph.vocabulary`.
 
 - `api_route`
 - `build_config`
+- `cache_key`
+- `cache_store`
 - `class`
 - `config_file`
 - `config_value`
@@ -26,6 +28,7 @@ This file is generated from `repo_graph.vocabulary`.
 - `service`
 - `solution`
 - `storage_location`
+- `scheduled_job`
 - `sql_function`
 - `sql_table`
 - `sql_trigger`
@@ -39,6 +42,8 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 
 - `api_route`
 - `build_config`
+- `cache_key`
+- `cache_store`
 - `class`
 - `config_file`
 - `config_value`
@@ -55,6 +60,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `package`
 - `project`
 - `repository`
+- `scheduled_job`
 - `service`
 - `solution`
 - `sql_function`
@@ -81,6 +87,7 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `DECLARES_CONFIG_FILE`
 - `DECLARES_DEPLOYMENT`
 - `DECLARES_INGRESS`
+- `DECLARES_JOB`
 - `DECLARES_PACKAGE`
 - `DECLARES_ROUTE`
 - `DECLARES_SERVICE`
@@ -94,19 +101,23 @@ These values are valid `to_type` values on edges. Most are entity types; `sql_ob
 - `HANDLES_ROUTE`
 - `IMPORTS`
 - `PUBLISHES_MESSAGE`
+- `READS_CACHE_KEY`
 - `READS_SQL_OBJECT`
 - `READS_STORAGE_OBJECT`
 - `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
 - `RUNS_CONTAINER`
+- `RUNS_JOB`
+- `SCHEDULES_JOB`
 - `SELECTS_DEPLOYMENT`
 - `TRIGGERS_ON_SQL_OBJECT`
 - `WRITES_SQL_OBJECT`
 - `WRITES_STORAGE_OBJECT`
+- `WRITES_CACHE_KEY`
 
 ## Interaction Evidence
 
-These edge types represent application-to-application, messaging, storage, or application-to-database interactions. They should include the regular evidence keys below in edge `properties`.
+These edge types represent application-to-application, messaging, storage, cache, or application-to-database interactions. They should include the regular evidence keys below in edge `properties`.
 
 ### Edge Types
 
@@ -116,11 +127,13 @@ These edge types represent application-to-application, messaging, storage, or ap
 - `CONFIGURES_SERVICE`
 - `CONSUMES_MESSAGE`
 - `PUBLISHES_MESSAGE`
+- `READS_CACHE_KEY`
 - `READS_SQL_OBJECT`
 - `READS_STORAGE_OBJECT`
 - `REFERENCES_SQL_OBJECT`
 - `ROUTES_TO_SERVICE`
 - `TRIGGERS_ON_SQL_OBJECT`
+- `WRITES_CACHE_KEY`
 - `WRITES_SQL_OBJECT`
 - `WRITES_STORAGE_OBJECT`
 
@@ -133,6 +146,7 @@ These edge types represent application-to-application, messaging, storage, or ap
 ### Target Boundaries
 
 - `application`
+- `cache`
 - `database`
 - `messaging`
 - `storage`
@@ -148,6 +162,8 @@ These edge types represent application-to-application, messaging, storage, or ap
 
 - `http_call`
 - `ingress_route`
+- `cache_read`
+- `cache_write`
 - `message_consume`
 - `message_publish`
 - `service_call`
@@ -165,6 +181,7 @@ These edge types represent application-to-application, messaging, storage, or ap
 - `dotnet_controller_route`
 - `dotnet_framework_config`
 - `dotnet_http`
+- `dotnet_cache`
 - `dotnet_minimal_route`
 - `dotnet_message`
 - `dotnet_project`
@@ -173,12 +190,14 @@ These edge types represent application-to-application, messaging, storage, or ap
 - `dotnet_symbol`
 - `filesystem`
 - `javascript_call`
+- `javascript_cache`
 - `javascript_export`
 - `javascript_http`
 - `javascript_import`
 - `javascript_message`
 - `javascript_route`
 - `javascript_storage`
+- `javascript_job`
 - `javascript_symbol`
 - `kubernetes_container`
 - `kubernetes_deployment`
@@ -195,17 +214,20 @@ These edge types represent application-to-application, messaging, storage, or ap
 - `project_discovery`
 - `pyproject`
 - `python_call`
+- `python_cache`
 - `python_http`
 - `python_import`
 - `python_message`
 - `python_route`
 - `python_storage`
+- `python_job`
 - `python_symbol`
 - `requirements`
 - `sql`
 - `sql_reference`
 - `sqlserver_metadata`
 - `vb_call`
+- `vb_cache`
 - `vb_config_service`
 - `vb_contract_route`
 - `vb_http`
@@ -219,8 +241,8 @@ These edge types represent application-to-application, messaging, storage, or ap
 | Profile | Edge Types | Description |
 | --- | --- | --- |
 | `all` | `all` | Traverse all edge types. |
-| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CALLS_SYMBOL`, `CONFIGURES_SERVICE`, `CONSUMES_MESSAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `HANDLES_ROUTE`, `IMPORTS`, `PUBLISHES_MESSAGE`, `READS_SQL_OBJECT`, `READS_STORAGE_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_SQL_OBJECT`, `WRITES_STORAGE_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
-| `structural` | `CONTAINS_FILE`, `CONTAINS_PROJECT`, `DECLARES_BUILD_CONFIG`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `DECLARES_PACKAGE`, `DECLARES_ROUTE`, `DECLARES_SERVICE`, `DECLARES_SOLUTION`, `DECLARES_SYMBOL`, `DECLARES_WORKSPACE`, `DEFINES`, `EXPOSES_ROUTE`, `RUNS_CONTAINER` | Traverse containment and declaration edges. |
+| `impact` | `CALLS_HTTP`, `CALLS_SERVICE`, `CALLS_SQL`, `CALLS_SYMBOL`, `CONFIGURES_SERVICE`, `CONSUMES_MESSAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `HANDLES_ROUTE`, `IMPORTS`, `PUBLISHES_MESSAGE`, `READS_CACHE_KEY`, `READS_SQL_OBJECT`, `READS_STORAGE_OBJECT`, `REFERENCES_SQL_OBJECT`, `ROUTES_TO_SERVICE`, `RUNS_JOB`, `SCHEDULES_JOB`, `SELECTS_DEPLOYMENT`, `TRIGGERS_ON_SQL_OBJECT`, `WRITES_CACHE_KEY`, `WRITES_SQL_OBJECT`, `WRITES_STORAGE_OBJECT` | Traverse dependency and usage edges for refactor blast-radius analysis. |
+| `structural` | `CONTAINS_FILE`, `CONTAINS_PROJECT`, `DECLARES_BUILD_CONFIG`, `DECLARES_CONFIG`, `DECLARES_CONFIG_FILE`, `DECLARES_DEPLOYMENT`, `DECLARES_INGRESS`, `DECLARES_JOB`, `DECLARES_PACKAGE`, `DECLARES_ROUTE`, `DECLARES_SERVICE`, `DECLARES_SOLUTION`, `DECLARES_SYMBOL`, `DECLARES_WORKSPACE`, `DEFINES`, `EXPOSES_ROUTE`, `RUNS_CONTAINER` | Traverse containment and declaration edges. |
 
 ## Unresolved Classifications
 

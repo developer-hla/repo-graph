@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from repo_graph.graph.model import Entity, Graph
-from repo_graph.vocabulary import MESSAGE_ENTITY_TYPES, STORAGE_ENTITY_TYPES
+from repo_graph.vocabulary import CACHE_ENTITY_TYPES, MESSAGE_ENTITY_TYPES, STORAGE_ENTITY_TYPES
 
 CANONICAL_RESOURCE_SOURCE_NAME = "external-resources"
 
@@ -72,7 +72,7 @@ def materialize_external_resources(graph: Graph) -> None:
 
 
 def external_resource_entity_types() -> frozenset[str]:
-    return MESSAGE_ENTITY_TYPES | STORAGE_ENTITY_TYPES
+    return CACHE_ENTITY_TYPES | MESSAGE_ENTITY_TYPES | STORAGE_ENTITY_TYPES
 
 
 def external_resource_boundary(entity_type: str | None) -> str:
@@ -80,6 +80,8 @@ def external_resource_boundary(entity_type: str | None) -> str:
         return "messaging"
     if entity_type in STORAGE_ENTITY_TYPES:
         return "storage"
+    if entity_type in CACHE_ENTITY_TYPES:
+        return "cache"
     return "external"
 
 

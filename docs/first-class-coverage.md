@@ -35,6 +35,8 @@ evidence.
 | Internal code delegation | `CALLS_SYMBOL` | Covered for JavaScript same-file functions, Python local functions and class/instance method calls, C# same-class or explicit class calls, and legacy VB same-class or explicit module/class calls when the parser can identify a discovered callable target without obvious third-party noise. |
 | Messaging and event streams | `message_topic`, `message_queue`, `message_contract`, `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE` | Covered for common JavaScript, Python, .NET, and VB producer/consumer forms with shared external message resource nodes. |
 | File, blob, and transfer storage | `storage_location`, `READS_STORAGE_OBJECT`, `WRITES_STORAGE_OBJECT` | Covered for common JavaScript, Python, .NET, and VB file, bucket, blob, and transfer read/write forms with shared external storage nodes. |
+| Cache and distributed state | `cache_key`, `cache_store`, `READS_CACHE_KEY`, `WRITES_CACHE_KEY` | Covered for common JavaScript, Python, .NET, and VB cache get/set forms with shared external cache key nodes. |
+| Scheduled and background work | `scheduled_job`, `DECLARES_JOB`, `RUNS_JOB`, `SCHEDULES_JOB` | Covered for JavaScript cron schedules and Python schedule decorators when a handler function can be identified. |
 | Packages and project structure | `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT`, `IMPORTS`, containment/declaration edges | Covered for supported package and project manifests. |
 | Application-to-database calls | `CALLS_SQL` | Covered for application stored procedure calls in supported languages, with function-level context when the parser can identify the enclosing handler or method. |
 | Database object reads | `READS_SQL_OBJECT` | Covered for SQL object reads from SQL definitions and application SQL snippets, with function-level context when available. |
@@ -53,8 +55,6 @@ shortcuts.
 | High | Current database introspection | Revision and migration files can describe objects that no longer exist. Read-only introspection can provide the current database shape and reconcile code evidence against reality. | Source type: `database`; schema state: `current_database`; SQL Server metadata from `sys.*` catalogs; PostgreSQL metadata from `pg_catalog` catalogs. |
 | High | Richer function-to-function calls | A route handler often delegates to service-layer functions before making HTTP or database calls. Impact paths need those internal calls to connect endpoint blast radius to deeper dependencies across JavaScript, imported Python symbols, dependency-injected .NET services, and richer legacy forms. | Continue using `CALLS_SYMBOL` when the target is a discovered function or method. |
 | Medium | Deeper SQL schema dependencies | Schema-bound views, computed columns, constraints, and SQL module dependencies create blast radius beyond simple `REFERENCES` clauses. | Continue using `REFERENCES_SQL_OBJECT` with `sql_operation` evidence such as `SCHEMA_BOUND_VIEW` or catalog-derived dependency type. |
-| Medium | Cache and distributed state | Redis or similar caches can couple services through key names and invalidation behavior. | Entities: `cache_store`, `cache_key`; edges: `READS_CACHE_KEY`, `WRITES_CACHE_KEY`. |
-| Medium | Scheduled and background work | Jobs create runtime entry points and dependencies that do not appear as HTTP routes. | Entities: `scheduled_job`, `worker`; edges: `DECLARES_JOB`, `RUNS_JOB`, `SCHEDULES_JOB`. |
 | Lower | Auth, identity, and policy boundaries | Auth changes can have wide blast radius, but many references are configuration-only and need careful false-positive control. | Prefer evidence-backed `USES_IDENTITY_PROVIDER` only when stable targets are available. |
 
 ## Recommended Slice Order
@@ -81,8 +81,8 @@ shortcuts.
 5. Add storage and transfer boundaries. Done for common code forms.
    Shared storage now uses `storage_location` nodes and generic read/write
    edges instead of one edge type per SDK.
-6. Add cache and scheduled-job slices when examples and stable naming rules are
-   clear.
+6. Add cache and scheduled-job slices. Done for common cache access plus
+   JavaScript and Python scheduled handler declarations.
 
 ## Database State Provenance
 

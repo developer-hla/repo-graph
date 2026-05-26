@@ -10,7 +10,15 @@ router = APIRouter()
 
 
 consumer = object()
+redis = object()
 s3 = object()
+
+
+def scheduled(schedule: str):
+    def decorate(function):
+        return function
+
+    return decorate
 
 
 class Worker:
@@ -26,6 +34,11 @@ async def read_thing(thing_id: str) -> dict[str, str]:
     s3.get_object(Bucket="shared-artifacts", Key="things/report.json")
     query = text("EXEC dbo.get_thing_by_id")
     return format_thing(str(query))
+
+
+@scheduled("0 * * * *")
+def refresh_thing_cache() -> None:
+    redis.get("thing:latest")
 
 
 app.include_router(router)

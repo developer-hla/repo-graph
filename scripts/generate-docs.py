@@ -432,7 +432,7 @@ def vocabulary_doc() -> str:
         "",
         "## Interaction Evidence",
         "",
-        "These edge types represent application-to-application, messaging, storage, or application-to-database "
+        "These edge types represent application-to-application, messaging, storage, cache, or application-to-database "
         "interactions. They should include the regular evidence keys below in edge `properties`.",
         "",
         "### Edge Types",

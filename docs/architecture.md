@@ -102,6 +102,8 @@ Output:
 - SQL snippets found in code
 - messaging publish and consume references
 - storage read and write references
+- cache read and write references
+- scheduled/background job declarations
 - evidence: parser ID, file path, line number, raw target, normalized target,
   syntax-specific details
 

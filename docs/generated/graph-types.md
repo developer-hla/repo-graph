@@ -5,9 +5,9 @@ This file is generated from a strict scan of `config/local-example.yaml`.
 It documents the graph types exercised by the synthetic examples, not a private source set.
 
 - Graph schema version: `0.1`
-- Entity count: `95`
-- Edge count: `201`
-- Resolved edge count: `184`
+- Entity count: `102`
+- Edge count: `220`
+- Resolved edge count: `203`
 - Unresolved edge count: `17`
 
 ## Entity Types
@@ -16,19 +16,21 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | --- | ---: |
 | `api_route` | 8 |
 | `build_config` | 1 |
+| `cache_key` | 1 |
 | `class` | 4 |
 | `config_file` | 2 |
 | `config_value` | 4 |
 | `container` | 1 |
 | `deployment` | 1 |
 | `file` | 26 |
-| `function` | 11 |
+| `function` | 15 |
 | `ingress` | 1 |
 | `message_contract` | 1 |
 | `message_topic` | 2 |
 | `package` | 8 |
 | `project` | 9 |
 | `repository` | 8 |
+| `scheduled_job` | 2 |
 | `service` | 1 |
 | `solution` | 1 |
 | `sql_table` | 3 |
@@ -42,7 +44,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `CALLS_HTTP` | 2 |
 | `CALLS_SERVICE` | 10 |
 | `CALLS_SQL` | 8 |
-| `CALLS_SYMBOL` | 5 |
+| `CALLS_SYMBOL` | 6 |
 | `CONFIGURES_SERVICE` | 3 |
 | `CONSUMES_MESSAGE` | 4 |
 | `CONTAINS_FILE` | 51 |
@@ -52,11 +54,12 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `DECLARES_CONFIG_FILE` | 2 |
 | `DECLARES_DEPLOYMENT` | 1 |
 | `DECLARES_INGRESS` | 1 |
+| `DECLARES_JOB` | 2 |
 | `DECLARES_PACKAGE` | 16 |
 | `DECLARES_ROUTE` | 8 |
 | `DECLARES_SERVICE` | 1 |
 | `DECLARES_SOLUTION` | 1 |
-| `DECLARES_SYMBOL` | 15 |
+| `DECLARES_SYMBOL` | 19 |
 | `DEFINES` | 5 |
 | `DEPENDS_ON_PACKAGE` | 12 |
 | `DEPENDS_ON_PROJECT` | 1 |
@@ -64,12 +67,16 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `HANDLES_ROUTE` | 4 |
 | `IMPORTS` | 9 |
 | `PUBLISHES_MESSAGE` | 4 |
+| `READS_CACHE_KEY` | 4 |
 | `READS_SQL_OBJECT` | 1 |
 | `READS_STORAGE_OBJECT` | 4 |
 | `REFERENCES_SQL_OBJECT` | 1 |
 | `ROUTES_TO_SERVICE` | 1 |
 | `RUNS_CONTAINER` | 1 |
+| `RUNS_JOB` | 2 |
+| `SCHEDULES_JOB` | 2 |
 | `SELECTS_DEPLOYMENT` | 1 |
+| `WRITES_CACHE_KEY` | 4 |
 | `WRITES_SQL_OBJECT` | 1 |
 | `WRITES_STORAGE_OBJECT` | 4 |
 
@@ -78,6 +85,7 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | Parser | Example Edge Count |
 | --- | ---: |
 | `dotnet_build_config` | 2 |
+| `dotnet_cache` | 2 |
 | `dotnet_call` | 1 |
 | `dotnet_controller_route` | 3 |
 | `dotnet_framework_config` | 6 |
@@ -89,14 +97,16 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `dotnet_storage` | 2 |
 | `dotnet_symbol` | 3 |
 | `filesystem` | 51 |
+| `javascript_cache` | 2 |
 | `javascript_call` | 1 |
 | `javascript_export` | 2 |
 | `javascript_http` | 4 |
 | `javascript_import` | 3 |
+| `javascript_job` | 3 |
 | `javascript_message` | 2 |
 | `javascript_route` | 5 |
 | `javascript_storage` | 2 |
-| `javascript_symbol` | 1 |
+| `javascript_symbol` | 2 |
 | `kubernetes_container` | 1 |
 | `kubernetes_deployment` | 1 |
 | `kubernetes_env` | 2 |
@@ -109,16 +119,19 @@ It documents the graph types exercised by the synthetic examples, not a private 
 | `packages_config` | 2 |
 | `project_discovery` | 9 |
 | `pyproject` | 9 |
-| `python_call` | 2 |
+| `python_cache` | 2 |
+| `python_call` | 3 |
 | `python_http` | 2 |
 | `python_import` | 6 |
+| `python_job` | 3 |
 | `python_message` | 2 |
 | `python_route` | 3 |
 | `python_storage` | 2 |
-| `python_symbol` | 6 |
+| `python_symbol` | 9 |
 | `requirements` | 1 |
 | `sql` | 5 |
 | `sql_reference` | 9 |
+| `vb_cache` | 2 |
 | `vb_call` | 1 |
 | `vb_config_service` | 2 |
 | `vb_contract_route` | 3 |
@@ -132,5 +145,5 @@ It documents the graph types exercised by the synthetic examples, not a private 
 
 | Confidence | Example Edge Count |
 | --- | ---: |
-| `high` | 129 |
-| `medium` | 72 |
+| `high` | 139 |
+| `medium` | 81 |

@@ -28,7 +28,7 @@ intended shape and meaning of the graph.
 ```json
 {
   "entity_id": "stable-id",
-  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | service | deployment | container | ingress | api_route | function | class | module | interface | message_topic | message_queue | message_contract | storage_location | sql_table | sql_view | sql_function | stored_procedure",
+  "entity_type": "repository | project | workspace | solution | build_config | config_file | config_value | file | package | service | deployment | container | ingress | api_route | function | class | module | interface | message_topic | message_queue | message_contract | storage_location | cache_key | cache_store | scheduled_job | sql_table | sql_view | sql_function | stored_procedure",
   "name": "display name",
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -49,7 +49,7 @@ intended shape and meaning of the graph.
   "to_name": "target display name or unresolved reference",
   "to_type": "target type when known",
   "to_entity_id": "stable-id when resolved",
-  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | CALLS_SYMBOL | RUNS_CONTAINER | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | PUBLISHES_MESSAGE | CONSUMES_MESSAGE | READS_STORAGE_OBJECT | WRITES_STORAGE_OBJECT | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
+  "edge_type": "CONTAINS_PROJECT | CONTAINS_FILE | DECLARES_WORKSPACE | DECLARES_SOLUTION | DECLARES_BUILD_CONFIG | DECLARES_CONFIG_FILE | DECLARES_CONFIG | DECLARES_PACKAGE | DECLARES_SERVICE | DECLARES_DEPLOYMENT | DECLARES_INGRESS | DECLARES_JOB | DEPENDS_ON_PACKAGE | DEPENDS_ON_PROJECT | IMPORTS | DECLARES_ROUTE | EXPOSES_ROUTE | HANDLES_ROUTE | DECLARES_SYMBOL | CALLS_SYMBOL | RUNS_CONTAINER | RUNS_JOB | SCHEDULES_JOB | SELECTS_DEPLOYMENT | ROUTES_TO_SERVICE | CALLS_HTTP | CALLS_SERVICE | CONFIGURES_SERVICE | PUBLISHES_MESSAGE | CONSUMES_MESSAGE | READS_STORAGE_OBJECT | WRITES_STORAGE_OBJECT | READS_CACHE_KEY | WRITES_CACHE_KEY | DEFINES | CALLS_SQL | READS_SQL_OBJECT | WRITES_SQL_OBJECT | REFERENCES_SQL_OBJECT",
   "resolved": true,
   "source_name": "source from config",
   "file_path": "relative/path when known",
@@ -72,13 +72,14 @@ when known.
 file location but can produce multiple facts with the same source and target,
 such as two database constraints between the same tables.
 
-Application-to-application, messaging, storage, and application-to-database
+Application-to-application, messaging, storage, cache, and application-to-database
 interaction edges should use regular evidence fields. The canonical list lives in
 `repo_graph.vocabulary.INTERACTION_EDGE_TYPES` and currently includes
 `CALLS_HTTP`, `CALLS_SERVICE`, `CONFIGURES_SERVICE`, `ROUTES_TO_SERVICE`,
 `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE`, `READS_STORAGE_OBJECT`,
-`WRITES_STORAGE_OBJECT`, `CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`,
-`REFERENCES_SQL_OBJECT`, and `TRIGGERS_ON_SQL_OBJECT`.
+`WRITES_STORAGE_OBJECT`, `READS_CACHE_KEY`, `WRITES_CACHE_KEY`, `CALLS_SQL`,
+`READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, `REFERENCES_SQL_OBJECT`, and
+`TRIGGERS_ON_SQL_OBJECT`.
 
 Database-to-database dependencies use the same interaction contract. For
 example, a stored procedure or view that reads a table should emit
@@ -98,12 +99,14 @@ When handler code delegates to another discovered function, use `CALLS_SYMBOL`
 from the caller function to the callee function. This keeps app-internal
 delegation visible without treating it as an app-to-app interaction.
 
-- `target_boundary`: `application`, `database`, `messaging`, or `storage`
+- `target_boundary`: `application`, `cache`, `database`, `messaging`, or
+  `storage`
 - `dependency_scope`: `runtime`, `configuration`, `deployment`, or `schema`
 - `interaction_kind`: a stable evidence category such as `http_call`,
   `service_call`, `service_configuration`, `ingress_route`,
   `message_publish`, `message_consume`, `sql_reference`, or
-  `sql_schema_reference`, `storage_read`, or `storage_write`
+  `sql_schema_reference`, `storage_read`, `storage_write`, `cache_read`, or
+  `cache_write`
 - protocol-specific evidence such as `client`, `protocol`, `http_method`,
   `target_path`, `sql_operation`, `database_object_type`, `schema_state`, or
   `sql_source_kind`
@@ -152,6 +155,12 @@ the dependency language agents should expose to users.
   transfer location discovered from storage reads and writes. These are
   materialized as `external-resources` nodes so writers and readers in
   different sources can meet at the same graph target.
+- `cache_key` and `cache_store`: shared cache state discovered from cache
+  reads and writes. Cache keys are materialized as `external-resources` nodes
+  so writers and readers in different sources can meet at the same graph
+  target.
+- `scheduled_job`: a scheduled or recurring background entry point discovered
+  from code or config.
 - `sql_table`, `sql_view`, `sql_function`, `sql_trigger`,
   `stored_procedure`: SQL objects declared in SQL files or emitted from
   database metadata.
@@ -169,6 +178,7 @@ the dependency language agents should expose to users.
 - `DECLARES_SERVICE`: file to Kubernetes service.
 - `DECLARES_DEPLOYMENT`: file to Kubernetes deployment.
 - `DECLARES_INGRESS`: file to Kubernetes ingress.
+- `DECLARES_JOB`: file to scheduled job.
 - `DEPENDS_ON_PACKAGE`: package, project, build config, or manifest file to
   package target.
 - `DEPENDS_ON_PROJECT`: project to project target, such as a .NET
@@ -180,6 +190,8 @@ the dependency language agents should expose to users.
 - `DECLARES_SYMBOL`: file to exported function or class.
 - `CALLS_SYMBOL`: function to another discovered function or method target.
 - `RUNS_CONTAINER`: Kubernetes deployment to container.
+- `RUNS_JOB`: scheduled job to the function that job runs.
+- `SCHEDULES_JOB`: project or scheduling manifest to a scheduled job.
 - `SELECTS_DEPLOYMENT`: Kubernetes service to deployment selected by labels.
 - `ROUTES_TO_SERVICE`: Kubernetes ingress route to backend service.
 - `CALLS_HTTP`: file to route target inferred from `fetch`, `axios`,
@@ -196,6 +208,10 @@ the dependency language agents should expose to users.
   file, bucket, blob, or transfer client reads.
 - `WRITES_STORAGE_OBJECT`: file or function to a storage location inferred
   from file, bucket, blob, or transfer client writes.
+- `READS_CACHE_KEY`: file or function to a cache key inferred from cache client
+  reads.
+- `WRITES_CACHE_KEY`: file or function to a cache key inferred from cache
+  client writes, deletes, or invalidations.
 - `DEFINES`: SQL file to SQL object declaration.
 - `CALLS_SQL`: file, function, or SQL object to stored procedure target.
 - `READS_SQL_OBJECT`: file, function, or SQL object to table, view, function, or

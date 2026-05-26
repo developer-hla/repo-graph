@@ -12,6 +12,7 @@ Namespace Example.Legacy
       Dim request = WebRequest.Create("http://inventory-service/api/orders/" & id)
       Dim message = QueueClient.ReceiveAsync("legacy-orders")
       Dim report = File.ReadAllText("shared-artifacts/things/report.json")
+      Dim cached = cache.GetString("thing:latest")
       Dim commandName = BuildCommandName(id)
       Dim command As New SqlCommand("dbo.GetOrder")
       command.CommandType = CommandType.StoredProcedure

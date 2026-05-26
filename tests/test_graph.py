@@ -181,6 +181,43 @@ class GraphResolutionTests(unittest.TestCase):
         self.assertTrue(all(edge.resolved for edge in storage_edges))
         self.assertEqual({edge.to_entity_id for edge in storage_edges}, {storage_entities[0].entity_id})
 
+    def test_cache_resources_are_materialized_as_shared_external_nodes(self) -> None:
+        graph = Graph(scope_name="test", sources=[])
+        writer = graph.add_entity(Entity(entity_type="file", name="writer.py", source_name="writer"))
+        reader = graph.add_entity(Entity(entity_type="file", name="reader.ts", source_name="reader"))
+        graph.add_edge(
+            Edge(
+                from_entity_id=writer.entity_id,
+                from_name=writer.name,
+                from_type=writer.entity_type,
+                to_name="thing:latest",
+                to_type="cache_key",
+                edge_type="WRITES_CACHE_KEY",
+                source_name="writer",
+            )
+        )
+        graph.add_edge(
+            Edge(
+                from_entity_id=reader.entity_id,
+                from_name=reader.name,
+                from_type=reader.entity_type,
+                to_name="thing:latest",
+                to_type="cache_key",
+                edge_type="READS_CACHE_KEY",
+                source_name="reader",
+            )
+        )
+
+        graph.resolve_edges()
+        cache_entities = [entity for entity in graph.entities.values() if entity.entity_type == "cache_key"]
+        cache_edges = [edge for edge in graph.edges.values() if edge.to_type == "cache_key"]
+
+        self.assertEqual(len(cache_entities), 1)
+        self.assertEqual(cache_entities[0].source_name, "external-resources")
+        self.assertEqual(cache_entities[0].properties["resource_boundary"], "cache")
+        self.assertTrue(all(edge.resolved for edge in cache_edges))
+        self.assertEqual({edge.to_entity_id for edge in cache_edges}, {cache_entities[0].entity_id})
+
 
 if __name__ == "__main__":
     unittest.main()

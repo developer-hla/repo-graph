@@ -16,6 +16,7 @@ from repo_graph.extraction.fact_helpers import (
     unresolved_relationship_fact,
 )
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
+from repo_graph.extraction.scanners.cache_helpers import cache_operation, cache_relationship_fact, cache_target
 from repo_graph.extraction.scanners.interaction_helpers import (
     HTTP_METHODS,
     http_facts_for_target,
@@ -31,6 +32,7 @@ from repo_graph.extraction.scanners.messaging_helpers import (
     message_target,
 )
 from repo_graph.extraction.scanners.package_helpers import normalize_python_package_name
+from repo_graph.extraction.scanners.scheduled_job_helpers import scheduled_job_facts
 from repo_graph.extraction.scanners.sql.helpers import (
     source_context_properties,
     sql_call_facts,
@@ -329,6 +331,57 @@ def python_message_destination_kind_for_method(method: str) -> str:
     if method in {"basic_consume", "receive_message", "send_message"}:
         return "queue"
     return "topic"
+
+
+def python_cache_facts(
+    context: FileScanContext,
+    call: ast.Call,
+    from_entity: EntityFact | None = None,
+) -> list[RelationshipFact]:
+    operation = cache_operation(
+        python_attribute_name(call.func),
+        receiver=python_call_root_name(call.func) or python_call_receiver_name(call.func),
+    )
+    raw_target = python_string_arg(call, 0)
+    if not operation or not raw_target:
+        return []
+    return [
+        cache_relationship_fact(context, operation, cache_target(raw_target), call.lineno, "python_cache", from_entity)
+    ]
+
+
+def python_job_facts(
+    context: FileScanContext,
+    decorators: Sequence[ast.expr],
+    line_number: int,
+    handler: EntityFact | None,
+) -> FactBatch:
+    facts = FactBatch()
+    for decorator in decorators:
+        if not isinstance(decorator, ast.Call):
+            continue
+        callee = python_attribute_name(decorator.func)
+        if callee not in {"cron", "periodic_task", "scheduled"}:
+            continue
+        schedule = (
+            python_string_arg(decorator, 0)
+            or python_keyword_string(decorator, "schedule")
+            or python_keyword_string(decorator, "cron")
+        )
+        if not schedule:
+            continue
+        handler_name = handler.name if handler else "job"
+        facts.extend(
+            scheduled_job_facts(
+                context,
+                f"{handler_name} @ {schedule}",
+                schedule,
+                "python_job",
+                line_number,
+                handler,
+            )
+        )
+    return facts
 
 
 def python_storage_facts(

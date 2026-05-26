@@ -436,6 +436,10 @@ export async function publishThing(id: string) {
   await producer.send({ topic: "things.changed", messages: [{ value: id }] });
   await s3.putObject({ Bucket: "shared-artifacts", Key: "things/report.json", Body: id });
 }
+async function refreshThingCache() {
+  await redis.set("thing:latest", "42");
+}
+cron.schedule("0 * * * *", refreshThingCache);
 """,
                 encoding="utf-8",
             )
@@ -444,6 +448,7 @@ export async function publishThing(id: string) {
 def consume_thing() -> None:
     consumer.subscribe(["things.changed"])
     s3.get_object(Bucket="shared-artifacts", Key="things/report.json")
+    redis.get("thing:latest")
 """,
                 encoding="utf-8",
             )
@@ -484,6 +489,13 @@ sources:
             if edge["edge_type"] in {"READS_STORAGE_OBJECT", "WRITES_STORAGE_OBJECT"}
             and edge["from_type"] == "function"
         ]
+        cache_keys = [entity for entity in graph_data["entities"] if entity["entity_type"] == "cache_key"]
+        cache_edges = [
+            edge
+            for edge in graph_data["edges"]
+            if edge["edge_type"] in {"READS_CACHE_KEY", "WRITES_CACHE_KEY"} and edge["from_type"] == "function"
+        ]
+        scheduled_jobs = [entity for entity in graph_data["entities"] if entity["entity_type"] == "scheduled_job"]
 
         self.assertEqual(len(topics), 1)
         self.assertEqual(topics[0]["name"], "things.changed")
@@ -518,6 +530,30 @@ sources:
         )
         self.assertTrue(any(edge["parser"] == "javascript_storage" for edge in storage_edges))
         self.assertTrue(any(edge["parser"] == "python_storage" for edge in storage_edges))
+        self.assertEqual(len(cache_keys), 1)
+        self.assertEqual(cache_keys[0]["name"], "thing:latest")
+        self.assertEqual(cache_keys[0]["source_name"], "external-resources")
+        self.assertEqual({edge["to_entity_id"] for edge in cache_edges}, {cache_keys[0]["entity_id"]})
+        self.assertTrue(
+            all(
+                edge["resolved"]
+                and edge["properties"].get("target_boundary") == "cache"
+                and edge["properties"].get("dependency_scope") == "runtime"
+                for edge in cache_edges
+            )
+        )
+        self.assertTrue(any(edge["parser"] == "javascript_cache" for edge in cache_edges))
+        self.assertTrue(any(edge["parser"] == "python_cache" for edge in cache_edges))
+        self.assertEqual(len(scheduled_jobs), 1)
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "RUNS_JOB"
+                and edge["from_type"] == "scheduled_job"
+                and edge["to_type"] == "function"
+                and edge["to_name"] == "refreshThingCache"
+                for edge in graph_data["edges"]
+            )
+        )
 
     def test_dependency_filter_keeps_internal_like_unresolved_package_references(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
