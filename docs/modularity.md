@@ -83,6 +83,28 @@ The largest runtime files should be addressed in this order:
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
 
+## Next Split Candidates
+
+After the report, database, storage, API, and UI splits, the remaining runtime
+hotspots are narrower. The next candidates should be handled as separate
+slices:
+
+1. Scanner helper internals: split
+   `extraction/scanners/code/dotnet/helpers.py` by symbol extraction,
+   interaction extraction, project metadata, and Visual Basic compatibility.
+   This is the only remaining runtime source file well above 600 lines.
+2. Database reconciliation report: split `reports/database_reconciliation.py`
+   into classification, summary, grouping, and public builder modules. This is
+   just above the soft limit and should be handled before it grows.
+3. Source resolver: split `sources/_resolver.py` into local path resolution,
+   Git/GitHub sync, source status payloads, and shared source metadata helpers.
+   It is just below the soft limit but mixes provider and status concerns.
+4. Scanner shared helpers: review Python scanner helpers, interaction helpers,
+   deployment helpers, and SQL helpers for focused package-local boundaries.
+
+Large test files and generated documentation scripts can be split later, but
+runtime package boundaries should stay the priority.
+
 ## Reports Package Target
 
 Report builders are read-only projections over graph data. They should not
