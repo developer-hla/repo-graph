@@ -504,6 +504,13 @@ state that the known impact paths may be incomplete and inspect
 `/reports/unresolved` for the same source before making a high-confidence
 refactor claim.
 
+The same core blast-radius shape is available from graph JSON when Neo4j is not
+running:
+
+```bash
+repo-graph report blast-radius --graph .repo-graph/output/graph.json --entity-id <entity_id>
+```
+
 ## Interaction Report
 
 Use the grouped interaction report when the user wants the application or

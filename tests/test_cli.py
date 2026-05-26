@@ -176,6 +176,61 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["scope_name"], "test-scope")
         self.assertEqual(payload["items"][0]["classification"], "code_only_reference")
 
+    def test_blast_radius_report_command_prints_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            graph_path = Path(tmpdir) / "graph.json"
+            graph_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {"scope_name": "test-scope"},
+                        "entities": [
+                            {
+                                "entity_id": "route-1",
+                                "entity_type": "api_route",
+                                "name": "GET /orders",
+                                "source_name": "api-service",
+                                "properties": {},
+                            },
+                            {
+                                "entity_id": "table-1",
+                                "entity_type": "sql_table",
+                                "name": "dbo.Orders",
+                                "source_name": "database",
+                                "properties": {},
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "edge_id": "edge-1",
+                                "from_entity_id": "route-1",
+                                "from_name": "GET /orders",
+                                "from_type": "api_route",
+                                "edge_type": "READS_SQL_OBJECT",
+                                "to_entity_id": "table-1",
+                                "to_name": "dbo.Orders",
+                                "to_type": "sql_table",
+                                "source_name": "api-service",
+                                "resolved": True,
+                                "properties": {},
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            parser = build_parser()
+            args = parser.parse_args(["report", "blast-radius", "--graph", str(graph_path), "--entity-id", "table-1"])
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                result = args.func(args)
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual(payload["scope_name"], "test-scope")
+        self.assertEqual(payload["entity"]["name"], "dbo.Orders")
+        self.assertEqual(payload["items"][0]["path"]["steps"][0]["edge"]["edge_type"], "READS_SQL_OBJECT")
+
     def test_snapshot_status_command_reports_changed_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

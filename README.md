@@ -116,6 +116,7 @@ Install Pixi, then run the scanner against the built-in examples:
 pixi run repo-graph inspect --config config/local-example.yaml
 pixi run repo-graph build --config config/local-example.yaml --strict
 pixi run repo-graph report unresolved --graph .repo-graph/output/graph.json
+pixi run repo-graph report blast-radius --graph .repo-graph/output/graph.json --entity-id <entity_id>
 ```
 
 For the generated CLI command reference, see

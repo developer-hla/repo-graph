@@ -26,6 +26,7 @@ repo-graph [-h]
 | `repo-graph report unresolved` | Group unresolved graph edges. |
 | `repo-graph report interactions` | Group application and database interaction edges. |
 | `repo-graph report database-reconciliation` | Compare code and SQL evidence with current database metadata. |
+| `repo-graph report blast-radius` | Trace dependency paths around one graph entity. |
 | `repo-graph snapshot` | Inspect or write source snapshots. |
 | `repo-graph snapshot status` | Compare current sources to snapshots. |
 | `repo-graph snapshot write` | Write current source snapshots. |
@@ -146,7 +147,7 @@ repo-graph agent-instructions [-h] [--api-url API_URL] [--config CONFIG]
 Generate reports from a graph JSON export.
 
 ```text
-repo-graph report [-h] {unresolved,interactions,database-reconciliation} ...
+repo-graph report [-h] {unresolved,interactions,database-reconciliation,blast-radius} ...
 ```
 
 | Subcommand | Help |
@@ -154,6 +155,7 @@ repo-graph report [-h] {unresolved,interactions,database-reconciliation} ...
 | `unresolved` | Group unresolved graph edges. |
 | `interactions` | Group application and database interaction edges. |
 | `database-reconciliation` | Compare code and SQL evidence with current database metadata. |
+| `blast-radius` | Trace dependency paths around one graph entity. |
 
 ## `repo-graph report unresolved`
 
@@ -207,6 +209,26 @@ repo-graph report database-reconciliation [-h] --graph GRAPH [--source SOURCE]
 | `--database-source` | no |  | Only include current database metadata from this source. |
 | `--limit` | no | `50` | Maximum reconciliation groups to return. |
 | `--examples` | no | `3` | Examples to include per group. |
+
+## `repo-graph report blast-radius`
+
+Trace dependency paths around one graph entity.
+
+```text
+repo-graph report blast-radius [-h] --graph GRAPH --entity-id ENTITY_ID [--direction {in,out,both}]
+                                      [--edge-type EDGE_TYPE] [--profile {all,impact,structural}] [--depth DEPTH]
+                                      [--limit LIMIT]
+```
+
+| Option | Required | Default | Help |
+| --- | --- | --- | --- |
+| `--graph` | yes |  | Graph JSON file to report on. |
+| `--entity-id` | yes |  | Entity ID to use as the blast-radius root. |
+| `--direction` | no | `in` | Traversal direction from the root entity. |
+| `--edge-type` | no |  | Only traverse this edge type. |
+| `--profile` | no | `impact` | Edge profile to traverse when --edge-type is not set. |
+| `--depth` | no | `2` | Traversal depth, from 1 to 3. |
+| `--limit` | no | `100` | Maximum paths to return. |
 
 ## `repo-graph snapshot`
 

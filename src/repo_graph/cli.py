@@ -21,6 +21,7 @@ from repo_graph.extraction import (
 )
 from repo_graph.refresh import refresh_graph
 from repo_graph.reports import (
+    blast_radius_report_from_graph,
     database_reconciliation_report_from_graph,
     interactions_report_from_graph,
     unresolved_report_from_graph,
@@ -177,6 +178,21 @@ def cmd_report_database_reconciliation(args: argparse.Namespace) -> int:
         database_source=args.database_source,
         group_limit=args.limit,
         examples_per_group=args.examples,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_report_blast_radius(args: argparse.Namespace) -> int:
+    graph_data = load_graph_json(args.graph)
+    report = blast_radius_report_from_graph(
+        graph_data,
+        args.entity_id,
+        direction=args.direction,
+        edge_type=args.edge_type,
+        depth=args.depth,
+        limit=args.limit,
+        profile=args.profile,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
@@ -403,6 +419,28 @@ def build_parser() -> argparse.ArgumentParser:
     reconciliation_parser.add_argument("--limit", type=int, default=50, help="Maximum reconciliation groups to return.")
     reconciliation_parser.add_argument("--examples", type=int, default=3, help="Examples to include per group.")
     reconciliation_parser.set_defaults(func=cmd_report_database_reconciliation)
+    blast_radius_parser = report_subparsers.add_parser(
+        "blast-radius",
+        help="Trace dependency paths around one graph entity.",
+    )
+    blast_radius_parser.add_argument("--graph", type=Path, required=True, help="Graph JSON file to report on.")
+    blast_radius_parser.add_argument("--entity-id", required=True, help="Entity ID to use as the blast-radius root.")
+    blast_radius_parser.add_argument(
+        "--direction",
+        choices=["in", "out", "both"],
+        default="in",
+        help="Traversal direction from the root entity.",
+    )
+    blast_radius_parser.add_argument("--edge-type", dest="edge_type", help="Only traverse this edge type.")
+    blast_radius_parser.add_argument(
+        "--profile",
+        choices=["all", "impact", "structural"],
+        default="impact",
+        help="Edge profile to traverse when --edge-type is not set.",
+    )
+    blast_radius_parser.add_argument("--depth", type=int, default=2, help="Traversal depth, from 1 to 3.")
+    blast_radius_parser.add_argument("--limit", type=int, default=100, help="Maximum paths to return.")
+    blast_radius_parser.set_defaults(func=cmd_report_blast_radius)
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Inspect or write source snapshots.")
     snapshot_subparsers = snapshot_parser.add_subparsers(dest="snapshot", required=True)

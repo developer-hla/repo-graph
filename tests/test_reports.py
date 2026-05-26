@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 
 from repo_graph.reports import (
+    blast_radius_report_from_graph,
+    blast_radius_report_from_items,
     database_reconciliation_report_from_graph,
     database_reconciliation_report_from_items,
     interactions_report_from_graph,
@@ -13,6 +15,100 @@ from repo_graph.reports import (
 
 
 class ReportTests(unittest.TestCase):
+    def test_blast_radius_report_traces_endpoint_to_database_paths(self) -> None:
+        graph_data = {
+            "metadata": {"scope_name": "test-scope", "generated_at": "2026-05-14T00:00:00+00:00"},
+            "entities": [
+                entity("route-1", "api_route", "GET /orders", "api-service"),
+                entity("function-1", "function", "OrdersController.Get", "api-service"),
+                entity("table-1", "sql_table", "dbo.Orders", "database"),
+            ],
+            "edges": [
+                graph_edge(
+                    "edge-route-handler",
+                    "route-1",
+                    "GET /orders",
+                    "api_route",
+                    "HANDLES_ROUTE",
+                    "function-1",
+                    "OrdersController.Get",
+                    "function",
+                    "api-service",
+                ),
+                graph_edge(
+                    "edge-sql",
+                    "function-1",
+                    "OrdersController.Get",
+                    "function",
+                    "READS_SQL_OBJECT",
+                    "table-1",
+                    "dbo.Orders",
+                    "sql_table",
+                    "api-service",
+                    properties=sql_edge_properties("dbo.Orders", "FROM", "sql_table"),
+                ),
+            ],
+        }
+
+        report = blast_radius_report_from_graph(graph_data, "table-1", direction="in", depth=2)
+
+        self.assertEqual(report["scope_name"], "test-scope")
+        self.assertEqual(report["summary"]["path_count"], 2)
+        self.assertEqual(report["summary"]["max_observed_depth"], 2)
+        self.assertEqual(report["affected_sources"][0]["source_name"], "api-service")
+        route_item = next(item for item in report["items"] if item["neighbor"]["name"] == "GET /orders")
+        self.assertEqual(route_item["depth"], 2)
+        self.assertEqual(
+            [step["edge"]["edge_type"] for step in route_item["path"]["steps"]],
+            ["HANDLES_ROUTE", "READS_SQL_OBJECT"],
+        )
+
+    def test_blast_radius_report_profile_filters_edges(self) -> None:
+        graph_data = {
+            "entities": [
+                entity("repo-1", "repository", "repo", "repo"),
+                entity("file-1", "file", "src/app.py", "repo"),
+            ],
+            "edges": [
+                graph_edge(
+                    "edge-file",
+                    "repo-1",
+                    "repo",
+                    "repository",
+                    "CONTAINS_FILE",
+                    "file-1",
+                    "src/app.py",
+                    "file",
+                    "repo",
+                )
+            ],
+        }
+
+        impact_report = blast_radius_report_from_graph(graph_data, "repo-1", direction="out", profile="impact")
+        structural_report = blast_radius_report_from_graph(graph_data, "repo-1", direction="out", profile="structural")
+
+        self.assertEqual(impact_report["count"], 0)
+        self.assertEqual(structural_report["count"], 1)
+        self.assertEqual(structural_report["allowed_edge_types"], sorted(structural_report["allowed_edge_types"]))
+
+    def test_blast_radius_report_groups_api_payload_items(self) -> None:
+        root = {"entity_id": "table-1", "entity_type": "sql_table", "name": "dbo.Orders", "source_name": "database"}
+        items = [
+            {
+                "direction": "in",
+                "depth": 1,
+                "edge": {"edge_type": "READS_SQL_OBJECT", "source_name": "api-service"},
+                "neighbor": {"entity_id": "function-1", "entity_type": "function", "source_name": "api-service"},
+            }
+        ]
+
+        report = blast_radius_report_from_items(root, items, entity_id="table-1", edge_type="READS_SQL_OBJECT")
+
+        self.assertEqual(report["profile"], "impact")
+        self.assertIsNone(report["allowed_edge_types"])
+        self.assertEqual(report["affected_source_count"], 1)
+        self.assertEqual(report["path_groups"][0]["edge_type"], "READS_SQL_OBJECT")
+
     def test_interactions_report_groups_app_and_database_edges(self) -> None:
         graph_data = {
             "metadata": {"scope_name": "test-scope", "generated_at": "2026-05-14T00:00:00+00:00"},
@@ -301,6 +397,45 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["current_database_entity_count"], 2)
         self.assertEqual(report["items"][0]["classification"], "database_only_object")
         self.assertEqual(report["items"][0]["target_name"], "dbo.Orders")
+
+
+def entity(entity_id: str, entity_type: str, name: str, source_name: str) -> dict[str, object]:
+    return {
+        "entity_id": entity_id,
+        "entity_type": entity_type,
+        "name": name,
+        "source_name": source_name,
+        "properties": {},
+    }
+
+
+def graph_edge(
+    edge_id: str,
+    from_entity_id: str,
+    from_name: str,
+    from_type: str,
+    edge_type: str,
+    to_entity_id: str | None,
+    to_name: str,
+    to_type: str,
+    source_name: str,
+    properties: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        "edge_id": edge_id,
+        "from_entity_id": from_entity_id,
+        "from_name": from_name,
+        "from_type": from_type,
+        "edge_type": edge_type,
+        "to_entity_id": to_entity_id,
+        "to_name": to_name,
+        "to_type": to_type,
+        "source_name": source_name,
+        "resolved": to_entity_id is not None,
+        "confidence": "high",
+        "parser": "test_parser",
+        "properties": properties or {},
+    }
 
 
 def edge(

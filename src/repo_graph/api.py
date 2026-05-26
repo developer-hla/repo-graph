@@ -20,8 +20,11 @@ from repo_graph.extraction import MAX_FILE_BYTES, build_graph, snapshot_status
 from repo_graph.jobs import JobRegistry
 from repo_graph.refresh import refresh_graph
 from repo_graph.reports import (
+    blast_radius_profile_edge_types,
+    blast_radius_report_from_items,
     database_reconciliation_report_from_items,
     interactions_report_from_items,
+    normalize_blast_radius_profile,
     unresolved_report_from_items,
 )
 from repo_graph.sources import config_summary, inspect_sources, source_path, sync_sources_with_status
@@ -871,8 +874,8 @@ def impact_response(
     limit: int,
     profile: str = "impact",
 ) -> dict[str, Any]:
-    normalized_profile = normalize_impact_profile(profile)
-    allowed_edge_types = impact_profile_edge_types(normalized_profile, edge_type)
+    normalized_profile = normalize_blast_radius_profile(profile)
+    allowed_edge_types = blast_radius_profile_edge_types(normalized_profile, edge_type)
     entity = entity_response(settings, entity_id)
     items = get_entity_neighbors(
         settings.neo4j_settings(),
@@ -883,22 +886,19 @@ def impact_response(
         depth=depth,
         limit=limit,
     )
-    affected_sources = impact_sources(items)
-    return {
-        "entity": entity,
-        "entity_id": entity_id,
-        "direction": direction,
-        "depth": depth,
-        "edge_type": edge_type,
-        "profile": normalized_profile,
-        "allowed_edge_types": sorted(allowed_edge_types) if allowed_edge_types else None,
-        "items": items,
-        "count": len(items),
-        "affected_source_count": len(affected_sources),
-        "affected_sources": affected_sources,
-        "path_groups": impact_path_groups(items),
-        "coverage": coverage_warnings_for_entity_source(settings, entity),
-    }
+    report = blast_radius_report_from_items(
+        entity,
+        items,
+        entity_id=entity_id,
+        direction=direction,
+        edge_type=edge_type,
+        depth=depth,
+        limit=limit,
+        profile=normalized_profile,
+        allowed_edge_types=allowed_edge_types,
+    )
+    report["coverage"] = coverage_warnings_for_entity_source(settings, entity)
+    return report
 
 
 def coverage_warnings_for_entity_source(settings: RuntimeSettings, entity: Mapping[str, Any]) -> dict[str, Any]:
@@ -1005,86 +1005,6 @@ def coverage_severity_rank(severity: str) -> int:
     return {"warning": 0, "info": 1}.get(severity, 2)
 
 
-def normalize_impact_profile(value: str) -> str:
-    profile = value.strip().lower()
-    if profile not in IMPACT_PROFILES:
-        raise ValueError("Impact profile must be one of: all, impact, structural.")
-    return profile
-
-
-def impact_profile_edge_types(profile: str, edge_type: str | None) -> frozenset[str] | None:
-    if edge_type:
-        return None
-    return IMPACT_PROFILES[profile]
-
-
-def impact_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[str, dict[str, Any]] = {}
-    for item in items:
-        source_name = impact_source_name(item)
-        group = grouped.setdefault(
-            source_name,
-            {
-                "source_name": source_name,
-                "count": 0,
-                "min_depth": item.get("depth"),
-                "entity_types": set(),
-                "edge_types": set(),
-                "examples": [],
-            },
-        )
-        group["count"] += 1
-        group["min_depth"] = min_depth(group["min_depth"], item.get("depth"))
-        neighbor = item.get("neighbor", {})
-        edge = item.get("edge", {})
-        add_if_string(group["entity_types"], neighbor.get("entity_type") or neighbor.get("target_type"))
-        add_if_string(group["edge_types"], edge.get("edge_type"))
-        if len(group["examples"]) < 5:
-            group["examples"].append(item)
-
-    items_by_source = []
-    for group in grouped.values():
-        items_by_source.append(
-            {
-                "source_name": group["source_name"],
-                "count": group["count"],
-                "min_depth": group["min_depth"],
-                "entity_types": sorted(group["entity_types"]),
-                "edge_types": sorted(group["edge_types"]),
-                "examples": group["examples"],
-            }
-        )
-    items_by_source.sort(key=lambda item: (item["min_depth"] or 0, -item["count"], item["source_name"]))
-    return items_by_source
-
-
-def impact_path_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], dict[str, Any]] = {}
-    for item in items:
-        source_name = impact_source_name(item)
-        edge = item.get("edge", {})
-        edge_type = string_mapping_value(edge, "edge_type") or "unknown"
-        key = (source_name, edge_type)
-        group = grouped.setdefault(
-            key,
-            {
-                "source_name": source_name,
-                "edge_type": edge_type,
-                "count": 0,
-                "min_depth": item.get("depth"),
-                "examples": [],
-            },
-        )
-        group["count"] += 1
-        group["min_depth"] = min_depth(group["min_depth"], item.get("depth"))
-        if len(group["examples"]) < 5:
-            group["examples"].append(item)
-
-    result = list(grouped.values())
-    result.sort(key=lambda item: (item["min_depth"] or 0, -item["count"], item["source_name"], item["edge_type"]))
-    return result
-
-
 def relationship_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     for item in items:
@@ -1188,16 +1108,6 @@ def string_mapping_value(value: Any, key: str) -> str | None:
     if isinstance(item, str) and item:
         return item
     return None
-
-
-def impact_source_name(item: Mapping[str, Any]) -> str:
-    neighbor = item.get("neighbor", {})
-    if isinstance(neighbor, Mapping) and isinstance(neighbor.get("source_name"), str):
-        return neighbor["source_name"]
-    edge = item.get("edge", {})
-    if isinstance(edge, Mapping) and isinstance(edge.get("source_name"), str):
-        return edge["source_name"]
-    return "unknown"
 
 
 def min_depth(left: Any, right: Any) -> int | None:
