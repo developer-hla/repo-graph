@@ -8,15 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.fact_helpers import entity_fact, unresolved_relationship_fact
+from repo_graph.extraction.fact_helpers import entity_fact
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.scanners.common import string_value
-from repo_graph.extraction.scanners.interactions.http import http_target
-from repo_graph.extraction.scanners.interactions.naming import (
-    service_name_from_identifier,
-    service_name_from_url,
-    url_value,
-)
+from repo_graph.extraction.scanners.interactions.naming import url_value
+from repo_graph.extraction.scanners.interactions.services import service_configuration_fact
 from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import xml_local_name
 
 
@@ -134,19 +130,10 @@ def config_service_fact(
         return None
     key = config_value.properties.get("key")
     contract = config_value.properties.get("contract")
-    service_name = service_name_from_url(raw_target)
-    if service_name == "external-service":
-        service_name = service_name_from_identifier(key or contract)
-    target = http_target(raw_target, "GET")
-    target["dependency_scope"] = "configuration"
-    target["interaction_kind"] = "service_configuration"
-    target["service_name"] = service_name
-    return unresolved_relationship_fact(
+    return service_configuration_fact(
         config_value.reference,
-        service_name,
-        "CONFIGURES_SERVICE",
+        raw_target,
         context,
         parser,
-        to_type="service",
-        properties=target,
+        fallback_identifier=key or contract,
     )

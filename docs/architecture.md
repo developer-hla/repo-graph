@@ -327,6 +327,7 @@ repo_graph/
         imports.py
         naming.py
         routes.py
+        services.py
       manifest_helpers.py
       cache/
         __init__.py

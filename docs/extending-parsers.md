@@ -82,6 +82,9 @@ resolution, and export shape.
    use `repo_graph.extraction.interaction_properties.interaction_properties`
    or an equivalent wrapper so `target_boundary`, `dependency_scope`, and
    `interaction_kind` are present.
+   For service configuration edges, use
+   `repo_graph.extraction.scanners.interactions.services.service_configuration_fact`
+   so URL, env-var, and service-name evidence stays consistent across scanners.
 
 8. Register the extractor in the scanner registry.
    Add one `ScannerRegistration` with an explicit order, the extractor's

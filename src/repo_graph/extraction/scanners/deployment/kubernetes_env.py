@@ -5,16 +5,16 @@ from __future__ import annotations
 from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.fact_helpers import entity_fact, resolved_relationship_fact, unresolved_relationship_fact
+from repo_graph.extraction.fact_helpers import entity_fact, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.scanners.common import string_value
-from repo_graph.extraction.scanners.interactions.http import http_target
 from repo_graph.extraction.scanners.interactions.naming import (
     ENV_NAME_RE,
     service_name_from_env,
     service_name_from_url,
     url_value,
 )
+from repo_graph.extraction.scanners.interactions.services import service_configuration_fact
 
 
 def kubernetes_env_facts(
@@ -72,17 +72,11 @@ def kubernetes_env_service_fact(config_value: EntityFact, context: FileScanConte
         service_name = service_name_from_env(key)
     if not service_name or not isinstance(raw_target, str):
         return None
-    target = http_target(raw_target, "GET")
-    target["dependency_scope"] = "configuration"
-    target["interaction_kind"] = "service_configuration"
-    target["config_key"] = key
-    target["service_name"] = service_name
-    return unresolved_relationship_fact(
+    return service_configuration_fact(
         config_value.reference,
-        service_name,
-        "CONFIGURES_SERVICE",
+        raw_target,
         context,
         "kubernetes_env",
-        to_type="service",
-        properties=target,
+        service_name=service_name,
+        extra_properties={"config_key": key},
     )
