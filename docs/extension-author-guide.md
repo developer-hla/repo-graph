@@ -115,6 +115,7 @@ Use these public extraction APIs before hand-building facts:
 | Interaction fact builders | `docs/interaction-fact-builders.md` |
 | Low-level interaction evidence | `repo_graph.extraction.interaction_properties.interaction_properties` from owning builder modules only |
 | Service configuration facts | `repo_graph.extraction.scanners.interactions.services.service_configuration_fact` |
+| SQL interaction facts | `repo_graph.extraction.scanners.sql.facts` |
 | Fact contract validation | `repo_graph.extraction.fact_validation` |
 | Messaging facts | `repo_graph.extraction.scanners.messaging.facts` |
 | Storage facts | `repo_graph.extraction.scanners.storage.facts` |

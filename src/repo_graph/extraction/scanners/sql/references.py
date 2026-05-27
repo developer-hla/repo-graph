@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from typing import Any
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
-from repo_graph.extraction.scanners.sql.naming import normalize_sql_name
-from repo_graph.extraction.scanners.sql.properties import (
-    source_context_properties,
-    sql_interaction_properties,
-    sql_reference_properties,
+from repo_graph.extraction.scanners.sql.facts import (
+    sql_call_fact,
+    sql_object_read_fact,
+    sql_object_write_fact,
+    sql_schema_reference_fact,
 )
+from repo_graph.extraction.scanners.sql.naming import normalize_sql_name
 
 SQL_EXEC_RE = re.compile(r"\bEXEC(?:UTE)?\s+([\[\]\w.]+)", re.IGNORECASE)
 
@@ -72,17 +71,15 @@ def sql_reference_facts_for_line(
     line_number: int,
     from_entity: EntityFact | None = None,
 ) -> list[RelationshipFact]:
-    extra_properties = source_context_properties(from_entity)
     return [
-        *sql_call_facts(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
-        *sql_object_read_facts(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
-        *sql_object_write_facts(context, line, line_number, from_entity=from_entity, extra_properties=extra_properties),
+        *sql_call_facts(context, line, line_number, from_entity=from_entity),
+        *sql_object_read_facts(context, line, line_number, from_entity=from_entity),
+        *sql_object_write_facts(context, line, line_number, from_entity=from_entity),
         *sql_object_schema_reference_facts(
             context,
             line,
             line_number,
             from_entity=from_entity,
-            extra_properties=extra_properties,
         ),
     ]
 
@@ -92,24 +89,13 @@ def sql_call_facts(
     line: str,
     line_number: int,
     from_entity: EntityFact | None = None,
-    extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
-    source_ref = entity_reference(from_entity or context.file_entity)
     return [
-        unresolved_relationship_fact(
-            source_ref,
-            normalize_sql_name(match.group(1)),
-            "CALLS_SQL",
+        sql_call_fact(
             context,
-            "sql_reference",
-            to_type="stored_procedure",
-            line_number=line_number,
-            properties=sql_interaction_properties(
-                match.group(1),
-                "EXECUTE",
-                "stored_procedure",
-                extra_properties=sql_reference_properties(context, extra_properties),
-            ),
+            match.group(1),
+            line_number,
+            from_entity=from_entity,
         )
         for match in SQL_EXEC_RE.finditer(line)
     ]
@@ -120,24 +106,14 @@ def sql_object_read_facts(
     line: str,
     line_number: int,
     from_entity: EntityFact | None = None,
-    extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
-    source_ref = entity_reference(from_entity or context.file_entity)
     return [
-        unresolved_relationship_fact(
-            source_ref,
-            normalize_sql_name(match.group("target")),
-            "READS_SQL_OBJECT",
+        sql_object_read_fact(
             context,
-            "sql_reference",
-            to_type="sql_object",
-            line_number=line_number,
-            properties=sql_interaction_properties(
-                match.group("target"),
-                match.group("operation"),
-                "sql_object",
-                extra_properties=sql_reference_properties(context, extra_properties),
-            ),
+            match.group("target"),
+            match.group("operation"),
+            line_number,
+            from_entity=from_entity,
         )
         for match in SQL_READ_REF_RE.finditer(line)
     ]
@@ -148,24 +124,14 @@ def sql_object_write_facts(
     line: str,
     line_number: int,
     from_entity: EntityFact | None = None,
-    extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
-    source_ref = entity_reference(from_entity or context.file_entity)
     return [
-        unresolved_relationship_fact(
-            source_ref,
-            normalize_sql_name(match.group("target")),
-            "WRITES_SQL_OBJECT",
+        sql_object_write_fact(
             context,
-            "sql_reference",
-            to_type="sql_object",
-            line_number=line_number,
-            properties=sql_interaction_properties(
-                match.group("target"),
-                operation,
-                "sql_object",
-                extra_properties=sql_reference_properties(context, extra_properties),
-            ),
+            match.group("target"),
+            operation,
+            line_number,
+            from_entity=from_entity,
         )
         for operation, match in sql_write_reference_matches(line)
     ]
@@ -176,26 +142,13 @@ def sql_object_schema_reference_facts(
     line: str,
     line_number: int,
     from_entity: EntityFact | None = None,
-    extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
-    source_ref = entity_reference(from_entity or context.file_entity)
     return [
-        unresolved_relationship_fact(
-            source_ref,
-            normalize_sql_name(match.group("target")),
-            "REFERENCES_SQL_OBJECT",
+        sql_schema_reference_fact(
             context,
-            "sql_reference",
-            to_type="sql_object",
-            line_number=line_number,
-            properties=sql_interaction_properties(
-                match.group("target"),
-                "REFERENCES",
-                "sql_object",
-                dependency_scope="schema",
-                interaction_kind="sql_schema_reference",
-                extra_properties=sql_reference_properties(context, extra_properties),
-            ),
+            match.group("target"),
+            line_number,
+            from_entity=from_entity,
         )
         for match in SQL_SCHEMA_REF_RE.finditer(line)
         if sql_reference_target_is_valid(match.group("target"))

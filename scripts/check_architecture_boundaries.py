@@ -35,6 +35,7 @@ ALLOWED_SCANNER_HELPER_PATHS = frozenset(
     }
 )
 INTERACTION_PROPERTIES_MODULE = "repo_graph.extraction.interaction_properties"
+SQL_PROPERTIES_MODULE = "repo_graph.extraction.scanners.sql.properties"
 ALLOWED_INTERACTION_PROPERTY_IMPORT_PATHS = frozenset(
     {
         "src/repo_graph/extraction/interaction_properties.py",
@@ -44,6 +45,12 @@ ALLOWED_INTERACTION_PROPERTY_IMPORT_PATHS = frozenset(
         f"{SCANNER_PACKAGE_ROOT}/messaging/facts.py",
         f"{SCANNER_PACKAGE_ROOT}/sql/properties.py",
         f"{SCANNER_PACKAGE_ROOT}/storage/facts.py",
+    }
+)
+ALLOWED_SQL_INTERACTION_PROPERTY_IMPORT_PATHS = frozenset(
+    {
+        f"{SCANNER_PACKAGE_ROOT}/sql/facts.py",
+        f"{SCANNER_PACKAGE_ROOT}/sql/properties.py",
     }
 )
 
@@ -94,6 +101,7 @@ def scan_paths(paths: Iterable[Path]) -> Iterable[BoundaryFinding]:
     for path in paths:
         yield from scanner_helper_path_findings(path)
         yield from interaction_property_import_findings(path)
+        yield from sql_interaction_property_import_findings(path)
         yield from scan_file(path)
 
 
@@ -133,6 +141,21 @@ def interaction_property_import_findings(path: Path) -> Iterable[BoundaryFinding
             )
 
 
+def sql_interaction_property_import_findings(path: Path) -> Iterable[BoundaryFinding]:
+    relative_path = normalize_path(path)
+    if relative_path in ALLOWED_SQL_INTERACTION_PROPERTY_IMPORT_PATHS:
+        return
+
+    for reference in import_from_name_references(path):
+        if reference.module == SQL_PROPERTIES_MODULE and reference.name == "sql_interaction_properties":
+            yield BoundaryFinding(
+                relative_path,
+                reference.line_number,
+                reference.module,
+                "use repo_graph.extraction.scanners.sql.facts instead of importing sql_interaction_properties",
+            )
+
+
 def scan_file(path: Path) -> Iterable[BoundaryFinding]:
     relative_path = normalize_path(path)
     if scanner_internal_imports_allowed(relative_path):
@@ -168,6 +191,25 @@ def import_references(path: Path) -> Iterable[ImportReference]:
                 yield ImportReference(alias.name, node.lineno)
         elif isinstance(node, ast.ImportFrom) and node.module:
             yield ImportReference(node.module, node.lineno)
+
+
+@dataclass(frozen=True)
+class ImportFromNameReference:
+    module: str
+    name: str
+    line_number: int
+
+
+def import_from_name_references(path: Path) -> Iterable[ImportFromNameReference]:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, UnicodeDecodeError):
+        return
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            for alias in node.names:
+                yield ImportFromNameReference(node.module, alias.name, node.lineno)
 
 
 def normalize_path(path: Path | str) -> str:

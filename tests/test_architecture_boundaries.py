@@ -14,6 +14,7 @@ from scripts.check_architecture_boundaries import (
     interaction_property_import_findings,
     scan_file,
     scanner_helper_path_findings,
+    sql_interaction_property_import_findings,
 )
 
 
@@ -86,6 +87,24 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertEqual(finding, [])
 
+    def test_reports_sql_interaction_properties_import_outside_sql_fact_builder(self) -> None:
+        finding = self.scan_sql_interaction_property_import(
+            "src/repo_graph/extraction/scanners/code/dotnet/vb_interactions.py",
+            "from repo_graph.extraction.scanners.sql.properties import source_context_properties, "
+            "sql_interaction_properties\n",
+        )
+
+        self.assertEqual(len(finding), 1)
+        self.assertIn("sql.facts", finding[0].message)
+
+    def test_allows_sql_interaction_properties_import_in_sql_fact_builder(self) -> None:
+        finding = self.scan_sql_interaction_property_import(
+            "src/repo_graph/extraction/scanners/sql/facts.py",
+            "from repo_graph.extraction.scanners.sql.properties import sql_interaction_properties\n",
+        )
+
+        self.assertEqual(finding, [])
+
     def scan_source(self, relative_path: str, content: str) -> list[BoundaryFinding]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / relative_path
@@ -104,6 +123,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
             with working_directory(Path(directory)):
                 return list(interaction_property_import_findings(Path(relative_path)))
+
+    def scan_sql_interaction_property_import(self, relative_path: str, content: str) -> list[BoundaryFinding]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            with working_directory(Path(directory)):
+                return list(sql_interaction_property_import_findings(Path(relative_path)))
 
 
 @contextmanager

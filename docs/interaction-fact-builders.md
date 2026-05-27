@@ -38,7 +38,7 @@ Builders should also preserve known evidence such as:
 | HTTP and service calls | `CALLS_HTTP`, `CALLS_SERVICE` | `repo_graph.extraction.scanners.interactions.http` and `repo_graph.extraction.scanners.interactions.services` |
 | Service configuration | `CONFIGURES_SERVICE` | `repo_graph.extraction.scanners.interactions.services.service_configuration_fact` |
 | Deployment service routing | `ROUTES_TO_SERVICE` | `repo_graph.extraction.scanners.interactions.services.route_to_service_fact` |
-| SQL calls and object references | `CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, `REFERENCES_SQL_OBJECT` | `repo_graph.extraction.scanners.sql.references` and `repo_graph.extraction.scanners.sql.properties` |
+| SQL calls and object references | `CALLS_SQL`, `READS_SQL_OBJECT`, `WRITES_SQL_OBJECT`, `REFERENCES_SQL_OBJECT` | `repo_graph.extraction.scanners.sql.facts`; see `docs/sql-interaction-builders.md` |
 | Messaging | `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE` | `repo_graph.extraction.scanners.messaging.facts` |
 | Storage | `READS_STORAGE_OBJECT`, `WRITES_STORAGE_OBJECT` | `repo_graph.extraction.scanners.storage.facts` |
 | Cache | `READS_CACHE_KEY`, `WRITES_CACHE_KEY` | `repo_graph.extraction.scanners.cache.facts` |

@@ -9,6 +9,7 @@ from repo_graph.config import load_config
 from repo_graph.extraction import build_graph
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityReference, Evidence, FactBatch, RelationshipFact
+from repo_graph.reports import blast_radius_report_from_graph
 
 
 class InvalidInteractionExtractor:
@@ -227,6 +228,79 @@ sources:
                 and edge["properties"].get("dependency_scope") == "schema"
                 and edge["properties"].get("interaction_kind") == "sql_schema_reference"
                 and edge["properties"].get("schema_state") == "current_schema"
+                for edge in graph_data["edges"]
+            )
+        )
+
+    def test_build_graph_traces_endpoint_to_sql_table_blast_radius_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            api = root / "api-service"
+            database = root / "database-project"
+            api.mkdir()
+            database.mkdir()
+            (api / "app.ts").write_text(
+                """
+export function handler(req, res) {
+  const sql = 'EXEC dbo.load_thing';
+}
+router.get('/things/:id', handler);
+""",
+                encoding="utf-8",
+            )
+            (database / "schema.sql").write_text(
+                """
+CREATE TABLE dbo.things (id int)
+CREATE PROCEDURE dbo.load_thing AS
+SELECT * FROM dbo.things
+UPDATE dbo.things SET id = id
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: api-service
+    path: api-service
+  - type: local_path
+    name: database-project
+    path: database-project
+""",
+                encoding="utf-8",
+            )
+
+            graph = build_graph(load_config(config_path))
+            graph_data = graph.to_dict()
+
+        route = next(
+            entity
+            for entity in graph_data["entities"]
+            if entity["entity_type"] == "api_route" and entity["name"] == "GET /things/:id"
+        )
+        report = blast_radius_report_from_graph(graph_data, route["entity_id"], direction="out", depth=3)
+        edge_paths = {tuple(step["edge"]["edge_type"] for step in item["path"]["steps"]) for item in report["items"]}
+
+        self.assertIn(("HANDLES_ROUTE", "CALLS_SQL", "READS_SQL_OBJECT"), edge_paths)
+        self.assertTrue(
+            any(
+                edge["edge_type"] == "CALLS_SQL"
+                and edge["from_type"] == "function"
+                and edge["from_name"] == "handler"
+                and edge["to_name"] == "dbo.load_thing"
+                and edge["resolved"]
+                for edge in graph_data["edges"]
+            )
+        )
+        self.assertTrue(
+            any(
+                edge["edge_type"] in {"READS_SQL_OBJECT", "WRITES_SQL_OBJECT"}
+                and edge["from_type"] == "stored_procedure"
+                and edge["from_name"] == "dbo.load_thing"
+                and edge["to_name"] == "dbo.things"
+                and edge["resolved"]
                 for edge in graph_data["edges"]
             )
         )

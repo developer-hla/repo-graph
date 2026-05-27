@@ -7,12 +7,13 @@ from typing import Any
 from urllib.parse import urlparse
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
+from repo_graph.extraction.fact_helpers import entity_reference
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.scanners.interactions.http import http_facts_for_target, http_service_call_fact
 from repo_graph.extraction.scanners.interactions.naming import service_name_from_identifier, service_name_from_url
 from repo_graph.extraction.scanners.interactions.services import service_call_fact
-from repo_graph.extraction.scanners.sql.properties import source_context_properties, sql_interaction_properties
+from repo_graph.extraction.scanners.sql.facts import sql_call_fact
+from repo_graph.extraction.scanners.sql.properties import source_context_properties
 from repo_graph.extraction.scanners.sql.references import stored_procedure_target
 
 VB_CONFIG_SETTING_RE = re.compile(r"ConfigurationManager\.AppSettings\s*\(\s*\"([^\"]+)\"\s*\)", re.IGNORECASE)
@@ -120,27 +121,19 @@ def vb_sql_command_facts(
     targets = [match.group(1) for match in VB_COMMAND_TEXT_RE.finditer(line)]
     targets.extend(match.group(1) for match in VB_SQL_COMMAND_RE.finditer(line))
     facts: list[RelationshipFact] = []
-    source_ref = entity_reference(from_entity or context.file_entity)
-    extra_properties = source_context_properties(from_entity)
     for target in targets:
         normalized = stored_procedure_target(target)
         if not normalized:
             continue
         facts.append(
-            unresolved_relationship_fact(
-                source_ref,
-                normalized,
-                "CALLS_SQL",
+            sql_call_fact(
                 context,
+                target,
+                line_number,
                 "vb_sql_command",
-                to_type="stored_procedure",
-                line_number=line_number,
-                properties=sql_interaction_properties(
-                    target,
-                    "EXECUTE",
-                    "stored_procedure",
-                    extra_properties=extra_properties,
-                ),
+                from_entity=from_entity,
+                target_name=normalized,
+                include_reference_properties=False,
             )
         )
     return facts

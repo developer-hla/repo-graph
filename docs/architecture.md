@@ -413,6 +413,7 @@ repo_graph/
       sql/
         __init__.py
         definitions.py
+        facts.py
         files.py
         naming.py
         properties.py

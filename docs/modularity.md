@@ -169,6 +169,7 @@ repo_graph/extraction/scanners/
     __init__.py
     files.py
     definitions.py
+    facts.py
     references.py
     properties.py
     provenance.py
