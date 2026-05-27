@@ -85,6 +85,8 @@ The largest runtime files should be addressed in this order:
    constants, and SQL item normalization. Done.
 8. Source resolver: split models, path resolution, GitHub expansion, Git
    checkout, sync workflows, resolution workflows, and status payloads. Done.
+9. Scanner helper architecture: define the package-local helper split target
+   for Python, shared interactions, SQL, and deployment scanners. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -95,11 +97,94 @@ After the report, database, storage, API, and UI splits, the remaining runtime
 hotspots are narrower. The next candidates should be handled as separate
 slices:
 
-1. Scanner shared helpers: review Python scanner helpers, interaction helpers,
-   deployment helpers, and SQL helpers for focused package-local boundaries.
+1. Python scanner helpers: split `code/python/helpers.py` into package-local
+   modules for AST values, symbols, imports, routes, and interaction domains.
+2. Shared interaction helpers: split `interaction_helpers.py` into imports,
+   exports, routes, HTTP calls, and service/URL normalization.
+3. SQL scanner helpers: split `sql/helpers.py` into definitions, references,
+   naming, provenance, and interaction properties.
+4. Deployment helpers: split `deployment/helpers.py` into Kubernetes
+   resources, environment/config links, ingress, selectors, and value
+   normalization.
 
 Large test files and generated documentation scripts can be split later, but
 runtime package boundaries should stay the priority.
+
+## Scanner Helper Package Target
+
+Scanner helper modules should make extension points obvious. A scanner package
+can have detailed internals, but the package surface should be small and the
+owning scanner entry point should not need to import unrelated behavior.
+
+Rules:
+
+- Keep scanner entry points focused on file eligibility, parse orchestration,
+  and visitor/state wiring.
+- Put syntax or AST value extraction in one module per language or input
+  family.
+- Put symbol declaration and symbol call logic together.
+- Put route declaration and route handler linking together.
+- Put application interaction extraction in focused modules by domain when the
+  language scanner owns domain-specific parsing: HTTP, SQL, messaging, cache,
+  scheduled jobs, and storage.
+- Keep shared helpers semantic, not library-specific. For example, HTTP helper
+  modules can preserve `requests`, `fetch`, or `HttpClient` evidence, but the
+  emitted relationship should still express application-to-application
+  dependency facts.
+- Keep `helpers.py` facades only as compatibility surfaces. New code should
+  import from the focused module that owns the behavior when it is already
+  inside the same scanner package.
+
+Target implementation slices:
+
+```text
+repo_graph/extraction/scanners/
+  interaction_helpers.py
+  interactions/
+    __init__.py
+    imports.py
+    exports.py
+    routes.py
+    http.py
+    naming.py
+  sql/
+    __init__.py
+    files.py
+    helpers.py
+    definitions.py
+    references.py
+    properties.py
+    provenance.py
+    naming.py
+  deployment/
+    __init__.py
+    kubernetes.py
+    helpers.py
+    kubernetes_resources.py
+    kubernetes_env.py
+    kubernetes_ingress.py
+    kubernetes_selectors.py
+    kubernetes_values.py
+  code/
+    python/
+      __init__.py
+      scanner.py
+      helpers.py
+      ast_values.py
+      symbols.py
+      imports.py
+      routes.py
+      http.py
+      sql.py
+      messaging.py
+      cache.py
+      jobs.py
+      storage.py
+```
+
+Shared helper facades may remain while internal imports migrate. The target is
+not fewer files; the target is one obvious place to add a behavior without
+reading unrelated scanner domains.
 
 ## Sources Package Target
 

@@ -112,6 +112,18 @@ Output:
 Code scanners should be conservative with internal call facts. Emit a function
 call fact only when the target can reasonably map to a discovered symbol.
 
+Code scanner helper packages should be split by semantic ownership. The
+scanner entry point owns traversal and registration; package-local modules own
+syntax or AST values, symbols, routes, and interaction domains such as HTTP,
+SQL, messaging, cache, scheduled jobs, and storage. Facade modules named
+`helpers.py` may exist for compatibility, but new scanner internals should
+import from the focused module that owns the behavior.
+
+Shared scanner helpers should stay semantic. They may preserve library-specific
+evidence in properties, but helper boundaries should express graph concepts:
+imports, exports, routes, HTTP calls, SQL references, deployment resources,
+and service/resource naming.
+
 ### Manifest Scanner
 
 Examples: `package.json`, `pyproject.toml`, `.csproj`, `.sln`,
@@ -313,8 +325,18 @@ repo_graph/
       code/
         python/
           __init__.py
+          ast_values.py
+          cache.py
+          http.py
+          imports.py
+          jobs.py
+          messaging.py
+          routes.py
           scanner.py
           helpers.py
+          sql.py
+          storage.py
+          symbols.py
         dotnet/
           __init__.py
           scanner.py
@@ -334,6 +356,11 @@ repo_graph/
         __init__.py
         kubernetes.py
         helpers.py
+        kubernetes_env.py
+        kubernetes_ingress.py
+        kubernetes_resources.py
+        kubernetes_selectors.py
+        kubernetes_values.py
       manifests/
         __init__.py
         package_json.py
@@ -341,8 +368,13 @@ repo_graph/
         dotnet_project.py
       sql/
         __init__.py
+        definitions.py
         files.py
         helpers.py
+        naming.py
+        properties.py
+        provenance.py
+        references.py
   graph/
     __init__.py
     builder.py
