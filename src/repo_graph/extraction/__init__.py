@@ -20,6 +20,7 @@ __all__ = [
     "EntityReference",
     "Evidence",
     "FactBatch",
+    "FactValidationIssue",
     "FileExtractor",
     "FileScanContext",
     "ProjectInfo",
@@ -32,6 +33,9 @@ __all__ = [
     "build_graph",
     "scanner_spec",
     "snapshot_status",
+    "validate_fact_batch",
+    "validate_interaction_relationship_fact",
+    "validate_relationship_facts",
     "write_snapshots",
     "write_source_graphs",
 ]
@@ -62,6 +66,22 @@ def __getattr__(name: str) -> object:
         from repo_graph.extraction.contracts import scanner_spec
 
         return scanner_spec
+    if name == "FactValidationIssue":
+        from repo_graph.extraction.fact_validation import FactValidationIssue
+
+        return FactValidationIssue
+    if name == "validate_fact_batch":
+        from repo_graph.extraction.fact_validation import validate_fact_batch
+
+        return validate_fact_batch
+    if name == "validate_interaction_relationship_fact":
+        from repo_graph.extraction.fact_validation import validate_interaction_relationship_fact
+
+        return validate_interaction_relationship_fact
+    if name == "validate_relationship_facts":
+        from repo_graph.extraction.fact_validation import validate_relationship_facts
+
+        return validate_relationship_facts
     if name == "CachedBuildResult":
         from repo_graph.extraction.cached_builds import CachedBuildResult
 

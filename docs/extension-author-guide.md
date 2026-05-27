@@ -113,6 +113,7 @@ Use these public extraction APIs before hand-building facts:
 | Unresolved target relationships | `unresolved_relationship_fact` |
 | Source evidence and local scanner issues | `source_evidence`, `scan_issue` |
 | Interaction edge evidence | `repo_graph.extraction.interaction_properties.interaction_properties` |
+| Fact contract validation | `repo_graph.extraction.fact_validation` |
 | Messaging facts | `repo_graph.extraction.scanners.messaging.facts` |
 | Storage facts | `repo_graph.extraction.scanners.storage.facts` |
 | Cache facts | `repo_graph.extraction.scanners.cache.facts` |

@@ -46,6 +46,8 @@ Target module responsibilities:
 - `contracts.py`: public file-scanner protocol and scan context types.
 - `facts.py`: typed scanner fact contracts, evidence, entity references, and
   local scan issues.
+- `fact_validation.py`: deterministic validation for scanner-emitted fact
+  contracts.
 - `fact_helpers.py`: small helper functions for common typed fact patterns,
   such as package declarations and package dependency relationships.
 - `interaction_properties.py`: common structured evidence for application,
@@ -106,6 +108,10 @@ Use `repo_graph.extraction.fact_helpers` for common fact patterns and
 `repo_graph.extraction.interaction_properties` for structured interaction
 evidence. Scanner helper modules may create `EntityFact`, `RelationshipFact`,
 and `FactBatch` values when a shared helper does not fit.
+Use `repo_graph.extraction.fact_validation` to validate emitted facts in tests
+or strict workflows before graph construction. Interaction edge facts must
+include `target_boundary`, `dependency_scope`, and `interaction_kind` with
+known vocabulary values.
 
 ## Refactor Path
 
