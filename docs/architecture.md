@@ -276,7 +276,14 @@ repo_graph/
   __init__.py
   config/
     __init__.py
+    _database.py
+    _defaults.py
+    _github.py
     _loader.py
+    _models.py
+    _rules.py
+    _sources.py
+    _values.py
   database/
     __init__.py
     _adapters.py

@@ -121,6 +121,9 @@ The largest runtime files should be addressed in this order:
 25. Vocabulary: split entity, edge, interaction, parser, impact, unresolved,
     and coverage warning vocabulary behind the stable `repo_graph.vocabulary`
     public surface. Done.
+26. Config loader: split defaults, models, scalar validation, source dispatch,
+    GitHub org source parsing, database source parsing, and scan rule parsing
+    behind the stable `repo_graph.config` public surface. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.

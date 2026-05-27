@@ -316,6 +316,7 @@ docs/spec.md            MVP planning spec
 docs/architecture.md    Target architecture and layer boundaries
 docs/spec-driven-development.md Spec-first workflow for meaningful changes
 docs/modularity.md     File-shape and package-boundary rules
+docs/config.md          Config package contract
 docs/extraction.md      Extraction layer contract and refactor path
 docs/interaction-fact-builders.md Canonical interaction fact builder APIs
 docs/sql-interaction-builders.md SQL-specific interaction builder contract
