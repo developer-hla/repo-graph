@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from scripts.check_architecture_boundaries import BoundaryFinding, scan_file
+from scripts.check_architecture_boundaries import BoundaryFinding, scan_file, scanner_helper_path_findings
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):
@@ -47,6 +47,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertEqual(len(finding), 1)
         self.assertEqual(finding[0].module, "repo_graph.extraction.scanners.manifests.pyproject")
 
+    def test_reports_new_scanner_helper_facade_path(self) -> None:
+        finding = self.scan_helper_path("src/repo_graph/extraction/scanners/cache_helpers.py")
+
+        self.assertEqual(len(finding), 1)
+        self.assertIn("focused scanner package module", finding[0].message)
+
+    def test_allows_existing_shared_helper_path(self) -> None:
+        finding = self.scan_helper_path("src/repo_graph/extraction/scanners/package_helpers.py")
+
+        self.assertEqual(finding, [])
+
+    def test_reports_package_helpers_file_without_allowlist(self) -> None:
+        finding = self.scan_helper_path("src/repo_graph/extraction/scanners/code/python/helpers.py")
+
+        self.assertEqual(len(finding), 1)
+        self.assertEqual(finding[0].module, "src/repo_graph/extraction/scanners/code/python/helpers.py")
+
     def scan_source(self, relative_path: str, content: str) -> list[BoundaryFinding]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / relative_path
@@ -54,6 +71,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
             with working_directory(Path(directory)):
                 return list(scan_file(Path(relative_path)))
+
+    def scan_helper_path(self, relative_path: str) -> list[BoundaryFinding]:
+        return list(scanner_helper_path_findings(Path(relative_path)))
 
 
 @contextmanager

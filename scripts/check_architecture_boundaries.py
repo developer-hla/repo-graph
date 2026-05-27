@@ -26,6 +26,15 @@ PUBLIC_SCANNER_PACKAGES = (
 )
 
 SCANNER_PACKAGE_ROOT = "src/repo_graph/extraction/scanners"
+ALLOWED_SCANNER_HELPER_PATHS = frozenset(
+    {
+        f"{SCANNER_PACKAGE_ROOT}/code/javascript/helpers.py",
+        f"{SCANNER_PACKAGE_ROOT}/manifest_dotnet_helpers.py",
+        f"{SCANNER_PACKAGE_ROOT}/manifest_helpers.py",
+        f"{SCANNER_PACKAGE_ROOT}/package_helpers.py",
+        f"{SCANNER_PACKAGE_ROOT}/symbol_helpers.py",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -44,7 +53,7 @@ class BoundaryFinding:
 
 def main() -> int:
     findings = sorted(
-        scan_files(python_files(Path("."), SCAN_ROOTS)),
+        scan_paths(python_files(Path("."), SCAN_ROOTS)),
         key=lambda finding: (finding.path, finding.line_number, finding.module),
     )
     if not findings:
@@ -70,9 +79,31 @@ def python_files(root: Path, scan_roots: Iterable[Path]) -> Iterable[Path]:
                 yield child
 
 
-def scan_files(paths: Iterable[Path]) -> Iterable[BoundaryFinding]:
+def scan_paths(paths: Iterable[Path]) -> Iterable[BoundaryFinding]:
     for path in paths:
+        yield from scanner_helper_path_findings(path)
         yield from scan_file(path)
+
+
+def scanner_helper_path_findings(path: Path) -> Iterable[BoundaryFinding]:
+    relative_path = normalize_path(path)
+    if not scanner_helper_module_path(relative_path):
+        return
+    if relative_path in ALLOWED_SCANNER_HELPER_PATHS:
+        return
+    yield BoundaryFinding(
+        relative_path,
+        1,
+        relative_path,
+        "use a focused scanner package module instead of adding a new scanner helper facade",
+    )
+
+
+def scanner_helper_module_path(relative_path: str) -> bool:
+    if not relative_path.startswith(f"{SCANNER_PACKAGE_ROOT}/"):
+        return False
+    name = Path(relative_path).name
+    return name == "helpers.py" or name.endswith("_helpers.py")
 
 
 def scan_file(path: Path) -> Iterable[BoundaryFinding]:

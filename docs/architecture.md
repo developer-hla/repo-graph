@@ -118,6 +118,8 @@ syntax or AST values, symbols, routes, and interaction domains such as HTTP,
 SQL, messaging, cache, scheduled jobs, and storage. Facade modules named
 `helpers.py` should exist only when there is an explicit migration reason; new
 scanner internals should import from the focused module that owns the behavior.
+`pixi run architecture-boundary-check` fails when new scanner helper facades
+are added outside the allowlisted shared helpers.
 
 Shared scanner helpers should stay semantic. They may preserve library-specific
 evidence in properties, but helper boundaries should express graph concepts:
