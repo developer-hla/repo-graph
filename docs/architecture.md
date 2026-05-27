@@ -360,7 +360,6 @@ repo_graph/
       deployment/
         __init__.py
         kubernetes.py
-        helpers.py
         kubernetes_env.py
         kubernetes_ingress.py
         kubernetes_resources.py

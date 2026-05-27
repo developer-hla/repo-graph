@@ -93,19 +93,17 @@ The largest runtime files should be addressed in this order:
     service/URL naming helpers. Done.
 12. SQL scanner helpers: split definitions, references, naming, provenance,
     and interaction properties. Done.
+13. Deployment helpers: split Kubernetes resources, environment/config links,
+    ingress, selectors, and value normalization. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
 
 ## Next Split Candidates
 
-After the report, database, storage, API, and UI splits, the remaining runtime
-hotspots are narrower. The next candidates should be handled as separate
-slices:
-
-1. Deployment helpers: split `deployment/helpers.py` into Kubernetes
-   resources, environment/config links, ingress, selectors, and value
-   normalization.
+After the report, database, storage, API, UI, and scanner helper splits, the
+remaining runtime hotspots are narrower. The next candidates should come from a
+fresh size and boundary report.
 
 Large test files and generated documentation scripts can be split later, but
 runtime package boundaries should stay the priority.
@@ -157,7 +155,6 @@ repo_graph/extraction/scanners/
   deployment/
     __init__.py
     kubernetes.py
-    helpers.py
     kubernetes_resources.py
     kubernetes_env.py
     kubernetes_ingress.py
