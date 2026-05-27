@@ -8,16 +8,16 @@ from pathlib import Path
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import scan_issue
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.code.python.helpers import (
+from repo_graph.extraction.scanners.code.python.cache import python_cache_facts
+from repo_graph.extraction.scanners.code.python.http import python_http_call_facts
+from repo_graph.extraction.scanners.code.python.imports import python_import_fact
+from repo_graph.extraction.scanners.code.python.jobs import python_job_facts
+from repo_graph.extraction.scanners.code.python.messaging import python_message_facts
+from repo_graph.extraction.scanners.code.python.routes import python_route_facts
+from repo_graph.extraction.scanners.code.python.sql import python_sql_call_facts
+from repo_graph.extraction.scanners.code.python.storage import python_storage_facts
+from repo_graph.extraction.scanners.code.python.symbols import (
     PythonCallableIndex,
-    python_cache_facts,
-    python_http_call_facts,
-    python_import_fact,
-    python_job_facts,
-    python_message_facts,
-    python_route_facts,
-    python_sql_call_facts,
-    python_storage_facts,
     python_symbol_call_facts,
     python_symbol_facts,
 )

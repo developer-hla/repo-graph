@@ -16,11 +16,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
     def test_reports_scanner_internal_import_outside_scanner_package(self) -> None:
         finding = self.scan_source(
             "src/repo_graph/api.py",
-            "from repo_graph.extraction.scanners.code.python.helpers import python_import_fact\n",
+            "from repo_graph.extraction.scanners.code.python.imports import python_import_fact\n",
         )
 
         self.assertEqual(len(finding), 1)
-        self.assertEqual(finding[0].module, "repo_graph.extraction.scanners.code.python.helpers")
+        self.assertEqual(finding[0].module, "repo_graph.extraction.scanners.code.python.imports")
 
     def test_allows_public_scanner_package_import_outside_scanner_package(self) -> None:
         finding = self.scan_source(
@@ -33,7 +33,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
     def test_allows_scanner_package_internal_import(self) -> None:
         finding = self.scan_source(
             "src/repo_graph/extraction/scanners/code/python/scanner.py",
-            "from repo_graph.extraction.scanners.code.python.helpers import python_import_fact\n",
+            "from repo_graph.extraction.scanners.code.python.imports import python_import_fact\n",
         )
 
         self.assertEqual(finding, [])

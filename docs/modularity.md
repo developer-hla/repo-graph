@@ -87,6 +87,8 @@ The largest runtime files should be addressed in this order:
    checkout, sync workflows, resolution workflows, and status payloads. Done.
 9. Scanner helper architecture: define the package-local helper split target
    for Python, shared interactions, SQL, and deployment scanners. Done.
+10. Python scanner helpers: split AST values, symbols, imports, routes, HTTP,
+    SQL, messaging, cache, scheduled jobs, and storage. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -97,13 +99,11 @@ After the report, database, storage, API, and UI splits, the remaining runtime
 hotspots are narrower. The next candidates should be handled as separate
 slices:
 
-1. Python scanner helpers: split `code/python/helpers.py` into package-local
-   modules for AST values, symbols, imports, routes, and interaction domains.
-2. Shared interaction helpers: split `interaction_helpers.py` into imports,
+1. Shared interaction helpers: split `interaction_helpers.py` into imports,
    exports, routes, HTTP calls, and service/URL normalization.
-3. SQL scanner helpers: split `sql/helpers.py` into definitions, references,
+2. SQL scanner helpers: split `sql/helpers.py` into definitions, references,
    naming, provenance, and interaction properties.
-4. Deployment helpers: split `deployment/helpers.py` into Kubernetes
+3. Deployment helpers: split `deployment/helpers.py` into Kubernetes
    resources, environment/config links, ingress, selectors, and value
    normalization.
 
@@ -131,9 +131,9 @@ Rules:
   modules can preserve `requests`, `fetch`, or `HttpClient` evidence, but the
   emitted relationship should still express application-to-application
   dependency facts.
-- Keep `helpers.py` facades only as compatibility surfaces. New code should
-  import from the focused module that owns the behavior when it is already
-  inside the same scanner package.
+- Use `helpers.py` facades only when there is an explicit migration reason.
+  New scanner internals should import from the focused module that owns the
+  behavior.
 
 Target implementation slices:
 
@@ -169,7 +169,6 @@ repo_graph/extraction/scanners/
     python/
       __init__.py
       scanner.py
-      helpers.py
       ast_values.py
       symbols.py
       imports.py
@@ -182,9 +181,9 @@ repo_graph/extraction/scanners/
       storage.py
 ```
 
-Shared helper facades may remain while internal imports migrate. The target is
-not fewer files; the target is one obvious place to add a behavior without
-reading unrelated scanner domains.
+Shared helper facades may remain only when an existing public surface needs a
+temporary bridge. The target is not fewer files; the target is one obvious
+place to add a behavior without reading unrelated scanner domains.
 
 ## Sources Package Target
 

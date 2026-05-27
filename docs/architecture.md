@@ -116,8 +116,8 @@ Code scanner helper packages should be split by semantic ownership. The
 scanner entry point owns traversal and registration; package-local modules own
 syntax or AST values, symbols, routes, and interaction domains such as HTTP,
 SQL, messaging, cache, scheduled jobs, and storage. Facade modules named
-`helpers.py` may exist for compatibility, but new scanner internals should
-import from the focused module that owns the behavior.
+`helpers.py` should exist only when there is an explicit migration reason; new
+scanner internals should import from the focused module that owns the behavior.
 
 Shared scanner helpers should stay semantic. They may preserve library-specific
 evidence in properties, but helper boundaries should express graph concepts:
@@ -333,7 +333,6 @@ repo_graph/
           messaging.py
           routes.py
           scanner.py
-          helpers.py
           sql.py
           storage.py
           symbols.py
