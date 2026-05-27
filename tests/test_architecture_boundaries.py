@@ -11,6 +11,7 @@ from pathlib import Path
 
 from scripts.check_architecture_boundaries import (
     BoundaryFinding,
+    database_metadata_edge_import_findings,
     interaction_property_import_findings,
     scan_file,
     scanner_helper_path_findings,
@@ -105,6 +106,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertEqual(finding, [])
 
+    def test_reports_raw_database_metadata_edge_import_outside_metadata_builder(self) -> None:
+        finding = self.scan_database_metadata_edge_import(
+            "src/repo_graph/database/_sqlserver_adapter.py",
+            "from repo_graph.database._metadata_edges import database_metadata_edge\n",
+        )
+
+        self.assertEqual(len(finding), 1)
+        self.assertIn("semantic database metadata edge builder", finding[0].message)
+
+    def test_allows_database_metadata_semantic_builder_imports(self) -> None:
+        finding = self.scan_database_metadata_edge_import(
+            "src/repo_graph/database/_sqlserver_adapter.py",
+            "from repo_graph.database._metadata_edges import database_foreign_key_metadata_edge\n",
+        )
+
+        self.assertEqual(finding, [])
+
     def scan_source(self, relative_path: str, content: str) -> list[BoundaryFinding]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / relative_path
@@ -131,6 +149,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
             with working_directory(Path(directory)):
                 return list(sql_interaction_property_import_findings(Path(relative_path)))
+
+    def scan_database_metadata_edge_import(self, relative_path: str, content: str) -> list[BoundaryFinding]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            with working_directory(Path(directory)):
+                return list(database_metadata_edge_import_findings(Path(relative_path)))
 
 
 @contextmanager

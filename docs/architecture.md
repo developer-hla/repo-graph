@@ -284,6 +284,7 @@ repo_graph/
     _connectors.py
     _constants.py
     _metadata.py
+    _metadata_edges.py
     _models.py
     _naming.py
     _postgres_adapter.py

@@ -319,6 +319,7 @@ docs/modularity.md     File-shape and package-boundary rules
 docs/extraction.md      Extraction layer contract and refactor path
 docs/interaction-fact-builders.md Canonical interaction fact builder APIs
 docs/sql-interaction-builders.md SQL-specific interaction builder contract
+docs/database-metadata-builders.md Database metadata relationship builder contract
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
 docs/extension-author-guide.md One obvious extension path for contributors

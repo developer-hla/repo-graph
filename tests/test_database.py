@@ -29,7 +29,9 @@ from repo_graph.database import (
     scan_sqlserver_source,
     supported_database_engines,
 )
-from repo_graph.extraction.facts import RelationshipFact
+from repo_graph.database._metadata_edges import database_foreign_key_metadata_edge
+from repo_graph.database._models import EntityMatch
+from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.graph import Graph, add_facts_to_graph
 
 
@@ -355,6 +357,39 @@ class DatabaseMetadataGraphTests(unittest.TestCase):
         self.assertIsNone(edge.to_entity_id)
         self.assertEqual(edge.to_name, "dbo.Customers")
         self.assertEqual(edge.to_type, "sql_table")
+
+    def test_database_metadata_builder_preserves_ambiguous_resolution_evidence(self) -> None:
+        source_entity = EntityFact(entity_type="sql_table", name="dbo.Orders", source_name="current-db")
+        table_candidate = EntityFact(entity_type="sql_table", name="dbo.Customers", source_name="current-db")
+        view_candidate = EntityFact(entity_type="sql_view", name="dbo.Customers", source_name="current-db")
+
+        edge = database_foreign_key_metadata_edge(
+            source_entity=source_entity,
+            target_match=EntityMatch(candidates=(table_candidate, view_candidate)),
+            target_name="dbo.Customers",
+            source_name="current-db",
+            metadata_source="sys.foreign_keys",
+            identity_key="foreign_key|dbo.Orders|dbo.Customers|FK_Orders_Customers",
+            database_engine="sqlserver",
+            parser=SQLSERVER_METADATA_PARSER,
+            constraint_name="FK_Orders_Customers",
+        )
+
+        self.assertFalse(edge.resolved)
+        self.assertEqual(edge.edge_type, "REFERENCES_SQL_OBJECT")
+        self.assertEqual(edge.to_type, "sql_table")
+        self.assertEqual(edge.properties["target_boundary"], "database")
+        self.assertEqual(edge.properties["dependency_scope"], "schema")
+        self.assertEqual(edge.properties["interaction_kind"], "sql_schema_reference")
+        self.assertEqual(edge.properties["schema_state"], CURRENT_DATABASE_SCHEMA_STATE)
+        self.assertEqual(edge.properties["database_engine"], "sqlserver")
+        self.assertEqual(edge.properties["metadata_source"], "sys.foreign_keys")
+        self.assertEqual(edge.properties["database_object_type"], "sql_object")
+        self.assertEqual(edge.properties["resolution_status"], "ambiguous")
+        self.assertEqual(
+            {candidate["entity_type"] for candidate in edge.properties["resolution_candidates"]},
+            {"sql_table", "sql_view"},
+        )
 
     def test_ambiguous_dependency_target_stays_unresolved_with_candidates(self) -> None:
         facts = scan_sqlserver_metadata(

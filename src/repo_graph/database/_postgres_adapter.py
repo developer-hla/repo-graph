@@ -9,7 +9,6 @@ from repo_graph.database._adapter_common import (
     add_entity,
     append_edge_result,
     build_entity_index,
-    database_metadata_edge,
     database_object_entity,
     database_trigger_entity,
     find_entity,
@@ -17,6 +16,11 @@ from repo_graph.database._adapter_common import (
     trigger_edge,
 )
 from repo_graph.database._constants import EXECUTE_DEPENDENCY_TYPES, POSTGRES_ENGINE, POSTGRES_METADATA_PARSER
+from repo_graph.database._metadata_edges import (
+    database_dependency_metadata_edge,
+    database_dependency_target_type,
+    database_foreign_key_metadata_edge,
+)
 from repo_graph.database._models import (
     DatabaseScanResult,
     EdgeBuildResult,
@@ -203,22 +207,16 @@ def postgres_foreign_key_edge(
         )
 
     return EdgeBuildResult(
-        edge=database_metadata_edge(
+        edge=database_foreign_key_metadata_edge(
             source_entity=source_match.entity,
             target_match=find_entity(entity_index, "sql_table", target_full_name),
             target_name=target_full_name,
-            target_type="sql_table",
-            edge_type="REFERENCES_SQL_OBJECT",
             source_name=source_name,
-            operation="FOREIGN_KEY",
-            database_object_type="sql_object",
-            dependency_scope="schema",
-            interaction_kind="sql_schema_reference",
             metadata_source="pg_constraint",
             identity_key=metadata_identity_key("foreign_key", source_full_name, target_full_name, row.name),
             database_engine=POSTGRES_ENGINE,
             parser=POSTGRES_METADATA_PARSER,
-            extra_properties={"constraint_name": row.name},
+            constraint_name=row.name,
         )
     )
 
@@ -245,22 +243,15 @@ def postgres_dependency_edge(
         )
 
     dependency_type = normalize_metadata_value(row.dependency_type)
-    edge_type = "CALLS_SQL" if dependency_type in EXECUTE_DEPENDENCY_TYPES else "REFERENCES_SQL_OBJECT"
-    target_type = graph_entity_type(row.to_type, "PostgreSQL")
-    if edge_type == "CALLS_SQL" and target_type == "sql_object":
-        target_type = "stored_procedure"
+    is_execute_dependency = dependency_type in EXECUTE_DEPENDENCY_TYPES
+    target_type = database_dependency_target_type(graph_entity_type(row.to_type, "PostgreSQL"), is_execute_dependency)
     return EdgeBuildResult(
-        edge=database_metadata_edge(
+        edge=database_dependency_metadata_edge(
             source_entity=source_match.entity,
             target_match=find_entity(entity_index, target_type, target_full_name),
             target_name=target_full_name,
             target_type=target_type,
-            edge_type=edge_type,
             source_name=source_name,
-            operation="EXECUTE" if edge_type == "CALLS_SQL" else "OBJECT_DEPENDENCY",
-            database_object_type=target_type,
-            dependency_scope="runtime" if edge_type == "CALLS_SQL" else "schema",
-            interaction_kind="sql_reference" if edge_type == "CALLS_SQL" else "sql_schema_reference",
             metadata_source="pg_depend",
             identity_key=metadata_identity_key(
                 "dependency",
@@ -271,6 +262,8 @@ def postgres_dependency_edge(
             ),
             database_engine=POSTGRES_ENGINE,
             parser=POSTGRES_METADATA_PARSER,
+            is_execute_dependency=is_execute_dependency,
+            reference_operation="OBJECT_DEPENDENCY",
             extra_properties={
                 "dependency_name": row.name,
                 "dependency_type": row.dependency_type,

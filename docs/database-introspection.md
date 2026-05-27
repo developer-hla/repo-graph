@@ -183,6 +183,9 @@ metadata rows such as `SqlServerObjectRow`, `SqlServerForeignKeyRow`,
 return `DatabaseScanResult` with a `FactBatch` of `EntityFact` and
 `RelationshipFact` records. Orchestration passes those facts through the graph
 builder; database adapters do not create graph `Entity` or `Edge` records.
+Catalog relationship edges are built through the shared metadata builder
+contract in [database-metadata-builders.md](database-metadata-builders.md) so
+each engine emits the same semantic graph vocabulary.
 
 Introspected relationships should reuse the same interaction vocabulary:
 

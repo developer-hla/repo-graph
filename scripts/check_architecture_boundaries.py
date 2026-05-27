@@ -36,6 +36,14 @@ ALLOWED_SCANNER_HELPER_PATHS = frozenset(
 )
 INTERACTION_PROPERTIES_MODULE = "repo_graph.extraction.interaction_properties"
 SQL_PROPERTIES_MODULE = "repo_graph.extraction.scanners.sql.properties"
+DATABASE_METADATA_EDGES_MODULE = "repo_graph.database._metadata_edges"
+DATABASE_METADATA_EDGES_PATH = "src/repo_graph/database/_metadata_edges.py"
+RAW_DATABASE_METADATA_EDGE_NAMES = frozenset(
+    {
+        "database_interaction_properties",
+        "database_metadata_edge",
+    }
+)
 ALLOWED_INTERACTION_PROPERTY_IMPORT_PATHS = frozenset(
     {
         "src/repo_graph/extraction/interaction_properties.py",
@@ -102,6 +110,7 @@ def scan_paths(paths: Iterable[Path]) -> Iterable[BoundaryFinding]:
         yield from scanner_helper_path_findings(path)
         yield from interaction_property_import_findings(path)
         yield from sql_interaction_property_import_findings(path)
+        yield from database_metadata_edge_import_findings(path)
         yield from scan_file(path)
 
 
@@ -153,6 +162,21 @@ def sql_interaction_property_import_findings(path: Path) -> Iterable[BoundaryFin
                 reference.line_number,
                 reference.module,
                 "use repo_graph.extraction.scanners.sql.facts instead of importing sql_interaction_properties",
+            )
+
+
+def database_metadata_edge_import_findings(path: Path) -> Iterable[BoundaryFinding]:
+    relative_path = normalize_path(path)
+    if relative_path == DATABASE_METADATA_EDGES_PATH:
+        return
+
+    for reference in import_from_name_references(path):
+        if reference.module == DATABASE_METADATA_EDGES_MODULE and reference.name in RAW_DATABASE_METADATA_EDGE_NAMES:
+            yield BoundaryFinding(
+                relative_path,
+                reference.line_number,
+                reference.module,
+                "use a semantic database metadata edge builder instead of importing raw edge/property helpers",
             )
 
 

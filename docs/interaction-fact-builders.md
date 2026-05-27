@@ -42,7 +42,7 @@ Builders should also preserve known evidence such as:
 | Messaging | `PUBLISHES_MESSAGE`, `CONSUMES_MESSAGE` | `repo_graph.extraction.scanners.messaging.facts` |
 | Storage | `READS_STORAGE_OBJECT`, `WRITES_STORAGE_OBJECT` | `repo_graph.extraction.scanners.storage.facts` |
 | Cache | `READS_CACHE_KEY`, `WRITES_CACHE_KEY` | `repo_graph.extraction.scanners.cache.facts` |
-| Database introspection | `CALLS_SQL`, `REFERENCES_SQL_OBJECT` | `repo_graph.database` adapter fact helpers |
+| Database introspection | `CALLS_SQL`, `REFERENCES_SQL_OBJECT`, `TRIGGERS_ON_SQL_OBJECT` | `repo_graph.database._metadata_edges`; see `docs/database-metadata-builders.md` |
 
 The raw `repo_graph.extraction.interaction_properties.interaction_properties`
 function is a low-level primitive. It should only be imported by these owning
@@ -65,3 +65,5 @@ builder modules.
 `interaction_properties()` outside the owning builder modules. If the guardrail
 fails, either use an existing builder or add a small builder in the owning
 interaction family and document it here.
+The same check blocks raw database metadata edge/property helper imports
+outside the database metadata builder module.
