@@ -134,7 +134,9 @@ def config_service_fact(
         return None
     key = config_value.properties.get("key")
     contract = config_value.properties.get("contract")
-    service_name = service_name_from_identifier(key or contract or service_name_from_url(raw_target))
+    service_name = service_name_from_url(raw_target)
+    if service_name == "external-service":
+        service_name = service_name_from_identifier(key or contract)
     target = http_target(raw_target, "GET")
     target["dependency_scope"] = "configuration"
     target["interaction_kind"] = "service_configuration"

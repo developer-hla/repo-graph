@@ -400,6 +400,7 @@ repo_graph/
           framework_config.py
           metadata.py
           packages_config.py
+          paths.py
           project.py
           references.py
           solution.py

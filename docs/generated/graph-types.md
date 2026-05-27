@@ -7,8 +7,8 @@ It documents the graph types exercised by the synthetic examples, not a private 
 - Graph schema version: `0.1`
 - Entity count: `102`
 - Edge count: `220`
-- Resolved edge count: `203`
-- Unresolved edge count: `17`
+- Resolved edge count: `205`
+- Unresolved edge count: `15`
 
 ## Entity Types
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
-from pathlib import Path
 
 from repo_graph.extraction.scanners.common import string_value
+from repo_graph.extraction.scanners.manifests.dotnet.paths import dotnet_manifest_path_stem
 from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import first_child_text, xml_local_name
 
 
@@ -31,10 +31,11 @@ def dotnet_project_references(root: ET.Element) -> Iterable[dict[str, str | None
         raw_target = string_value(element.attrib.get("Include"))
         if not raw_target:
             continue
+        name = dotnet_manifest_path_stem(raw_target)
         yield {
-            "name": Path(raw_target).stem,
+            "name": name,
             "raw_target": raw_target,
-            "normalized_target": Path(raw_target).stem,
+            "normalized_target": name,
         }
 
 

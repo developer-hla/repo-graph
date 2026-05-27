@@ -6,7 +6,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 
 - Parser count: `56`
 - Edge count: `220`
-- Unresolved edge count: `17`
+- Unresolved edge count: `15`
 
 ## Coverage By Parser
 
@@ -21,7 +21,7 @@ It documents parser coverage exercised by synthetic examples, not every supporte
 | `dotnet_message` | 2 | 0 | `PUBLISHES_MESSAGE` | `file`, `function` | `message_contract` | `dotnet-service` |
 | `dotnet_minimal_route` | 2 | 0 | `DECLARES_ROUTE`, `EXPOSES_ROUTE` | `file`, `project` | `api_route` | `dotnet-service` |
 | `dotnet_project` | 8 | 0 | `DECLARES_PACKAGE`, `DEPENDS_ON_PACKAGE`, `DEPENDS_ON_PROJECT` | `file`, `package`, `project` | `package`, `project` | `dotnet-service`, `legacy-vb-service` |
-| `dotnet_solution` | 3 | 2 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
+| `dotnet_solution` | 3 | 0 | `CONTAINS_PROJECT`, `DECLARES_SOLUTION` | `file`, `solution` | `project`, `solution` | `dotnet-service` |
 | `dotnet_storage` | 2 | 0 | `WRITES_STORAGE_OBJECT` | `file`, `function` | `storage_location` | `dotnet-service` |
 | `dotnet_symbol` | 3 | 0 | `DECLARES_SYMBOL` | `file` | `class`, `function` | `dotnet-service` |
 | `filesystem` | 51 | 0 | `CONTAINS_FILE` | `project`, `repository` | `file` | `api-service`, `database-project`, `dotnet-service`, `inventory-service`, `legacy-vb-service`, `python-shared`, `python-worker`, `shared-library` |

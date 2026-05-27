@@ -19,12 +19,13 @@ def dotnet_project_metadata_from_root(root: ET.Element, default_name: str | None
     assembly_name = first_xml_text(root, "AssemblyName") or default_name
     root_namespace = first_xml_text(root, "RootNamespace")
     version = first_xml_text(root, "Version")
+    target_framework = first_xml_text(root, "TargetFramework") or first_xml_text(root, "TargetFrameworkVersion")
     return {
         "package_id": package_id,
         "assembly_name": assembly_name,
         "root_namespace": root_namespace,
         "version": version,
-        "target_framework": first_xml_text(root, "TargetFramework"),
+        "target_framework": target_framework,
         "target_frameworks": first_xml_text(root, "TargetFrameworks"),
         "output_type": first_xml_text(root, "OutputType"),
     }

@@ -130,6 +130,173 @@ class GoldenExtractionTests(unittest.TestCase):
 
         self.assertEqual(graph_data["summary"]["error_count"], 0)
 
+    def test_legacy_dotnet_manifest_fixture_emits_expected_facts(self) -> None:
+        graph_data = build_legacy_dotnet_fixture_graph()
+        edges = graph_data["edges"]
+        entities = graph_data["entities"]
+
+        expected_entities = (
+            {
+                "entity_type": "project",
+                "name": "Legacy.Ordering",
+                "properties": {
+                    "ecosystem": "dotnet",
+                    "project_type": "dotnet_project",
+                    "package_name": "Legacy.Ordering",
+                },
+            },
+            {
+                "entity_type": "package",
+                "name": "Legacy.Ordering",
+                "properties": {
+                    "ecosystem": "dotnet",
+                    "target_framework": "v4.8",
+                },
+            },
+            {
+                "entity_type": "config_value",
+                "name": "app_setting:InventoryServiceUrl",
+                "properties": {
+                    "value_kind": "app_setting",
+                    "target_url": "http://inventory-service/api",
+                },
+            },
+            {
+                "entity_type": "config_value",
+                "name": "connection_string:MainDb",
+                "properties": {
+                    "value_kind": "connection_string",
+                    "provider_name": "System.Data.SqlClient",
+                },
+            },
+            {
+                "entity_type": "config_value",
+                "name": "wcf_endpoint:InventoryClient",
+                "properties": {
+                    "binding": "basicHttpBinding",
+                    "contract": "Example.IInventory",
+                    "target_url": "http://inventory-service/Inventory.svc",
+                },
+            },
+        )
+        expected_edges = (
+            {
+                "edge_type": "DECLARES_PACKAGE",
+                "parser": "dotnet_project",
+                "from_type": "project",
+                "from_name": "Legacy.Ordering",
+                "to_type": "package",
+                "to_name": "Legacy.Ordering",
+                "resolved": True,
+            },
+            {
+                "edge_type": "DEPENDS_ON_PROJECT",
+                "parser": "dotnet_project",
+                "from_type": "project",
+                "from_name": "Legacy.Ordering",
+                "to_type": "project",
+                "to_name": "Legacy.Shared",
+                "resolved": True,
+                "properties": {
+                    "raw_target": r"..\Legacy.Shared\Legacy.Shared.vbproj",
+                    "normalized_target": "Legacy.Shared",
+                },
+            },
+            {
+                "edge_type": "CONTAINS_PROJECT",
+                "parser": "dotnet_solution",
+                "from_type": "solution",
+                "from_name": "LegacySuite",
+                "to_type": "project",
+                "to_name": "Legacy.Ordering",
+                "resolved": True,
+                "properties": {
+                    "raw_target": r"src\Legacy.Ordering\Legacy.Ordering.vbproj",
+                    "normalized_target": "Legacy.Ordering",
+                },
+            },
+            {
+                "edge_type": "DECLARES_CONFIG_FILE",
+                "parser": "dotnet_framework_config",
+                "from_type": "file",
+                "to_type": "config_file",
+                "to_name": "Web.config",
+                "resolved": True,
+            },
+            {
+                "edge_type": "DECLARES_CONFIG",
+                "parser": "dotnet_framework_config",
+                "from_type": "config_file",
+                "from_name": "Web.config",
+                "to_type": "config_value",
+                "to_name": "app_setting:InventoryServiceUrl",
+                "resolved": True,
+            },
+            {
+                "edge_type": "CONFIGURES_SERVICE",
+                "parser": "dotnet_framework_config",
+                "from_type": "config_value",
+                "from_name": "app_setting:InventoryServiceUrl",
+                "to_type": "project",
+                "to_name": "inventory-service",
+                "resolved": True,
+                "properties": {
+                    "dependency_scope": "configuration",
+                    "interaction_kind": "service_configuration",
+                    "target_boundary": "application",
+                },
+            },
+            {
+                "edge_type": "CONFIGURES_SERVICE",
+                "parser": "dotnet_framework_config",
+                "from_type": "config_value",
+                "from_name": "wcf_endpoint:InventoryClient",
+                "to_type": "project",
+                "to_name": "inventory-service",
+                "resolved": True,
+            },
+            {
+                "edge_type": "DEPENDS_ON_PACKAGE",
+                "parser": "packages_config",
+                "from_type": "project",
+                "from_name": "Legacy.Ordering",
+                "to_type": "package",
+                "to_name": "Newtonsoft.Json",
+                "resolved": False,
+                "properties": {
+                    "dependency_type": "packages.config",
+                    "version": "13.0.3",
+                },
+            },
+            {
+                "edge_type": "DECLARES_BUILD_CONFIG",
+                "parser": "dotnet_build_config",
+                "from_type": "file",
+                "to_type": "build_config",
+                "to_name": "Directory.Build.props",
+                "resolved": True,
+            },
+            {
+                "edge_type": "DEPENDS_ON_PACKAGE",
+                "parser": "dotnet_build_config",
+                "from_type": "build_config",
+                "from_name": "Directory.Build.props",
+                "to_type": "package",
+                "to_name": "Microsoft.Net.Compilers.Toolset",
+                "resolved": False,
+            },
+        )
+
+        for expected in expected_entities:
+            with self.subTest(expected=expected):
+                self.assertTrue(entity_exists(entities, expected), expected)
+        for expected in expected_edges:
+            with self.subTest(expected=expected):
+                self.assertTrue(edge_exists(edges, expected), expected)
+
+        self.assertEqual(graph_data["summary"]["files_scanned"], 7)
+        self.assertEqual(graph_data["summary"]["error_count"], 0)
+
 
 def build_golden_fixture_graph() -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -268,9 +435,158 @@ def build_golden_fixture_graph() -> dict[str, Any]:
         return build_graph(load_config(config_path)).to_dict()
 
 
+def build_legacy_dotnet_fixture_graph() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        legacy = root / "legacy-suite"
+        ordering = legacy / "src" / "Legacy.Ordering"
+        shared = legacy / "src" / "Legacy.Shared"
+        inventory = root / "inventory-service"
+        ordering.mkdir(parents=True)
+        shared.mkdir(parents=True)
+        inventory.mkdir()
+
+        (legacy / "LegacySuite.sln").write_text(
+            "\n".join(
+                [
+                    "Microsoft Visual Studio Solution File, Format Version 12.00",
+                    (
+                        'Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Legacy.Ordering", '
+                        r'"src\Legacy.Ordering\Legacy.Ordering.vbproj", '
+                        '"{11111111-1111-1111-1111-111111111111}"'
+                    ),
+                    "EndProject",
+                    (
+                        'Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Legacy.Shared", '
+                        r'"src\Legacy.Shared\Legacy.Shared.vbproj", '
+                        '"{22222222-2222-2222-2222-222222222222}"'
+                    ),
+                    "EndProject",
+                    "Global",
+                    "EndGlobal",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (legacy / "Directory.Build.props").write_text(
+            textwrap.dedent(
+                """
+                <Project>
+                  <ItemGroup>
+                    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="4.8.0" />
+                  </ItemGroup>
+                </Project>
+                """
+            ),
+            encoding="utf-8",
+        )
+        (ordering / "Legacy.Ordering.vbproj").write_text(
+            textwrap.dedent(
+                r"""
+                <Project ToolsVersion="15.0">
+                  <PropertyGroup>
+                    <RootNamespace>Example.Legacy.Ordering</RootNamespace>
+                    <AssemblyName>Legacy.Ordering</AssemblyName>
+                    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+                  </PropertyGroup>
+                  <ItemGroup>
+                    <ProjectReference Include="..\Legacy.Shared\Legacy.Shared.vbproj" />
+                  </ItemGroup>
+                </Project>
+                """
+            ),
+            encoding="utf-8",
+        )
+        (ordering / "packages.config").write_text(
+            textwrap.dedent(
+                """
+                <packages>
+                  <package id="Newtonsoft.Json" version="13.0.3" targetFramework="net48" />
+                </packages>
+                """
+            ),
+            encoding="utf-8",
+        )
+        (ordering / "Web.config").write_text(
+            textwrap.dedent(
+                """
+                <configuration>
+                  <appSettings>
+                    <add key="InventoryServiceUrl" value="http://inventory-service/api" />
+                  </appSettings>
+                  <connectionStrings>
+                    <add name="MainDb"
+                         connectionString="Server=example;Database=legacy;"
+                         providerName="System.Data.SqlClient" />
+                  </connectionStrings>
+                  <system.serviceModel>
+                    <client>
+                      <endpoint name="InventoryClient"
+                                address="http://inventory-service/Inventory.svc"
+                                binding="basicHttpBinding"
+                                contract="Example.IInventory" />
+                    </client>
+                  </system.serviceModel>
+                </configuration>
+                """
+            ),
+            encoding="utf-8",
+        )
+        (shared / "Legacy.Shared.vbproj").write_text(
+            textwrap.dedent(
+                """
+                <Project ToolsVersion="15.0">
+                  <PropertyGroup>
+                    <RootNamespace>Example.Legacy.Shared</RootNamespace>
+                    <AssemblyName>Legacy.Shared</AssemblyName>
+                    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+                  </PropertyGroup>
+                </Project>
+                """
+            ),
+            encoding="utf-8",
+        )
+        (inventory / "package.json").write_text('{"name": "@example/inventory-service"}', encoding="utf-8")
+
+        config_path = root / "sources.yaml"
+        config_path.write_text(
+            textwrap.dedent(
+                """
+                name: legacy-dotnet-golden-scope
+                sources:
+                  - type: local_path
+                    name: legacy-suite
+                    path: legacy-suite
+                  - type: local_path
+                    name: inventory-service
+                    path: inventory-service
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        return build_graph(load_config(config_path)).to_dict()
+
+
 def edge_exists(edges: list[dict[str, Any]], expected: dict[str, Any]) -> bool:
     return any(edge_matches(edge, expected) for edge in edges)
 
 
+def entity_exists(entities: list[dict[str, Any]], expected: dict[str, Any]) -> bool:
+    return any(item_matches(entity, expected) for entity in entities)
+
+
 def edge_matches(edge: dict[str, Any], expected: dict[str, Any]) -> bool:
-    return all(edge.get(key) == value for key, value in expected.items())
+    return item_matches(edge, expected)
+
+
+def item_matches(item: dict[str, Any], expected: dict[str, Any]) -> bool:
+    for key, value in expected.items():
+        if isinstance(value, dict):
+            actual = item.get(key)
+            if not isinstance(actual, dict) or not item_matches(actual, value):
+                return False
+        elif item.get(key) != value:
+            return False
+    return True
