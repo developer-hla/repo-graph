@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import (
     declares_package_facts,
     entity_fact,
@@ -20,10 +20,14 @@ from repo_graph.extraction.scanners.common import read_yaml_object, string_value
 from repo_graph.extraction.scanners.package_helpers import package_dependencies
 
 
-class PackageJsonExtractor:
-    name = "package_json"
-    target_patterns = ("package.json",)
-    parser_ids = ("package_json",)
+class PackageJsonExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="package_json",
+        family="manifest",
+        target_patterns=("package.json",),
+        parser_ids=("package_json",),
+        description="JavaScript package manifest dependencies and package declarations.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "package.json"
@@ -88,10 +92,14 @@ class PackageJsonExtractor:
         return facts
 
 
-class PnpmWorkspaceExtractor:
-    name = "pnpm_workspace"
-    target_patterns = ("pnpm-workspace.yaml",)
-    parser_ids = ("pnpm_workspace",)
+class PnpmWorkspaceExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="pnpm_workspace",
+        family="manifest",
+        target_patterns=("pnpm-workspace.yaml",),
+        parser_ids=("pnpm_workspace",),
+        description="pnpm workspace manifest declarations.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "pnpm-workspace.yaml"

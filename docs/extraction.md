@@ -75,8 +75,9 @@ scanners instead of constructing scanner families directly.
 
 Registry order must stay deterministic because parser fingerprints, snapshot
 status, and generated parser coverage depend on it.
-Every default extractor must expose `target_patterns` and `parser_ids` so the
-generated scanner catalog can explain scanner scope and emitted evidence.
+Every default extractor must expose a `ScannerSpec` so the generated scanner
+catalog can explain scanner family, scope, and emitted evidence from one
+regular metadata shape.
 
 `pixi run architecture-boundary-check` enforces that code outside
 `repo_graph.extraction.scanners` imports scanner family package roots instead of

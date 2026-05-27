@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import scan_issue
 from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.code.python.cache import python_cache_facts
@@ -23,20 +23,24 @@ from repo_graph.extraction.scanners.code.python.symbols import (
 )
 
 
-class PythonCodeExtractor:
-    name = "python"
-    target_patterns = ("*.py",)
-    parser_ids = (
-        "python_call",
-        "python_cache",
-        "python_http",
-        "python_import",
-        "python_message",
-        "python_route",
-        "python_storage",
-        "python_job",
-        "python_symbol",
-        "sql_reference",
+class PythonCodeExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="python",
+        family="code",
+        target_patterns=("*.py",),
+        parser_ids=(
+            "python_call",
+            "python_cache",
+            "python_http",
+            "python_import",
+            "python_message",
+            "python_route",
+            "python_storage",
+            "python_job",
+            "python_symbol",
+            "sql_reference",
+        ),
+        description="Python symbols, imports, routes, calls, and application interactions.",
     )
 
     def can_process(self, rel_path: str) -> bool:

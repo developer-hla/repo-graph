@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import (
     entity_fact,
     entity_reference,
@@ -15,10 +15,14 @@ from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.manifests.dotnet.solutions import solution_project_reference
 
 
-class DotnetSolutionExtractor:
-    name = "dotnet_solution"
-    target_patterns = ("*.sln",)
-    parser_ids = ("dotnet_solution",)
+class DotnetSolutionExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="dotnet_solution",
+        family="manifest",
+        target_patterns=("*.sln",),
+        parser_ids=("dotnet_solution",),
+        description=".NET solution project containment.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".sln"

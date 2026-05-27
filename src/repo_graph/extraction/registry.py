@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from repo_graph.extraction.contracts import FileExtractor
+from repo_graph.extraction.contracts import FileExtractor, ScannerSpec, scanner_spec
 from repo_graph.extraction.scanners.code.dotnet import (
     CSharpCodeExtractor,
     LegacyDotnetEndpointExtractor,
@@ -48,3 +48,7 @@ def default_extractors() -> list[FileExtractor]:
         SqlExtractor(),
         SqlReferenceExtractor(),
     ]
+
+
+def default_scanner_specs() -> list[ScannerSpec]:
+    return [scanner_spec(extractor) for extractor in default_extractors()]

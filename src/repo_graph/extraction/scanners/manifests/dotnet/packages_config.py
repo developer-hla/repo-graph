@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import (
     entity_reference,
     package_dependency_fact,
@@ -16,10 +16,14 @@ from repo_graph.extraction.scanners.manifests.dotnet.references import packages_
 from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import xml_root
 
 
-class DotnetPackagesConfigExtractor:
-    name = "packages_config"
-    target_patterns = ("packages.config",)
-    parser_ids = ("packages_config",)
+class DotnetPackagesConfigExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="packages_config",
+        family="manifest",
+        target_patterns=("packages.config",),
+        parser_ids=("packages_config",),
+        description="Legacy .NET packages.config dependencies.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "packages.config"

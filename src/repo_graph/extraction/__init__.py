@@ -25,9 +25,12 @@ __all__ = [
     "ProjectInfo",
     "RelationshipFact",
     "ScanIssue",
+    "ScannerMetadataMixin",
+    "ScannerSpec",
     "SourceScanResult",
     "build_cached_graph",
     "build_graph",
+    "scanner_spec",
     "snapshot_status",
     "write_snapshots",
     "write_source_graphs",
@@ -47,6 +50,18 @@ def __getattr__(name: str) -> object:
         from repo_graph.extraction.contracts import ProjectInfo
 
         return ProjectInfo
+    if name == "ScannerMetadataMixin":
+        from repo_graph.extraction.contracts import ScannerMetadataMixin
+
+        return ScannerMetadataMixin
+    if name == "ScannerSpec":
+        from repo_graph.extraction.contracts import ScannerSpec
+
+        return ScannerSpec
+    if name == "scanner_spec":
+        from repo_graph.extraction.contracts import scanner_spec
+
+        return scanner_spec
     if name == "CachedBuildResult":
         from repo_graph.extraction.cached_builds import CachedBuildResult
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import (
     declares_package_facts,
     entity_reference,
@@ -24,10 +24,14 @@ from repo_graph.extraction.scanners.package_helpers import (
 )
 
 
-class PythonProjectExtractor:
-    name = "pyproject"
-    target_patterns = ("pyproject.toml",)
-    parser_ids = ("pyproject",)
+class PythonProjectExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="pyproject",
+        family="manifest",
+        target_patterns=("pyproject.toml",),
+        parser_ids=("pyproject",),
+        description="Python project package metadata and dependencies.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).name == "pyproject.toml"
@@ -94,10 +98,14 @@ class PythonProjectExtractor:
         return facts
 
 
-class PythonRequirementsExtractor:
-    name = "requirements"
-    target_patterns = ("requirements*.txt",)
-    parser_ids = ("requirements",)
+class PythonRequirementsExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="requirements",
+        family="manifest",
+        target_patterns=("requirements*.txt",),
+        parser_ids=("requirements",),
+        description="Python requirements file dependencies.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return is_requirements_file(Path(rel_path))

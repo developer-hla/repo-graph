@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.cache.facts import cache_facts_for_line
 from repo_graph.extraction.scanners.code.javascript.helpers import (
@@ -22,21 +22,25 @@ from repo_graph.extraction.scanners.sql.references import sql_reference_facts_fo
 from repo_graph.extraction.scanners.storage.facts import storage_facts_for_line
 
 
-class JavaScriptExtractor:
-    name = "javascript"
-    target_patterns = ("*.js", "*.jsx", "*.ts", "*.tsx")
-    parser_ids = (
-        "javascript_call",
-        "javascript_cache",
-        "javascript_export",
-        "javascript_http",
-        "javascript_import",
-        "javascript_message",
-        "javascript_route",
-        "javascript_job",
-        "javascript_storage",
-        "javascript_symbol",
-        "sql_reference",
+class JavaScriptExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="javascript",
+        family="code",
+        target_patterns=("*.js", "*.jsx", "*.ts", "*.tsx"),
+        parser_ids=(
+            "javascript_call",
+            "javascript_cache",
+            "javascript_export",
+            "javascript_http",
+            "javascript_import",
+            "javascript_message",
+            "javascript_route",
+            "javascript_job",
+            "javascript_storage",
+            "javascript_symbol",
+            "sql_reference",
+        ),
+        description="JavaScript and TypeScript symbols, imports, routes, calls, and application interactions.",
     )
 
     def can_process(self, rel_path: str) -> bool:

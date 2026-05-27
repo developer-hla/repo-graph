@@ -88,11 +88,16 @@ shape.
 File scanners implement the public `FileExtractor` protocol from
 `repo_graph.extraction.contracts`:
 
+- `spec: ScannerSpec`
 - `name`
 - `target_patterns`
 - `parser_ids`
 - `can_process(rel_path)`
 - `extract(context, content) -> FactBatch`
+
+Use `ScannerMetadataMixin` for scanner classes so `name`, `target_patterns`,
+and `parser_ids` are derived from `spec`. The spec is the documented scanner
+metadata surface used by the registry, generated docs, and guardrail tests.
 
 Scanner families may have detailed internals under directories such as
 `repo_graph.extraction.scanners.code.python`, but registration should stay in

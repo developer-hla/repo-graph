@@ -30,6 +30,7 @@ from repo_graph.config import (
     load_config,
 )
 from repo_graph.extraction import MAX_FILE_BYTES, build_graph
+from repo_graph.extraction.contracts import scanner_spec
 from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.source_scanner import scan_source
 from repo_graph.sources import resolve_sources
@@ -351,18 +352,21 @@ def scanner_catalog_doc() -> str:
         "",
         f"- Scanner count: `{len(extractors)}`",
         "",
-        "| Order | Scanner | Module | Target Patterns | Parser IDs | Exercised Edge Types | Exercised Node Types |",
-        "| ---: | --- | --- | --- | --- | --- | --- |",
+        "| Order | Scanner | Family | Module | Target Patterns | Parser IDs | Exercised Edge Types | "
+        "Exercised Node Types |",
+        "| ---: | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for index, extractor in enumerate(extractors, start=1):
-        example = examples[extractor.name]
+        spec = scanner_spec(extractor)
+        example = examples[spec.name]
         lines.append(
             "| "
             f"{index} | "
-            f"`{extractor.name}` | "
+            f"`{spec.name}` | "
+            f"`{spec.family}` | "
             f"`{extractor.__class__.__module__}` | "
-            f"{format_inline_values(extractor.target_patterns)} | "
-            f"{format_inline_values(extractor.parser_ids)} | "
+            f"{format_inline_values(spec.target_patterns)} | "
+            f"{format_inline_values(spec.parser_ids)} | "
             f"{format_inline_values(example['edge_types'])} | "
             f"{format_inline_values(example['node_types'])} |"
         )
@@ -388,7 +392,8 @@ def scanner_example_coverage(
     sources = list(resolve_sources(config))
     coverage: dict[str, dict[str, list[str]]] = {}
     for extractor in extractors:
-        parser_ids = set(extractor.parser_ids)
+        spec = scanner_spec(extractor)
+        parser_ids = set(spec.parser_ids)
         edge_types: set[str] = set()
         node_types: set[str] = set()
         for source in sources:
@@ -399,7 +404,7 @@ def scanner_example_coverage(
                 edge_types.add(relationship.edge_type)
                 node_types.add(relationship.from_type)
                 node_types.add(relationship.to_type)
-        coverage[extractor.name] = {
+        coverage[spec.name] = {
             "edge_types": sorted(edge_types),
             "node_types": sorted(node_types),
         }

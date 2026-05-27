@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.cache.facts import cache_facts_for_line
@@ -51,10 +51,14 @@ from repo_graph.extraction.scanners.sql.references import sql_reference_facts_fo
 from repo_graph.extraction.scanners.storage.facts import storage_facts_for_line
 
 
-class LegacyDotnetEndpointExtractor:
-    name = "legacy_dotnet_endpoint"
-    target_patterns = ("*.asmx", "*.svc")
-    parser_ids = ("legacy_dotnet_endpoint",)
+class LegacyDotnetEndpointExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="legacy_dotnet_endpoint",
+        family="code",
+        target_patterns=("*.asmx", "*.svc"),
+        parser_ids=("legacy_dotnet_endpoint",),
+        description="Legacy ASMX and WCF endpoint route declarations.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".asmx", ".svc"}
@@ -90,19 +94,23 @@ class LegacyDotnetEndpointExtractor:
         return facts
 
 
-class CSharpCodeExtractor:
-    name = "csharp_code"
-    target_patterns = ("*.cs",)
-    parser_ids = (
-        "dotnet_call",
-        "dotnet_cache",
-        "dotnet_controller_route",
-        "dotnet_http",
-        "dotnet_minimal_route",
-        "dotnet_message",
-        "dotnet_symbol",
-        "dotnet_storage",
-        "sql_reference",
+class CSharpCodeExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="csharp_code",
+        family="code",
+        target_patterns=("*.cs",),
+        parser_ids=(
+            "dotnet_call",
+            "dotnet_cache",
+            "dotnet_controller_route",
+            "dotnet_http",
+            "dotnet_minimal_route",
+            "dotnet_message",
+            "dotnet_symbol",
+            "dotnet_storage",
+            "sql_reference",
+        ),
+        description="C# symbols, routes, calls, and application interactions.",
     )
 
     def can_process(self, rel_path: str) -> bool:
@@ -228,19 +236,23 @@ class CSharpCodeExtractor:
         return facts
 
 
-class VbCodeExtractor:
-    name = "vb_code"
-    target_patterns = ("*.vb",)
-    parser_ids = (
-        "vb_call",
-        "vb_cache",
-        "vb_config_service",
-        "vb_contract_route",
-        "vb_http",
-        "vb_message",
-        "vb_sql_command",
-        "vb_storage",
-        "vb_symbol",
+class VbCodeExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="vb_code",
+        family="code",
+        target_patterns=("*.vb",),
+        parser_ids=(
+            "vb_call",
+            "vb_cache",
+            "vb_config_service",
+            "vb_contract_route",
+            "vb_http",
+            "vb_message",
+            "vb_sql_command",
+            "vb_storage",
+            "vb_symbol",
+        ),
+        description="Legacy VB.NET symbols, contract routes, calls, and application interactions.",
     )
 
     def can_process(self, rel_path: str) -> bool:

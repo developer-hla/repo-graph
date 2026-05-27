@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.manifests.dotnet.config import (
@@ -15,10 +15,14 @@ from repo_graph.extraction.scanners.manifests.dotnet.config import (
 from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import xml_root
 
 
-class DotnetFrameworkConfigExtractor:
-    name = "dotnet_framework_config"
-    target_patterns = ("*.config except packages.config",)
-    parser_ids = ("dotnet_framework_config",)
+class DotnetFrameworkConfigExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="dotnet_framework_config",
+        family="manifest",
+        target_patterns=("*.config except packages.config",),
+        parser_ids=("dotnet_framework_config",),
+        description="Legacy .NET App.config/Web.config values and service configuration.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         path = Path(rel_path)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import (
     entity_fact,
     entity_reference,
@@ -17,10 +17,14 @@ from repo_graph.extraction.scanners.manifests.dotnet.references import dotnet_pa
 from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import xml_root
 
 
-class DotnetBuildConfigExtractor:
-    name = "dotnet_build_config"
-    target_patterns = ("Directory.Build.props", "*.props", "*.targets")
-    parser_ids = ("dotnet_build_config",)
+class DotnetBuildConfigExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="dotnet_build_config",
+        family="manifest",
+        target_patterns=("Directory.Build.props", "*.props", "*.targets"),
+        parser_ids=("dotnet_build_config",),
+        description=".NET build props and targets package dependencies.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         path = Path(rel_path)

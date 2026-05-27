@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.sql.definitions import sql_definition_facts
 from repo_graph.extraction.scanners.sql.references import scan_sql_references, sql_reference_facts_for_line
@@ -13,10 +13,14 @@ from repo_graph.extraction.scanners.sql.references import scan_sql_references, s
 SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE)
 
 
-class SqlExtractor:
-    name = "sql"
-    target_patterns = ("*.sql",)
-    parser_ids = ("sql", "sql_reference")
+class SqlExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="sql",
+        family="sql",
+        target_patterns=("*.sql",),
+        parser_ids=("sql", "sql_reference"),
+        description="SQL object definitions and SQL-to-SQL references.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() == ".sql"
@@ -38,10 +42,14 @@ class SqlExtractor:
         return facts
 
 
-class SqlReferenceExtractor:
-    name = "sql_reference"
-    target_patterns = ("*.cs", "*.js", "*.jsx", "*.py", "*.ts", "*.tsx", "*.vb")
-    parser_ids = ("sql_reference",)
+class SqlReferenceExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="sql_reference",
+        family="sql",
+        target_patterns=("*.cs", "*.js", "*.jsx", "*.py", "*.ts", "*.tsx", "*.vb"),
+        parser_ids=("sql_reference",),
+        description="Embedded SQL references in application code.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in {".cs", ".js", ".jsx", ".py", ".ts", ".tsx", ".vb"}

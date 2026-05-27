@@ -28,10 +28,48 @@ class FileScanContext:
     project: ProjectInfo | None = None
 
 
-class FileExtractor(Protocol):
+@dataclass(frozen=True)
+class ScannerSpec:
     name: str
+    family: str
     target_patterns: tuple[str, ...]
     parser_ids: tuple[str, ...]
+    description: str = ""
+
+
+class ScannerMetadataMixin:
+    spec: ScannerSpec
+
+    @property
+    def name(self) -> str:
+        return self.spec.name
+
+    @property
+    def target_patterns(self) -> tuple[str, ...]:
+        return self.spec.target_patterns
+
+    @property
+    def parser_ids(self) -> tuple[str, ...]:
+        return self.spec.parser_ids
+
+
+class FileExtractor(Protocol):
+    spec: ScannerSpec
+
+    @property
+    def name(self) -> str:
+        """Stable scanner name used for registration and generated docs."""
+        ...
+
+    @property
+    def target_patterns(self) -> tuple[str, ...]:
+        """Human-readable file targets this scanner can process."""
+        ...
+
+    @property
+    def parser_ids(self) -> tuple[str, ...]:
+        """Parser IDs this scanner can emit as evidence."""
+        ...
 
     def can_process(self, rel_path: str) -> bool:
         """Return whether this extractor can scan a relative file path."""
@@ -42,8 +80,18 @@ class FileExtractor(Protocol):
         ...
 
 
+def scanner_spec(extractor: FileExtractor) -> ScannerSpec:
+    spec = getattr(extractor, "spec", None)
+    if not isinstance(spec, ScannerSpec):
+        raise TypeError(f"{extractor.__class__.__name__} must expose a ScannerSpec as `spec`")
+    return spec
+
+
 __all__ = [
     "FileExtractor",
     "FileScanContext",
     "ProjectInfo",
+    "ScannerMetadataMixin",
+    "ScannerSpec",
+    "scanner_spec",
 ]

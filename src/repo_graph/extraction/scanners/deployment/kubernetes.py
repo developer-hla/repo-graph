@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import scan_issue
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.scanners.common import string_value
@@ -20,17 +20,21 @@ from repo_graph.extraction.scanners.deployment.kubernetes_resources import (
 from repo_graph.extraction.scanners.deployment.kubernetes_selectors import kubernetes_selector_facts
 
 
-class KubernetesManifestExtractor:
-    name = "kubernetes"
-    target_patterns = ("*.yaml", "*.yml")
-    parser_ids = (
-        "kubernetes_container",
-        "kubernetes_deployment",
-        "kubernetes_env",
-        "kubernetes_ingress",
-        "kubernetes_ingress_route",
-        "kubernetes_selector",
-        "kubernetes_service",
+class KubernetesManifestExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="kubernetes",
+        family="deployment",
+        target_patterns=("*.yaml", "*.yml"),
+        parser_ids=(
+            "kubernetes_container",
+            "kubernetes_deployment",
+            "kubernetes_env",
+            "kubernetes_ingress",
+            "kubernetes_ingress_route",
+            "kubernetes_selector",
+            "kubernetes_service",
+        ),
+        description="Kubernetes services, deployments, ingress, selectors, containers, and env links.",
     )
 
     def can_process(self, rel_path: str) -> bool:

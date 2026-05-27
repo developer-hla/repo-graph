@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.contracts import FileScanContext, ScannerMetadataMixin, ScannerSpec
 from repo_graph.extraction.fact_helpers import (
     declares_package_facts,
     entity_reference,
@@ -22,10 +22,14 @@ from repo_graph.extraction.scanners.manifests.dotnet.references import (
 from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import xml_root
 
 
-class DotnetProjectExtractor:
-    name = "dotnet_project"
-    target_patterns = ("*.csproj", "*.fsproj", "*.vbproj")
-    parser_ids = ("dotnet_project",)
+class DotnetProjectExtractor(ScannerMetadataMixin):
+    spec = ScannerSpec(
+        name="dotnet_project",
+        family="manifest",
+        target_patterns=("*.csproj", "*.fsproj", "*.vbproj"),
+        parser_ids=("dotnet_project",),
+        description=".NET project package metadata, package dependencies, and project references.",
+    )
 
     def can_process(self, rel_path: str) -> bool:
         return Path(rel_path).suffix.lower() in DOTNET_PROJECT_SUFFIXES
