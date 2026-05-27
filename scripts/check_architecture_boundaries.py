@@ -34,6 +34,18 @@ ALLOWED_SCANNER_HELPER_PATHS = frozenset(
         f"{SCANNER_PACKAGE_ROOT}/symbol_helpers.py",
     }
 )
+INTERACTION_PROPERTIES_MODULE = "repo_graph.extraction.interaction_properties"
+ALLOWED_INTERACTION_PROPERTY_IMPORT_PATHS = frozenset(
+    {
+        "src/repo_graph/extraction/interaction_properties.py",
+        f"{SCANNER_PACKAGE_ROOT}/cache/facts.py",
+        f"{SCANNER_PACKAGE_ROOT}/interactions/http.py",
+        f"{SCANNER_PACKAGE_ROOT}/interactions/services.py",
+        f"{SCANNER_PACKAGE_ROOT}/messaging/facts.py",
+        f"{SCANNER_PACKAGE_ROOT}/sql/properties.py",
+        f"{SCANNER_PACKAGE_ROOT}/storage/facts.py",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -81,6 +93,7 @@ def python_files(root: Path, scan_roots: Iterable[Path]) -> Iterable[Path]:
 def scan_paths(paths: Iterable[Path]) -> Iterable[BoundaryFinding]:
     for path in paths:
         yield from scanner_helper_path_findings(path)
+        yield from interaction_property_import_findings(path)
         yield from scan_file(path)
 
 
@@ -103,6 +116,21 @@ def scanner_helper_module_path(relative_path: str) -> bool:
         return False
     name = Path(relative_path).name
     return name == "helpers.py" or name.endswith("_helpers.py")
+
+
+def interaction_property_import_findings(path: Path) -> Iterable[BoundaryFinding]:
+    relative_path = normalize_path(path)
+    if relative_path in ALLOWED_INTERACTION_PROPERTY_IMPORT_PATHS:
+        return
+
+    for reference in import_references(path):
+        if reference.module == INTERACTION_PROPERTIES_MODULE:
+            yield BoundaryFinding(
+                relative_path,
+                reference.line_number,
+                reference.module,
+                "use the owning interaction fact builder instead of importing the raw interaction property helper",
+            )
 
 
 def scan_file(path: Path) -> Iterable[BoundaryFinding]:

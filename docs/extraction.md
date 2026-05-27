@@ -104,10 +104,12 @@ Database introspection returns `DatabaseScanResult` with the same `FactBatch`
 shape. Database adapters may resolve relationships within their metadata
 snapshot, but they still emit fact records instead of graph records.
 
-Use `repo_graph.extraction.fact_helpers` for common fact patterns and
-`repo_graph.extraction.interaction_properties` for structured interaction
-evidence. Scanner helper modules may create `EntityFact`, `RelationshipFact`,
-and `FactBatch` values when a shared helper does not fit.
+Use `repo_graph.extraction.fact_helpers` for common fact patterns. Interaction
+edge construction should go through the owning builders documented in
+`docs/interaction-fact-builders.md`; scanner modules should not import the raw
+interaction property helper directly. Scanner helper modules may create
+`EntityFact`, `RelationshipFact`, and `FactBatch` values when a shared helper
+does not fit.
 Use `repo_graph.extraction.fact_validation` to validate emitted facts in tests
 or strict workflows before graph construction. Interaction edge facts must
 include `target_boundary`, `dependency_scope`, and `interaction_kind` with

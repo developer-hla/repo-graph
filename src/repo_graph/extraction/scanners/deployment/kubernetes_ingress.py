@@ -10,10 +10,8 @@ from repo_graph.extraction.fact_helpers import (
     entity_fact,
     entity_reference,
     resolved_relationship_fact,
-    unresolved_relationship_fact,
 )
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.interaction_properties import interaction_properties
 from repo_graph.extraction.scanners.common import object_mapping, string_value
 from repo_graph.extraction.scanners.deployment.kubernetes_values import (
     kubernetes_namespace,
@@ -23,6 +21,7 @@ from repo_graph.extraction.scanners.deployment.kubernetes_values import (
     string_dict,
 )
 from repo_graph.extraction.scanners.interactions.routes import route_entity_fact
+from repo_graph.extraction.scanners.interactions.services import route_to_service_fact
 
 
 def kubernetes_ingress_facts(context: FileScanContext, document: dict[str, Any]) -> FactBatch:
@@ -99,23 +98,12 @@ def kubernetes_ingress_rule_facts(context: FileScanContext, ingress: EntityFact,
         service_name = kubernetes_ingress_backend_service_name(path_item.get("backend"))
         if service_name:
             facts.relationships.append(
-                unresolved_relationship_fact(
+                route_to_service_fact(
                     route.reference,
                     service_name,
-                    "ROUTES_TO_SERVICE",
                     context,
                     "kubernetes_ingress_route",
-                    to_type="service",
                     line_number=1,
-                    properties=interaction_properties(
-                        "application",
-                        "deployment",
-                        "ingress_route",
-                        protocol="http",
-                        raw_target=service_name,
-                        normalized_target=service_name,
-                        service_name=service_name,
-                    ),
                 )
             )
     return facts

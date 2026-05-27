@@ -9,9 +9,9 @@ from urllib.parse import urlparse
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
-from repo_graph.extraction.interaction_properties import interaction_properties
-from repo_graph.extraction.scanners.interactions.http import http_facts_for_target, http_target
+from repo_graph.extraction.scanners.interactions.http import http_facts_for_target, http_service_call_fact
 from repo_graph.extraction.scanners.interactions.naming import service_name_from_identifier, service_name_from_url
+from repo_graph.extraction.scanners.interactions.services import service_call_fact
 from repo_graph.extraction.scanners.sql.properties import source_context_properties, sql_interaction_properties
 from repo_graph.extraction.scanners.sql.references import stored_procedure_target
 
@@ -49,26 +49,19 @@ def vb_service_call_facts(
     for match in VB_CONFIG_SETTING_RE.finditer(line):
         key = match.group(1)
         service_name = service_name_from_identifier(key)
-        properties = interaction_properties(
-            "application",
-            "runtime",
-            "service_call",
-            raw_target=key,
-            normalized_target=service_name,
-            config_key=key,
-            service_name=service_name,
-        )
-        properties.update(extra_properties)
         facts.append(
-            unresolved_relationship_fact(
+            service_call_fact(
                 source_ref,
-                service_name,
-                "CALLS_SERVICE",
+                key,
                 context,
                 "vb_config_service",
-                to_type="service",
+                service_name=service_name,
+                normalized_target=service_name,
                 line_number=line_number,
-                properties=properties,
+                extra_properties={
+                    "config_key": key,
+                    **extra_properties,
+                },
             )
         )
     return facts
@@ -83,24 +76,19 @@ def legacy_http_facts_for_target(
     from_entity: EntityFact | None = None,
     extra_properties: dict[str, Any] | None = None,
 ) -> list[RelationshipFact]:
-    source_ref = entity_reference(from_entity or context.file_entity)
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
-        target = http_target(raw_target, "GET")
-        target["service_name"] = service_name_from_url(raw_target)
-        target["client"] = client
-        if extra_properties:
-            target.update(extra_properties)
         return [
-            unresolved_relationship_fact(
-                source_ref,
-                target["service_name"],
-                "CALLS_SERVICE",
+            http_service_call_fact(
                 context,
+                "GET",
+                raw_target,
+                line_number,
                 parser,
-                to_type="service",
-                line_number=line_number,
-                properties=target,
+                client=client,
+                from_entity=from_entity,
+                service_name=service_name_from_url(raw_target),
+                extra_properties=extra_properties,
             )
         ]
     return http_facts_for_target(

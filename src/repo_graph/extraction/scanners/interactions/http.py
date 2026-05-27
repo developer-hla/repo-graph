@@ -16,6 +16,7 @@ from repo_graph.extraction.scanners.interactions.naming import (
     extract_endpoint,
     normalize_route_path,
     service_name_from_env,
+    service_name_from_url,
 )
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
@@ -102,6 +103,36 @@ def http_facts_for_target(
             properties=target,
         )
     ]
+
+
+def http_service_call_fact(
+    context: FileScanContext,
+    method: str,
+    raw_target: str,
+    line_number: int,
+    parser: str,
+    client: str | None = None,
+    from_entity: EntityFact | None = None,
+    service_name: str | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> RelationshipFact:
+    source_ref = entity_reference(from_entity or context.file_entity)
+    target = http_target(raw_target, method)
+    target["service_name"] = service_name or target.get("service_name") or service_name_from_url(raw_target)
+    if client:
+        target["client"] = client
+    if extra_properties:
+        target.update(extra_properties)
+    return unresolved_relationship_fact(
+        source_ref,
+        target["service_name"],
+        "CALLS_SERVICE",
+        context,
+        parser,
+        to_type="service",
+        line_number=line_number,
+        properties=target,
+    )
 
 
 def http_target(raw_target: str, method: str) -> dict[str, Any]:

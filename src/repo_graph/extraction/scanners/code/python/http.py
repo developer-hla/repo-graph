@@ -6,7 +6,6 @@ import ast
 from urllib.parse import urlparse
 
 from repo_graph.extraction.contracts import FileScanContext
-from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.scanners.code.python.ast_values import (
     python_attribute_name,
@@ -14,7 +13,7 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
     python_keyword_string,
     python_string_arg,
 )
-from repo_graph.extraction.scanners.interactions.http import HTTP_METHODS, http_facts_for_target, http_target
+from repo_graph.extraction.scanners.interactions.http import HTTP_METHODS, http_facts_for_target, http_service_call_fact
 from repo_graph.extraction.scanners.interactions.naming import service_name_from_url
 from repo_graph.extraction.scanners.sql.properties import source_context_properties
 
@@ -48,24 +47,20 @@ def python_http_facts_for_target(
 ) -> list[RelationshipFact]:
     if not raw_target:
         return []
-    source_ref = entity_reference(from_entity or context.file_entity)
     extra_properties = source_context_properties(from_entity)
     parsed = urlparse(raw_target)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
-        target = http_target(raw_target, method)
-        target["service_name"] = service_name_from_url(raw_target)
-        target["client"] = client
-        target.update(extra_properties)
         return [
-            unresolved_relationship_fact(
-                source_ref,
-                target["service_name"],
-                "CALLS_SERVICE",
+            http_service_call_fact(
                 context,
+                method,
+                raw_target,
+                line_number,
                 "python_http",
-                to_type="service",
-                line_number=line_number,
-                properties=target,
+                client=client,
+                from_entity=from_entity,
+                service_name=service_name_from_url(raw_target),
+                extra_properties=extra_properties,
             )
         ]
     return http_facts_for_target(

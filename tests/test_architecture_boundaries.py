@@ -9,7 +9,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from scripts.check_architecture_boundaries import BoundaryFinding, scan_file, scanner_helper_path_findings
+from scripts.check_architecture_boundaries import (
+    BoundaryFinding,
+    interaction_property_import_findings,
+    scan_file,
+    scanner_helper_path_findings,
+)
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):
@@ -64,6 +69,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertEqual(len(finding), 1)
         self.assertEqual(finding[0].module, "src/repo_graph/extraction/scanners/code/python/helpers.py")
 
+    def test_reports_raw_interaction_property_import_outside_builder_modules(self) -> None:
+        finding = self.scan_interaction_property_import(
+            "src/repo_graph/extraction/scanners/code/python/http.py",
+            "from repo_graph.extraction.interaction_properties import interaction_properties\n",
+        )
+
+        self.assertEqual(len(finding), 1)
+        self.assertIn("owning interaction fact builder", finding[0].message)
+
+    def test_allows_raw_interaction_property_import_in_builder_modules(self) -> None:
+        finding = self.scan_interaction_property_import(
+            "src/repo_graph/extraction/scanners/interactions/services.py",
+            "from repo_graph.extraction.interaction_properties import interaction_properties\n",
+        )
+
+        self.assertEqual(finding, [])
+
     def scan_source(self, relative_path: str, content: str) -> list[BoundaryFinding]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / relative_path
@@ -74,6 +96,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
     def scan_helper_path(self, relative_path: str) -> list[BoundaryFinding]:
         return list(scanner_helper_path_findings(Path(relative_path)))
+
+    def scan_interaction_property_import(self, relative_path: str, content: str) -> list[BoundaryFinding]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            with working_directory(Path(directory)):
+                return list(interaction_property_import_findings(Path(relative_path)))
 
 
 @contextmanager

@@ -317,6 +317,7 @@ docs/architecture.md    Target architecture and layer boundaries
 docs/spec-driven-development.md Spec-first workflow for meaningful changes
 docs/modularity.md     File-shape and package-boundary rules
 docs/extraction.md      Extraction layer contract and refactor path
+docs/interaction-fact-builders.md Canonical interaction fact builder APIs
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
 docs/extension-author-guide.md One obvious extension path for contributors

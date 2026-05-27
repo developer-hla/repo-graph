@@ -5,7 +5,12 @@ from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact
-from repo_graph.extraction.scanners.interactions.services import service_configuration_fact
+from repo_graph.extraction.scanners.interactions.http import http_service_call_fact
+from repo_graph.extraction.scanners.interactions.services import (
+    route_to_service_fact,
+    service_call_fact,
+    service_configuration_fact,
+)
 from repo_graph.sources import ResolvedSource
 
 
@@ -30,6 +35,68 @@ def example_context() -> FileScanContext:
 
 
 class InteractionFactHelperTests(unittest.TestCase):
+    def test_http_service_call_fact_uses_http_call_evidence(self) -> None:
+        context = example_context()
+        function = EntityFact(
+            entity_type="function",
+            name="orders.handler",
+            source_name=context.source.name,
+            file_path=context.rel_path,
+        )
+
+        fact = http_service_call_fact(
+            context,
+            "POST",
+            "https://inventory-service.example.com/api/orders",
+            8,
+            "python_http",
+            client="requests",
+            from_entity=function,
+            service_name="inventory-service",
+            extra_properties={"source_context_type": "function", "source_context_name": "orders.handler"},
+        )
+
+        self.assertEqual(fact.edge_type, "CALLS_SERVICE")
+        self.assertEqual(fact.from_name, "orders.handler")
+        self.assertEqual(fact.to_name, "inventory-service")
+        self.assertEqual(fact.properties["target_boundary"], "application")
+        self.assertEqual(fact.properties["dependency_scope"], "runtime")
+        self.assertEqual(fact.properties["interaction_kind"], "http_call")
+        self.assertEqual(fact.properties["raw_target"], "https://inventory-service.example.com/api/orders")
+        self.assertEqual(fact.properties["normalized_target"], "POST /api/orders")
+        self.assertEqual(fact.properties["client"], "requests")
+        self.assertEqual(fact.properties["source_context_name"], "orders.handler")
+
+    def test_service_call_fact_uses_runtime_service_call_evidence(self) -> None:
+        context = example_context()
+        function = EntityFact(
+            entity_type="function",
+            name="LegacyOrderService.GetOrder",
+            source_name=context.source.name,
+            file_path=context.rel_path,
+        )
+
+        fact = service_call_fact(
+            function.reference,
+            "InventoryServiceUrl",
+            context,
+            "vb_config_service",
+            service_name="inventory-service",
+            normalized_target="inventory-service",
+            line_number=12,
+            extra_properties={"config_key": "InventoryServiceUrl"},
+        )
+
+        self.assertEqual(fact.edge_type, "CALLS_SERVICE")
+        self.assertEqual(fact.to_type, "service")
+        self.assertEqual(fact.to_name, "inventory-service")
+        self.assertEqual(fact.properties["target_boundary"], "application")
+        self.assertEqual(fact.properties["dependency_scope"], "runtime")
+        self.assertEqual(fact.properties["interaction_kind"], "service_call")
+        self.assertEqual(fact.properties["raw_target"], "InventoryServiceUrl")
+        self.assertEqual(fact.properties["normalized_target"], "inventory-service")
+        self.assertEqual(fact.properties["config_key"], "InventoryServiceUrl")
+
     def test_service_configuration_fact_uses_structured_interaction_evidence(self) -> None:
         context = example_context()
         config_value = EntityFact(
@@ -104,6 +171,33 @@ class InteractionFactHelperTests(unittest.TestCase):
 
         self.assertEqual(fact.to_name, "inventory-api")
         self.assertEqual(fact.properties["service_name"], "inventory-api")
+
+    def test_route_to_service_fact_uses_deployment_route_evidence(self) -> None:
+        context = example_context()
+        route = EntityFact(
+            entity_type="api_route",
+            name="ANY /inventory",
+            source_name=context.source.name,
+            file_path=context.rel_path,
+        )
+
+        fact = route_to_service_fact(
+            route.reference,
+            "inventory-service",
+            context,
+            "kubernetes_ingress_route",
+            line_number=4,
+        )
+
+        self.assertEqual(fact.edge_type, "ROUTES_TO_SERVICE")
+        self.assertEqual(fact.to_type, "service")
+        self.assertEqual(fact.to_name, "inventory-service")
+        self.assertEqual(fact.properties["target_boundary"], "application")
+        self.assertEqual(fact.properties["dependency_scope"], "deployment")
+        self.assertEqual(fact.properties["interaction_kind"], "ingress_route")
+        self.assertEqual(fact.properties["raw_target"], "inventory-service")
+        self.assertEqual(fact.properties["normalized_target"], "inventory-service")
+        self.assertEqual(fact.properties["service_name"], "inventory-service")
 
 
 if __name__ == "__main__":
