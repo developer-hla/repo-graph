@@ -12,7 +12,7 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
     python_keyword_string,
     python_string_arg,
 )
-from repo_graph.extraction.scanners.scheduled_job_helpers import scheduled_job_facts
+from repo_graph.extraction.scanners.scheduled_jobs.facts import scheduled_job_facts
 
 
 def python_job_facts(

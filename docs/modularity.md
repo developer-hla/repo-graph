@@ -103,6 +103,8 @@ The largest runtime files should be addressed in this order:
     regex/method constants, and fact construction. Done.
 17. Cache helpers: split models, operation detection, target extraction,
     regex/method constants, and fact construction. Done.
+18. Scheduled job helpers: split shared job fact construction from JavaScript
+    cron extraction. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -189,6 +191,10 @@ repo_graph/extraction/scanners/
     operations.py
     patterns.py
     targets.py
+  scheduled_jobs/
+    __init__.py
+    facts.py
+    javascript.py
   code/
     python/
       __init__.py

@@ -341,6 +341,10 @@ repo_graph/
         patterns.py
         targets.py
       package_helpers.py
+      scheduled_jobs/
+        __init__.py
+        facts.py
+        javascript.py
       storage/
         __init__.py
         facts.py

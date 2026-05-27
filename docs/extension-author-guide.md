@@ -110,7 +110,7 @@ Use these public extraction APIs before hand-building facts:
 | Messaging facts | `repo_graph.extraction.scanners.messaging.facts` |
 | Storage facts | `repo_graph.extraction.scanners.storage.facts` |
 | Cache facts | `repo_graph.extraction.scanners.cache.facts` |
-| Scheduled job facts | `repo_graph.extraction.scanners.scheduled_job_helpers` |
+| Scheduled job facts | `repo_graph.extraction.scanners.scheduled_jobs.facts` |
 | Symbol facts and conservative internal calls | `repo_graph.extraction.scanners.symbol_helpers` |
 
 ## Graph Fact Rules
