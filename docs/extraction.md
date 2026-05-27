@@ -80,7 +80,7 @@ generated scanner catalog can explain scanner scope and emitted evidence.
 
 `pixi run architecture-boundary-check` enforces that code outside
 `repo_graph.extraction.scanners` imports scanner family package roots instead of
-internal modules such as `code.python.helpers` or `manifests.pyproject`.
+internal modules such as `code.python.http` or `manifests.pyproject`.
 
 ## Scanner Output
 
