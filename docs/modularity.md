@@ -91,6 +91,8 @@ The largest runtime files should be addressed in this order:
     SQL, messaging, cache, scheduled jobs, and storage. Done.
 11. Shared interaction helpers: split import, export, route, HTTP, and
     service/URL naming helpers. Done.
+12. SQL scanner helpers: split definitions, references, naming, provenance,
+    and interaction properties. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -101,9 +103,7 @@ After the report, database, storage, API, and UI splits, the remaining runtime
 hotspots are narrower. The next candidates should be handled as separate
 slices:
 
-1. SQL scanner helpers: split `sql/helpers.py` into definitions, references,
-   naming, provenance, and interaction properties.
-2. Deployment helpers: split `deployment/helpers.py` into Kubernetes
+1. Deployment helpers: split `deployment/helpers.py` into Kubernetes
    resources, environment/config links, ingress, selectors, and value
    normalization.
 
@@ -149,7 +149,6 @@ repo_graph/extraction/scanners/
   sql/
     __init__.py
     files.py
-    helpers.py
     definitions.py
     references.py
     properties.py

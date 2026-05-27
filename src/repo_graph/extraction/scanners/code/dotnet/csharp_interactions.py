@@ -11,7 +11,7 @@ from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.scanners.code.dotnet.csharp_syntax import csharp_unescape_string
 from repo_graph.extraction.scanners.interactions.http import http_facts_for_target, http_target
 from repo_graph.extraction.scanners.interactions.naming import service_name_from_url
-from repo_graph.extraction.scanners.sql.helpers import source_context_properties
+from repo_graph.extraction.scanners.sql.properties import source_context_properties
 
 CS_HTTP_CALL_RE = re.compile(
     r"\.\s*(Get|Post|Put|Patch|Delete)Async\s*\(\s*(?:\$@|@\$|\$|@)?\"((?:\"\"|\\.|[^\"])*)\"",

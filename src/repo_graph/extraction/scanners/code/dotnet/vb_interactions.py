@@ -12,11 +12,8 @@ from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.interaction_properties import interaction_properties
 from repo_graph.extraction.scanners.interactions.http import http_facts_for_target, http_target
 from repo_graph.extraction.scanners.interactions.naming import service_name_from_identifier, service_name_from_url
-from repo_graph.extraction.scanners.sql.helpers import (
-    source_context_properties,
-    sql_interaction_properties,
-    stored_procedure_target,
-)
+from repo_graph.extraction.scanners.sql.properties import source_context_properties, sql_interaction_properties
+from repo_graph.extraction.scanners.sql.references import stored_procedure_target
 
 VB_CONFIG_SETTING_RE = re.compile(r"ConfigurationManager\.AppSettings\s*\(\s*\"([^\"]+)\"\s*\)", re.IGNORECASE)
 VB_COMMAND_TEXT_RE = re.compile(r"\.CommandText\s*=\s*\"([^\"]+)\"", re.IGNORECASE)

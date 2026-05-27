@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.sql.helpers import (
-    SQL_BATCH_SEPARATOR_RE,
-    scan_sql_references,
-    sql_definition_facts,
-    sql_reference_facts_for_line,
-)
+from repo_graph.extraction.scanners.sql.definitions import sql_definition_facts
+from repo_graph.extraction.scanners.sql.references import scan_sql_references, sql_reference_facts_for_line
+
+SQL_BATCH_SEPARATOR_RE = re.compile(r"^\s*GO(?:\s+\d+)?\s*;?\s*$", re.IGNORECASE)
 
 
 class SqlExtractor:

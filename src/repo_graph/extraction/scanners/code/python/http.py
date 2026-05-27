@@ -16,7 +16,7 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
 )
 from repo_graph.extraction.scanners.interactions.http import HTTP_METHODS, http_facts_for_target, http_target
 from repo_graph.extraction.scanners.interactions.naming import service_name_from_url
-from repo_graph.extraction.scanners.sql.helpers import source_context_properties
+from repo_graph.extraction.scanners.sql.properties import source_context_properties
 
 
 def python_http_call_facts(

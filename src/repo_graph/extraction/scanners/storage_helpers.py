@@ -11,7 +11,7 @@ from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.interaction_properties import interaction_properties
-from repo_graph.extraction.scanners.sql.helpers import source_context_properties
+from repo_graph.extraction.scanners.sql.properties import source_context_properties
 
 STORAGE_NAME_RE = r"[A-Za-z_][\w.]*"
 STORAGE_METHOD_RE = re.compile(

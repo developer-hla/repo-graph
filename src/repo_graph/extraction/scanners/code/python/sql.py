@@ -7,8 +7,8 @@ import ast
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.scanners.code.python.ast_values import python_attribute_name, python_string_arg
-from repo_graph.extraction.scanners.sql.helpers import (
-    source_context_properties,
+from repo_graph.extraction.scanners.sql.properties import source_context_properties
+from repo_graph.extraction.scanners.sql.references import (
     sql_call_facts,
     sql_object_read_facts,
     sql_object_schema_reference_facts,

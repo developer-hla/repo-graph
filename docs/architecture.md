@@ -375,7 +375,6 @@ repo_graph/
         __init__.py
         definitions.py
         files.py
-        helpers.py
         naming.py
         properties.py
         provenance.py
