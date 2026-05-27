@@ -295,7 +295,10 @@ repo_graph/
     _models.py
     _naming.py
     _postgres_adapter.py
+    _postgres_filters.py
+    _postgres_queries.py
     _postgres_reader.py
+    _postgres_row_mapping.py
     _reader_common.py
     _readers.py
     _sqlserver_adapter.py

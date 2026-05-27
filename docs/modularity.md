@@ -124,6 +124,9 @@ The largest runtime files should be addressed in this order:
 26. Config loader: split defaults, models, scalar validation, source dispatch,
     GitHub org source parsing, database source parsing, and scan rule parsing
     behind the stable `repo_graph.config` public surface. Done.
+27. PostgreSQL reader: split catalog query builders, filter helpers, and row
+    mapping behind the stable `read_postgres_metadata` reader entrypoint.
+    Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -375,7 +378,10 @@ repo_graph/database/
   _readers.py
   _reader_common.py
   _sqlserver_reader.py
+  _postgres_filters.py
+  _postgres_queries.py
   _postgres_reader.py
+  _postgres_row_mapping.py
   _metadata.py
 ```
 
@@ -391,8 +397,11 @@ Responsibilities:
 - `_sqlserver_adapter.py` and `_postgres_adapter.py`: pure metadata-row to
   fact conversion for each engine.
 - `_connectors.py`: live connector entry points and safe connection handling.
-- `_sqlserver_reader.py` and `_postgres_reader.py`: bounded catalog queries
-  for each engine.
+- `_sqlserver_reader.py` and `_postgres_reader.py`: bounded catalog read
+  orchestration for each engine.
+- `_postgres_queries.py`, `_postgres_filters.py`, and
+  `_postgres_row_mapping.py`: PostgreSQL catalog SQL, filter expansion, and
+  metadata-row conversion.
 - `_adapter_common.py`, `_reader_common.py`, `_constants.py`, and
   `_naming.py`: small package-local shared contracts.
 
