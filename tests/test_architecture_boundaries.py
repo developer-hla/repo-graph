@@ -16,6 +16,7 @@ from scripts.check_architecture_boundaries import (
     scan_file,
     scanner_helper_path_findings,
     sql_interaction_property_import_findings,
+    storage_internal_import_findings,
 )
 
 
@@ -123,6 +124,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertEqual(finding, [])
 
+    def test_reports_storage_internal_import_outside_storage_package(self) -> None:
+        finding = self.scan_storage_internal_import(
+            "src/repo_graph/api_runtime/query_responses.py",
+            "from repo_graph.storage._neo4j_reads import read_graph_scope\n",
+        )
+
+        self.assertEqual(len(finding), 1)
+        self.assertIn("repo_graph.storage", finding[0].message)
+
+    def test_allows_storage_internal_import_inside_storage_package(self) -> None:
+        finding = self.scan_storage_internal_import(
+            "src/repo_graph/storage/_neo4j.py",
+            "from repo_graph.storage._neo4j_reads import read_graph_scope\n",
+        )
+
+        self.assertEqual(finding, [])
+
     def scan_source(self, relative_path: str, content: str) -> list[BoundaryFinding]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / relative_path
@@ -157,6 +175,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
             with working_directory(Path(directory)):
                 return list(database_metadata_edge_import_findings(Path(relative_path)))
+
+    def scan_storage_internal_import(self, relative_path: str, content: str) -> list[BoundaryFinding]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            with working_directory(Path(directory)):
+                return list(storage_internal_import_findings(Path(relative_path)))
 
 
 @contextmanager

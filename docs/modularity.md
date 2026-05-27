@@ -113,6 +113,8 @@ The largest runtime files should be addressed in this order:
     profiles, and summaries. Done.
 22. API runtime routes: split app construction from focused route registration
     modules for UI, system, source, build, query, and report workflows. Done.
+23. Neo4j read workflows: split scope, source, entity, relationship, and common
+    read helpers behind the public storage surface. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -402,9 +404,14 @@ repo_graph/storage/
   _neo4j_models.py
   _neo4j_payloads.py
   _neo4j_queries.py
+  _neo4j_entity_reads.py
+  _neo4j_read_common.py
   _neo4j_reads.py
+  _neo4j_relationship_reads.py
   _neo4j_records.py
+  _neo4j_scope_reads.py
   _neo4j_settings.py
+  _neo4j_source_reads.py
   _neo4j_writes.py
 ```
 
@@ -421,7 +428,14 @@ Responsibilities:
 - `_neo4j_records.py`: conversion from graph export dictionaries to write
   records.
 - `_neo4j_writes.py`: schema setup and write transactions.
-- `_neo4j_reads.py`: read workflows and result shaping.
+- `_neo4j_entity_reads.py`: entity lookup, search, and type listing.
+- `_neo4j_relationship_reads.py`: relationship search, neighbors, and
+  unresolved edge listing.
+- `_neo4j_scope_reads.py`: graph stats, loaded scope, overview, and source
+  activity.
+- `_neo4j_source_reads.py`: one-source overview.
+- `_neo4j_read_common.py`: shared read result conversion helpers.
+- `_neo4j_reads.py`: compatibility facade for older internal read imports.
 - `_neo4j_queries.py`: Cypher query text builders.
 - `_neo4j_payloads.py`: Neo4j records mapped into API/report payloads.
 - `_neo4j_common.py`: small adapter-local normalization helpers.

@@ -26,6 +26,7 @@ PUBLIC_SCANNER_PACKAGES = (
 )
 
 SCANNER_PACKAGE_ROOT = "src/repo_graph/extraction/scanners"
+STORAGE_PACKAGE_ROOT = "src/repo_graph/storage"
 ALLOWED_SCANNER_HELPER_PATHS = frozenset(
     {
         f"{SCANNER_PACKAGE_ROOT}/code/javascript/helpers.py",
@@ -38,6 +39,7 @@ INTERACTION_PROPERTIES_MODULE = "repo_graph.extraction.interaction_properties"
 SQL_PROPERTIES_MODULE = "repo_graph.extraction.scanners.sql.properties"
 DATABASE_METADATA_EDGES_MODULE = "repo_graph.database._metadata_edges"
 DATABASE_METADATA_EDGES_PATH = "src/repo_graph/database/_metadata_edges.py"
+STORAGE_INTERNAL_MODULE_PREFIX = "repo_graph.storage._"
 RAW_DATABASE_METADATA_EDGE_NAMES = frozenset(
     {
         "database_interaction_properties",
@@ -111,6 +113,7 @@ def scan_paths(paths: Iterable[Path]) -> Iterable[BoundaryFinding]:
         yield from interaction_property_import_findings(path)
         yield from sql_interaction_property_import_findings(path)
         yield from database_metadata_edge_import_findings(path)
+        yield from storage_internal_import_findings(path)
         yield from scan_file(path)
 
 
@@ -177,6 +180,21 @@ def database_metadata_edge_import_findings(path: Path) -> Iterable[BoundaryFindi
                 reference.line_number,
                 reference.module,
                 "use a semantic database metadata edge builder instead of importing raw edge/property helpers",
+            )
+
+
+def storage_internal_import_findings(path: Path) -> Iterable[BoundaryFinding]:
+    relative_path = normalize_path(path)
+    if relative_path.startswith(f"{STORAGE_PACKAGE_ROOT}/"):
+        return
+
+    for reference in import_references(path):
+        if reference.module.startswith(STORAGE_INTERNAL_MODULE_PREFIX):
+            yield BoundaryFinding(
+                relative_path,
+                reference.line_number,
+                reference.module,
+                "import through repo_graph.storage instead of reaching into storage internals",
             )
 
 
