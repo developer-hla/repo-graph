@@ -394,15 +394,19 @@ repo_graph/
         __init__.py
         dotnet/
           __init__.py
+          build_config.py
           config.py
           constants.py
+          framework_config.py
           metadata.py
+          packages_config.py
+          project.py
           references.py
+          solution.py
           solutions.py
           xml_utils.py
         package_json.py
         pyproject.py
-        dotnet_project.py
       sql/
         __init__.py
         definitions.py

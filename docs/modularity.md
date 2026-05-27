@@ -107,6 +107,8 @@ The largest runtime files should be addressed in this order:
     cron extraction. Done.
 19. .NET manifest helpers: split constants, XML parsing, project metadata,
     references, solution parsing, and framework config facts. Done.
+20. .NET manifest scanner entrypoints: split project, packages config,
+    framework config, build config, and solution scanners. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -200,10 +202,15 @@ repo_graph/extraction/scanners/
   manifests/
     dotnet/
       __init__.py
+      build_config.py
       config.py
       constants.py
+      framework_config.py
       metadata.py
+      packages_config.py
+      project.py
       references.py
+      solution.py
       solutions.py
       xml_utils.py
   code/
