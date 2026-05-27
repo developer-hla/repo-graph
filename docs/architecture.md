@@ -334,6 +334,13 @@ repo_graph/
         patterns.py
         targets.py
       package_helpers.py
+      storage/
+        __init__.py
+        facts.py
+        models.py
+        operations.py
+        patterns.py
+        targets.py
       symbol_helpers.py
       code/
         python/

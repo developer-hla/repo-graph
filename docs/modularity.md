@@ -99,6 +99,8 @@ The largest runtime files should be addressed in this order:
     import focused .NET scanner modules directly. Done.
 15. Messaging helpers: split models, operation detection, target extraction,
     regex/method constants, and fact construction. Done.
+16. Storage helpers: split models, operation detection, target extraction,
+    regex/method constants, and fact construction. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -165,6 +167,13 @@ repo_graph/extraction/scanners/
     kubernetes_selectors.py
     kubernetes_values.py
   messaging/
+    __init__.py
+    facts.py
+    models.py
+    operations.py
+    patterns.py
+    targets.py
+  storage/
     __init__.py
     facts.py
     models.py

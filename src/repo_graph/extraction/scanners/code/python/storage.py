@@ -13,14 +13,10 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
     python_keyword_string,
     python_string_arg,
 )
-from repo_graph.extraction.scanners.storage_helpers import (
-    StorageOperation,
-    StorageTarget,
-    storage_operation,
-    storage_relationship_fact,
-    storage_target,
-    storage_target_from_parts,
-)
+from repo_graph.extraction.scanners.storage.facts import storage_relationship_fact
+from repo_graph.extraction.scanners.storage.models import StorageOperation, StorageTarget
+from repo_graph.extraction.scanners.storage.operations import storage_operation
+from repo_graph.extraction.scanners.storage.targets import storage_target, storage_target_from_parts
 
 
 def python_storage_facts(

@@ -48,7 +48,7 @@ from repo_graph.extraction.scanners.code.dotnet.vb_syntax import (
 from repo_graph.extraction.scanners.interactions.routes import route_entity_fact
 from repo_graph.extraction.scanners.messaging.facts import message_facts_for_line
 from repo_graph.extraction.scanners.sql.references import sql_reference_facts_for_line
-from repo_graph.extraction.scanners.storage_helpers import storage_facts_for_line
+from repo_graph.extraction.scanners.storage.facts import storage_facts_for_line
 
 
 class LegacyDotnetEndpointExtractor:
