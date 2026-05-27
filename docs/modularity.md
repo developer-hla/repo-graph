@@ -83,6 +83,8 @@ The largest runtime files should be addressed in this order:
    interactions, VB syntax, VB symbols, VB routes, and VB interactions. Done.
 7. Database reconciliation report: split collection, grouping, summaries,
    constants, and SQL item normalization. Done.
+8. Source resolver: split models, path resolution, GitHub expansion, Git
+   checkout, sync workflows, resolution workflows, and status payloads. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -93,14 +95,50 @@ After the report, database, storage, API, and UI splits, the remaining runtime
 hotspots are narrower. The next candidates should be handled as separate
 slices:
 
-1. Source resolver: split `sources/_resolver.py` into local path resolution,
-   Git/GitHub sync, source status payloads, and shared source metadata helpers.
-   It is just below the soft limit but mixes provider and status concerns.
-2. Scanner shared helpers: review Python scanner helpers, interaction helpers,
+1. Scanner shared helpers: review Python scanner helpers, interaction helpers,
    deployment helpers, and SQL helpers for focused package-local boundaries.
 
 Large test files and generated documentation scripts can be split later, but
 runtime package boundaries should stay the priority.
+
+## Sources Package Target
+
+Source resolution owns where code and database metadata come from. It should
+not parse source files, introspect database catalogs, construct graph IDs, or
+serve API response shapes.
+
+```text
+repo_graph/sources/
+  __init__.py
+  _models.py
+  _paths.py
+  _github.py
+  _git.py
+  _expansion.py
+  _resolution.py
+  _sync.py
+  _status.py
+  _resolver.py
+```
+
+`repo_graph.sources` remains the public import surface for CLI, API,
+extraction, snapshots, and docs code. `_resolver.py` is a compatibility facade
+for older internal imports; new code should import through the package root or
+the focused module that owns the behavior.
+
+Responsibilities:
+
+- `_models.py`: resolved source data models.
+- `_paths.py`: local and cache path naming.
+- `_github.py`: GitHub organization expansion, pagination, filtering, and
+  token/header creation.
+- `_git.py`: Git checkout, fetch, branch selection, commit, origin, and command
+  execution helpers.
+- `_expansion.py`: configured source expansion and duplicate-name checks.
+- `_resolution.py`: converting configured sources into `ResolvedSource`
+  records.
+- `_sync.py`: source sync orchestration.
+- `_status.py`: inspect/sync status payloads and database connector readiness.
 
 ## .NET Scanner Package Target
 

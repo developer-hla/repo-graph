@@ -13,15 +13,10 @@ from repo_graph.sources import (
     inspect_sources,
     sync_sources_with_status,
 )
-from repo_graph.sources._resolver import (
-    expand_sources,
-    get_default_branch,
-    git_cache_path,
-    github_api_headers,
-    github_next_link,
-    run_git,
-    sync_git_source,
-)
+from repo_graph.sources._expansion import expand_sources
+from repo_graph.sources._git import get_default_branch, run_git, sync_git_source
+from repo_graph.sources._github import github_api_headers, github_next_link
+from repo_graph.sources._paths import git_cache_path
 
 
 class SourceSyncTests(unittest.TestCase):
@@ -161,7 +156,7 @@ class SourceSyncTests(unittest.TestCase):
             },
         ]
 
-        with patch("repo_graph.sources._resolver.github_api_pages", return_value=repos_payload) as github_api_pages:
+        with patch("repo_graph.sources._github.github_api_pages", return_value=repos_payload) as github_api_pages:
             sources = expand_sources((source,))
 
         github_api_pages.assert_called_once_with("https://api.github.com/orgs/example/repos?per_page=100&type=all")
@@ -185,7 +180,7 @@ class SourceSyncTests(unittest.TestCase):
             },
         ]
 
-        with patch("repo_graph.sources._resolver.github_api_pages", return_value=repos_payload) as github_api_pages:
+        with patch("repo_graph.sources._github.github_api_pages", return_value=repos_payload) as github_api_pages:
             sources = expand_sources((source,))
 
         github_api_pages.assert_called_once_with("https://api.github.com/orgs/example/repos?per_page=100&type=forks")
@@ -204,7 +199,7 @@ class SourceSyncTests(unittest.TestCase):
             )
             repos_payload = [{"name": "api-service", "clone_url": "https://github.com/example/api-service.git"}]
 
-            with patch("repo_graph.sources._resolver.github_api_pages", return_value=repos_payload):
+            with patch("repo_graph.sources._github.github_api_pages", return_value=repos_payload):
                 payload = inspect_sources(config)
 
         self.assertEqual(len(payload), 1)
@@ -235,7 +230,7 @@ class SourceSyncTests(unittest.TestCase):
             ),
         )
 
-        with patch("repo_graph.sources._resolver.sqlserver_driver_available", return_value=False):
+        with patch("repo_graph.sources._status.sqlserver_driver_available", return_value=False):
             payload = inspect_sources(config)
 
         self.assertEqual(payload[0]["name"], "current-db")
@@ -265,7 +260,7 @@ class SourceSyncTests(unittest.TestCase):
             ),
         )
 
-        with patch("repo_graph.sources._resolver.postgres_driver_available", return_value=False):
+        with patch("repo_graph.sources._status.postgres_driver_available", return_value=False):
             payload = inspect_sources(config)
 
         self.assertEqual(payload[0]["name"], "current-pg")

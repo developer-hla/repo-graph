@@ -280,7 +280,15 @@ repo_graph/
     _sqlserver_reader.py
   sources/
     __init__.py
+    _expansion.py
+    _git.py
+    _github.py
+    _models.py
+    _paths.py
+    _resolution.py
     _resolver.py
+    _status.py
+    _sync.py
   extraction/
     __init__.py
     orchestrator.py
