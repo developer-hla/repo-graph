@@ -345,7 +345,6 @@ repo_graph/
         dotnet/
           __init__.py
           scanner.py
-          helpers.py
           csharp_interactions.py
           csharp_routes.py
           csharp_symbols.py

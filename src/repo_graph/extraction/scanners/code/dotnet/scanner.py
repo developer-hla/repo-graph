@@ -8,32 +8,42 @@ from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch
 from repo_graph.extraction.scanners.cache_helpers import cache_facts_for_line
-from repo_graph.extraction.scanners.code.dotnet.helpers import (
+from repo_graph.extraction.scanners.code.dotnet.csharp_interactions import csharp_http_call_facts
+from repo_graph.extraction.scanners.code.dotnet.csharp_routes import (
+    csharp_controller_route_facts,
+    csharp_minimal_route_facts,
+    csharp_route_prefix,
+)
+from repo_graph.extraction.scanners.code.dotnet.csharp_symbols import (
     CS_METHOD_RE,
-    CS_NAMESPACE_RE,
     CS_TYPE_RE,
+    csharp_method_index,
+    csharp_symbol_call_facts,
+    csharp_symbol_facts,
+)
+from repo_graph.extraction.scanners.code.dotnet.csharp_syntax import (
+    CS_NAMESPACE_RE,
+    CSharpAttribute,
+    csharp_attributes,
+    csharp_function_scope_state,
+    csharp_should_clear_attributes,
+)
+from repo_graph.extraction.scanners.code.dotnet.vb_interactions import (
+    vb_service_call_facts,
+    vb_sql_command_facts,
+)
+from repo_graph.extraction.scanners.code.dotnet.vb_routes import vb_contract_route_facts
+from repo_graph.extraction.scanners.code.dotnet.vb_symbols import (
+    vb_method_index,
+    vb_symbol_call_facts,
+    vb_symbol_facts,
+)
+from repo_graph.extraction.scanners.code.dotnet.vb_syntax import (
     VB_ATTRIBUTE_RE,
     VB_END_METHOD_RE,
     VB_METHOD_RE,
     VB_NAMESPACE_RE,
     VB_TYPE_RE,
-    CSharpAttribute,
-    csharp_attributes,
-    csharp_controller_route_facts,
-    csharp_function_scope_state,
-    csharp_http_call_facts,
-    csharp_method_index,
-    csharp_minimal_route_facts,
-    csharp_route_prefix,
-    csharp_should_clear_attributes,
-    csharp_symbol_call_facts,
-    csharp_symbol_facts,
-    vb_contract_route_facts,
-    vb_method_index,
-    vb_service_call_facts,
-    vb_sql_command_facts,
-    vb_symbol_call_facts,
-    vb_symbol_facts,
 )
 from repo_graph.extraction.scanners.interactions.routes import route_entity_fact
 from repo_graph.extraction.scanners.messaging_helpers import message_facts_for_line

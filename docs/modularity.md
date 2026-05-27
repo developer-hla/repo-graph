@@ -95,6 +95,8 @@ The largest runtime files should be addressed in this order:
     and interaction properties. Done.
 13. Deployment helpers: split Kubernetes resources, environment/config links,
     ingress, selectors, and value normalization. Done.
+14. .NET scanner facade cleanup: remove the package-level helper facade and
+    import focused .NET scanner modules directly. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -230,7 +232,6 @@ resolution, SQL extraction, and legacy HTTP logic.
 repo_graph/extraction/scanners/code/dotnet/
   __init__.py
   scanner.py
-  helpers.py
   csharp_syntax.py
   csharp_symbols.py
   csharp_routes.py
@@ -240,10 +241,6 @@ repo_graph/extraction/scanners/code/dotnet/
   vb_routes.py
   vb_interactions.py
 ```
-
-`helpers.py` is a compatibility facade for the existing package surface. New
-code should import from the focused module that owns the behavior unless it is
-intentionally preserving the legacy facade.
 
 Responsibilities:
 
