@@ -101,6 +101,8 @@ The largest runtime files should be addressed in this order:
     regex/method constants, and fact construction. Done.
 16. Storage helpers: split models, operation detection, target extraction,
     regex/method constants, and fact construction. Done.
+17. Cache helpers: split models, operation detection, target extraction,
+    regex/method constants, and fact construction. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -143,6 +145,13 @@ Target implementation slices:
 
 ```text
 repo_graph/extraction/scanners/
+  cache/
+    __init__.py
+    facts.py
+    models.py
+    operations.py
+    patterns.py
+    targets.py
   interactions/
     __init__.py
     imports.py

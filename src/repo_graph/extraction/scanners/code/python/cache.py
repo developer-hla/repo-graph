@@ -6,7 +6,9 @@ import ast
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
-from repo_graph.extraction.scanners.cache_helpers import cache_operation, cache_relationship_fact, cache_target
+from repo_graph.extraction.scanners.cache.facts import cache_relationship_fact
+from repo_graph.extraction.scanners.cache.operations import cache_operation
+from repo_graph.extraction.scanners.cache.targets import cache_target
 from repo_graph.extraction.scanners.code.python.ast_values import (
     python_attribute_name,
     python_call_receiver_name,

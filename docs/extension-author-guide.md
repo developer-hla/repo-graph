@@ -109,7 +109,7 @@ Use these public extraction APIs before hand-building facts:
 | Interaction edge evidence | `repo_graph.extraction.interaction_properties.interaction_properties` |
 | Messaging facts | `repo_graph.extraction.scanners.messaging.facts` |
 | Storage facts | `repo_graph.extraction.scanners.storage.facts` |
-| Cache facts | `repo_graph.extraction.scanners.cache_helpers` |
+| Cache facts | `repo_graph.extraction.scanners.cache.facts` |
 | Scheduled job facts | `repo_graph.extraction.scanners.scheduled_job_helpers` |
 | Symbol facts and conservative internal calls | `repo_graph.extraction.scanners.symbol_helpers` |
 

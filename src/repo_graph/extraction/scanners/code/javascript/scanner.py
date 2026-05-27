@@ -6,7 +6,7 @@ from pathlib import Path
 
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.cache_helpers import cache_facts_for_line
+from repo_graph.extraction.scanners.cache.facts import cache_facts_for_line
 from repo_graph.extraction.scanners.code.javascript.helpers import (
     javascript_function_scope_state,
     javascript_symbol_call_facts,

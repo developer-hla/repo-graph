@@ -7,7 +7,7 @@ from pathlib import Path
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.cache_helpers import cache_facts_for_line
+from repo_graph.extraction.scanners.cache.facts import cache_facts_for_line
 from repo_graph.extraction.scanners.code.dotnet.csharp_interactions import csharp_http_call_facts
 from repo_graph.extraction.scanners.code.dotnet.csharp_routes import (
     csharp_controller_route_facts,
