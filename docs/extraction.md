@@ -69,15 +69,18 @@ resolution modules.
 
 ## Scanner Registry
 
-The registry owns scanner order. Scanner modules should expose scanner classes
-or small factory functions; callers should ask the registry for default
-scanners instead of constructing scanner families directly.
+The registry owns scanner order and scanner extension metadata. Scanner modules
+should expose scanner classes or small factory functions; callers should ask the
+registry for default scanners instead of constructing scanner families
+directly.
 
 Registry order must stay deterministic because parser fingerprints, snapshot
 status, and generated parser coverage depend on it.
-Every default extractor must expose a `ScannerSpec` so the generated scanner
-catalog can explain scanner family, scope, and emitted evidence from one
-regular metadata shape.
+Every default extractor must have one `ScannerRegistration` with an explicit
+order, a `ScannerSpec`, and a factory. The generated scanner catalog uses those
+registrations to explain scanner family, scope, and emitted evidence from one
+regular metadata shape. `validate_scanner_registrations()` is the guardrail for
+registration order, names, families, metadata, and factory/spec mismatches.
 
 `pixi run architecture-boundary-check` enforces that code outside
 `repo_graph.extraction.scanners` imports scanner family package roots instead of

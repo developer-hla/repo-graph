@@ -101,7 +101,8 @@ metadata surface used by the registry, generated docs, and guardrail tests.
 
 Scanner families may have detailed internals under directories such as
 `repo_graph.extraction.scanners.code.python`, but registration should stay in
-`repo_graph.extraction.registry`.
+`repo_graph.extraction.registry`. Add new default scanners through
+`ScannerRegistration`, not by hand-editing `default_extractors()`.
 
 Use these public extraction APIs before hand-building facts:
 

@@ -40,8 +40,8 @@ resolution, and export shape.
    come from the spec. Add a narrow `can_process` predicate and an extraction
    method that returns scanner output. Put the implementation in the relevant
    `repo_graph.extraction.scanners` family module and keep cross-family
-   registration in `registry.py`. Scanner output should be typed extracted
-   facts, not graph objects.
+   registration in `registry.py` as a `ScannerRegistration`. Scanner output
+   should be typed extracted facts, not graph objects.
 
 6. Emit semantic facts with source provenance.
    File-derived facts should include `file_path`, `line_number` when available,
@@ -84,7 +84,9 @@ resolution, and export shape.
    `interaction_kind` are present.
 
 8. Register the extractor in the scanner registry.
-   The registry order should stay deterministic.
+   Add one `ScannerRegistration` with an explicit order, the extractor's
+   `ScannerSpec`, and the extractor factory. The registry order should stay
+   deterministic.
 
 9. Add focused tests in `tests/test_extraction.py`.
    Tests should cover at least one positive extraction and any important

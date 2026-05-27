@@ -31,7 +31,7 @@ from repo_graph.config import (
 )
 from repo_graph.extraction import MAX_FILE_BYTES, build_graph
 from repo_graph.extraction.contracts import scanner_spec
-from repo_graph.extraction.registry import default_extractors
+from repo_graph.extraction.registry import default_scanner_registrations
 from repo_graph.extraction.source_scanner import scan_source
 from repo_graph.sources import resolve_sources
 from repo_graph.vocabulary import (
@@ -340,33 +340,35 @@ def parser_coverage_doc() -> str:
 
 def scanner_catalog_doc() -> str:
     config = load_config(LOCAL_EXAMPLE_CONFIG)
-    extractors = default_extractors()
+    registrations = default_scanner_registrations()
+    extractors = [registration.create_extractor() for registration in registrations]
     examples = scanner_example_coverage(config, extractors)
 
     lines = [
         generated_header("Scanner Catalog"),
-        "This file is generated from `repo_graph.extraction.registry.default_extractors` and a strict scan of "
-        "`config/local-example.yaml`.",
-        "It documents scanner registration order, target patterns, parser IDs, and graph types exercised by "
-        "synthetic examples.",
+        "This file is generated from `repo_graph.extraction.registry.default_scanner_registrations` and a strict "
+        "scan of `config/local-example.yaml`.",
+        "It documents scanner registration order, families, target patterns, parser IDs, descriptions, and graph "
+        "types exercised by synthetic examples.",
         "",
-        f"- Scanner count: `{len(extractors)}`",
+        f"- Scanner count: `{len(registrations)}`",
         "",
-        "| Order | Scanner | Family | Module | Target Patterns | Parser IDs | Exercised Edge Types | "
+        "| Order | Scanner | Family | Factory | Target Patterns | Parser IDs | Description | Exercised Edge Types | "
         "Exercised Node Types |",
-        "| ---: | --- | --- | --- | --- | --- | --- | --- |",
+        "| ---: | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for index, extractor in enumerate(extractors, start=1):
-        spec = scanner_spec(extractor)
+    for registration in registrations:
+        spec = registration.spec
         example = examples[spec.name]
         lines.append(
             "| "
-            f"{index} | "
+            f"{registration.order} | "
             f"`{spec.name}` | "
             f"`{spec.family}` | "
-            f"`{extractor.__class__.__module__}` | "
+            f"`{registration.factory_module}.{registration.factory_name}` | "
             f"{format_inline_values(spec.target_patterns)} | "
             f"{format_inline_values(spec.parser_ids)} | "
+            f"{escape_markdown_cell(spec.description)} | "
             f"{format_inline_values(example['edge_types'])} | "
             f"{format_inline_values(example['node_types'])} |"
         )
