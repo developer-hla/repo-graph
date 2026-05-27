@@ -16,7 +16,7 @@ from repo_graph.extraction.scanners.code.javascript.helpers import (
 from repo_graph.extraction.scanners.interactions.http import http_call_facts
 from repo_graph.extraction.scanners.interactions.imports import import_facts
 from repo_graph.extraction.scanners.interactions.routes import route_facts
-from repo_graph.extraction.scanners.messaging_helpers import message_facts_for_line
+from repo_graph.extraction.scanners.messaging.facts import message_facts_for_line
 from repo_graph.extraction.scanners.scheduled_job_helpers import javascript_scheduled_job_facts
 from repo_graph.extraction.scanners.sql.references import sql_reference_facts_for_line
 from repo_graph.extraction.scanners.storage_helpers import storage_facts_for_line

@@ -97,6 +97,8 @@ The largest runtime files should be addressed in this order:
     ingress, selectors, and value normalization. Done.
 14. .NET scanner facade cleanup: remove the package-level helper facade and
     import focused .NET scanner modules directly. Done.
+15. Messaging helpers: split models, operation detection, target extraction,
+    regex/method constants, and fact construction. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -162,6 +164,13 @@ repo_graph/extraction/scanners/
     kubernetes_ingress.py
     kubernetes_selectors.py
     kubernetes_values.py
+  messaging/
+    __init__.py
+    facts.py
+    models.py
+    operations.py
+    patterns.py
+    targets.py
   code/
     python/
       __init__.py

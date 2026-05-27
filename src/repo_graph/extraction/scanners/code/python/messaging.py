@@ -13,12 +13,10 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
     python_keyword_strings,
     python_string_values_from_arg,
 )
-from repo_graph.extraction.scanners.messaging_helpers import (
-    MessageTarget,
-    message_operation,
-    message_relationship_fact,
-    message_target,
-)
+from repo_graph.extraction.scanners.messaging.facts import message_relationship_fact
+from repo_graph.extraction.scanners.messaging.models import MessageTarget
+from repo_graph.extraction.scanners.messaging.operations import message_operation
+from repo_graph.extraction.scanners.messaging.targets import message_target
 
 
 def python_message_facts(

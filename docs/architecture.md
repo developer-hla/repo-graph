@@ -326,6 +326,13 @@ repo_graph/
         routes.py
       manifest_dotnet_helpers.py
       manifest_helpers.py
+      messaging/
+        __init__.py
+        facts.py
+        models.py
+        operations.py
+        patterns.py
+        targets.py
       package_helpers.py
       symbol_helpers.py
       code/
