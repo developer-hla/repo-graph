@@ -320,6 +320,7 @@ docs/extraction.md      Extraction layer contract and refactor path
 docs/interaction-fact-builders.md Canonical interaction fact builder APIs
 docs/sql-interaction-builders.md SQL-specific interaction builder contract
 docs/database-metadata-builders.md Database metadata relationship builder contract
+docs/vocabulary.md      Graph vocabulary package contract
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
 docs/blast-radius-report.md Blast-radius report contract

@@ -1,0 +1,75 @@
+"""Canonical graph vocabulary and policy metadata."""
+
+from __future__ import annotations
+
+from repo_graph.vocabulary.coverage import (
+    CLASSIFICATION_COVERAGE_WARNING_RULES,
+    EDGE_TYPE_COVERAGE_WARNING_RULES,
+    CoverageWarningRule,
+)
+from repo_graph.vocabulary.edges import EDGE_TYPES, INTERACTION_EDGE_TYPES, SQL_EDGE_TYPES
+from repo_graph.vocabulary.entities import (
+    CACHE_ENTITY_TYPES,
+    EDGE_TARGET_TYPES,
+    ENTITY_TYPES,
+    MESSAGE_ENTITY_TYPES,
+    SQL_ENTITY_TYPES,
+    STORAGE_ENTITY_TYPES,
+)
+from repo_graph.vocabulary.impact import (
+    IMPACT_EDGE_TYPES,
+    IMPACT_PROFILE_DESCRIPTIONS,
+    IMPACT_PROFILES,
+    STRUCTURAL_EDGE_TYPES,
+)
+from repo_graph.vocabulary.interactions import (
+    INTERACTION_DEPENDENCY_SCOPES,
+    INTERACTION_EVIDENCE_KEYS,
+    INTERACTION_KINDS,
+    INTERACTION_TARGET_BOUNDARIES,
+)
+from repo_graph.vocabulary.parsers import PARSER_IDS
+from repo_graph.vocabulary.unresolved import (
+    CLASSIFICATION_ACTIONS,
+    CLASSIFICATION_ORDER,
+    LOCAL_EDGE_PREFIXES,
+    MISSING_SOURCE_EDGE_TYPES,
+    MISSING_SOURCE_TARGET_TYPES,
+    PARSER_GAP_EDGE_TYPES,
+    PARSER_GAP_TARGET_TYPES,
+    UNRESOLVED_CLASSIFICATIONS,
+    UnresolvedClassification,
+)
+
+__all__ = [
+    "CACHE_ENTITY_TYPES",
+    "CLASSIFICATION_ACTIONS",
+    "CLASSIFICATION_COVERAGE_WARNING_RULES",
+    "CLASSIFICATION_ORDER",
+    "EDGE_TARGET_TYPES",
+    "EDGE_TYPES",
+    "EDGE_TYPE_COVERAGE_WARNING_RULES",
+    "ENTITY_TYPES",
+    "IMPACT_EDGE_TYPES",
+    "IMPACT_PROFILES",
+    "IMPACT_PROFILE_DESCRIPTIONS",
+    "INTERACTION_DEPENDENCY_SCOPES",
+    "INTERACTION_EDGE_TYPES",
+    "INTERACTION_EVIDENCE_KEYS",
+    "INTERACTION_KINDS",
+    "INTERACTION_TARGET_BOUNDARIES",
+    "LOCAL_EDGE_PREFIXES",
+    "MESSAGE_ENTITY_TYPES",
+    "MISSING_SOURCE_EDGE_TYPES",
+    "MISSING_SOURCE_TARGET_TYPES",
+    "PARSER_GAP_EDGE_TYPES",
+    "PARSER_GAP_TARGET_TYPES",
+    "PARSER_IDS",
+    "SQL_EDGE_TYPES",
+    "SQL_ENTITY_TYPES",
+    "STORAGE_ENTITY_TYPES",
+    "STRUCTURAL_EDGE_TYPES",
+    "UNRESOLVED_CLASSIFICATIONS",
+    "CoverageWarningRule",
+    "UnresolvedClassification",
+]

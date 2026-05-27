@@ -425,7 +425,15 @@ repo_graph/
     builder.py
     model.py
     resolution.py
-    vocabulary.py
+  vocabulary/
+    __init__.py
+    coverage.py
+    edges.py
+    entities.py
+    impact.py
+    interactions.py
+    parsers.py
+    unresolved.py
   storage/
     __init__.py
     _neo4j.py

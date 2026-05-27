@@ -118,6 +118,9 @@ The largest runtime files should be addressed in this order:
 24. CLI runtime: split parser setup, build/load/refresh commands, source
     commands, report commands, runtime commands, and CLI-only helpers behind
     the stable `repo_graph.cli` entrypoint. Done.
+25. Vocabulary: split entity, edge, interaction, parser, impact, unresolved,
+    and coverage warning vocabulary behind the stable `repo_graph.vocabulary`
+    public surface. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
