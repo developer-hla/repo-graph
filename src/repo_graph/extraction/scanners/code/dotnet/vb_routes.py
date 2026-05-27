@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, resolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, FactBatch
-from repo_graph.extraction.scanners.interaction_helpers import route_entity_fact, route_handler_fact
+from repo_graph.extraction.scanners.interactions.routes import route_entity_fact, route_handler_fact
 
 
 def vb_contract_route_facts(

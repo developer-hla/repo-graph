@@ -10,12 +10,8 @@ from repo_graph.extraction.contracts import FileScanContext
 from repo_graph.extraction.fact_helpers import entity_reference, unresolved_relationship_fact
 from repo_graph.extraction.facts import EntityFact, RelationshipFact
 from repo_graph.extraction.interaction_properties import interaction_properties
-from repo_graph.extraction.scanners.interaction_helpers import (
-    http_facts_for_target,
-    http_target,
-    service_name_from_identifier,
-    service_name_from_url,
-)
+from repo_graph.extraction.scanners.interactions.http import http_facts_for_target, http_target
+from repo_graph.extraction.scanners.interactions.naming import service_name_from_identifier, service_name_from_url
 from repo_graph.extraction.scanners.sql.helpers import (
     source_context_properties,
     sql_interaction_properties,

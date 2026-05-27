@@ -13,11 +13,9 @@ from repo_graph.extraction.scanners.code.javascript.helpers import (
     javascript_symbol_facts,
     javascript_symbol_index,
 )
-from repo_graph.extraction.scanners.interaction_helpers import (
-    http_call_facts,
-    import_facts,
-    route_facts,
-)
+from repo_graph.extraction.scanners.interactions.http import http_call_facts
+from repo_graph.extraction.scanners.interactions.imports import import_facts
+from repo_graph.extraction.scanners.interactions.routes import route_facts
 from repo_graph.extraction.scanners.messaging_helpers import message_facts_for_line
 from repo_graph.extraction.scanners.scheduled_job_helpers import javascript_scheduled_job_facts
 from repo_graph.extraction.scanners.sql.helpers import sql_reference_facts_for_line

@@ -317,7 +317,13 @@ repo_graph/
     scanners/
       __init__.py
       common.py
-      interaction_helpers.py
+      interactions/
+        __init__.py
+        exports.py
+        http.py
+        imports.py
+        naming.py
+        routes.py
       manifest_dotnet_helpers.py
       manifest_helpers.py
       package_helpers.py

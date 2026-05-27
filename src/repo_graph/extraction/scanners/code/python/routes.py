@@ -14,11 +14,8 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
     python_keyword_strings,
     python_string_arg,
 )
-from repo_graph.extraction.scanners.interaction_helpers import (
-    HTTP_METHODS,
-    route_entity_fact,
-    route_handler_fact,
-)
+from repo_graph.extraction.scanners.interactions.http import HTTP_METHODS
+from repo_graph.extraction.scanners.interactions.routes import route_entity_fact, route_handler_fact
 
 
 def python_route_facts(

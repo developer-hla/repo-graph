@@ -14,12 +14,8 @@ from repo_graph.extraction.scanners.code.python.ast_values import (
     python_keyword_string,
     python_string_arg,
 )
-from repo_graph.extraction.scanners.interaction_helpers import (
-    HTTP_METHODS,
-    http_facts_for_target,
-    http_target,
-    service_name_from_url,
-)
+from repo_graph.extraction.scanners.interactions.http import HTTP_METHODS, http_facts_for_target, http_target
+from repo_graph.extraction.scanners.interactions.naming import service_name_from_url
 from repo_graph.extraction.scanners.sql.helpers import source_context_properties
 
 

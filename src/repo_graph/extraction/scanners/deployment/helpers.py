@@ -16,14 +16,14 @@ from repo_graph.extraction.fact_helpers import (
 from repo_graph.extraction.facts import EntityFact, FactBatch, RelationshipFact
 from repo_graph.extraction.interaction_properties import interaction_properties
 from repo_graph.extraction.scanners.common import object_mapping, string_value
-from repo_graph.extraction.scanners.interaction_helpers import (
+from repo_graph.extraction.scanners.interactions.http import http_target
+from repo_graph.extraction.scanners.interactions.naming import (
     ENV_NAME_RE,
-    http_target,
-    route_entity_fact,
     service_name_from_env,
     service_name_from_url,
     url_value,
 )
+from repo_graph.extraction.scanners.interactions.routes import route_entity_fact
 
 
 @dataclass(frozen=True)

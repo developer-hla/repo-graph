@@ -15,7 +15,7 @@ from repo_graph.extraction.scanners.code.dotnet.csharp_syntax import (
     csharp_replace_route_tokens,
     csharp_unescape_string,
 )
-from repo_graph.extraction.scanners.interaction_helpers import add_route_facts, route_entity_fact, route_handler_fact
+from repo_graph.extraction.scanners.interactions.routes import add_route_facts, route_entity_fact, route_handler_fact
 
 CS_MINIMAL_ROUTE_RE = re.compile(
     r"\b[A-Za-z_]\w*\s*\.\s*Map(Get|Post|Put|Patch|Delete|Head|Options)\s*\(\s*"
