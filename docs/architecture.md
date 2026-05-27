@@ -459,6 +459,12 @@ repo_graph/
     unresolved.py
   api_runtime/
     __init__.py
+    _build_routes.py
+    _query_routes.py
+    _report_routes.py
+    _source_routes.py
+    _system_routes.py
+    _ui_routes.py
     config_workflows.py
     constants.py
     coverage.py

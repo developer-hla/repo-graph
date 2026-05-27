@@ -111,6 +111,8 @@ The largest runtime files should be addressed in this order:
     framework config, build config, and solution scanners. Done.
 21. Blast-radius report: split report assembly, traversal, payload shaping,
     profiles, and summaries. Done.
+22. API runtime routes: split app construction from focused route registration
+    modules for UI, system, source, build, query, and report workflows. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
