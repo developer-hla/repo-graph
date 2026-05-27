@@ -150,7 +150,7 @@ Useful request fields:
 - `config_path`: optional config path inside the running API environment.
 - `output_path`: optional graph JSON output path.
 - `sync`: clone or update Git sources before scanning.
-- `strict`: fail the build when scanner errors are present.
+- `strict`: fail the build when source, scanner, database, or fact-validation errors are present.
 - `max_file_bytes`: skip files larger than this size.
 - `clear_existing`: clear prior Repo Graph data before loading.
 

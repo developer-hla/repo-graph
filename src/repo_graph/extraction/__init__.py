@@ -31,6 +31,7 @@ __all__ = [
     "SourceScanResult",
     "build_cached_graph",
     "build_graph",
+    "format_fact_validation_issue",
     "scanner_spec",
     "snapshot_status",
     "validate_fact_batch",
@@ -70,6 +71,10 @@ def __getattr__(name: str) -> object:
         from repo_graph.extraction.fact_validation import FactValidationIssue
 
         return FactValidationIssue
+    if name == "format_fact_validation_issue":
+        from repo_graph.extraction.fact_validation import format_fact_validation_issue
+
+        return format_fact_validation_issue
     if name == "validate_fact_batch":
         from repo_graph.extraction.fact_validation import validate_fact_batch
 

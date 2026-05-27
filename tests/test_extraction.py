@@ -3,9 +3,39 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from repo_graph.config import load_config
 from repo_graph.extraction import build_graph
+from repo_graph.extraction.contracts import FileScanContext
+from repo_graph.extraction.facts import EntityReference, Evidence, FactBatch, RelationshipFact
+
+
+class InvalidInteractionExtractor:
+    name = "invalid_interaction"
+    target_patterns = ("package.json",)
+    parser_ids = ("invalid_http",)
+
+    def can_process(self, rel_path: str) -> bool:
+        return Path(rel_path).name == "package.json"
+
+    def extract(self, context: FileScanContext, content: str) -> FactBatch:
+        return FactBatch(
+            relationships=[
+                RelationshipFact(
+                    from_ref=context.file_entity.reference,
+                    to_ref=EntityReference(entity_type="service", name="inventory-service"),
+                    edge_type="CALLS_SERVICE",
+                    evidence=Evidence(
+                        source_name=context.source.name,
+                        parser="invalid_http",
+                        file_path=context.rel_path,
+                        line_number=1,
+                    ),
+                    properties={},
+                )
+            ]
+        )
 
 
 class ExtractionTests(unittest.TestCase):
@@ -275,6 +305,67 @@ sources:
         )
         self.assertTrue(any(source["name"] == "service" for source in graph.to_dict()["sources"]))
         self.assertTrue(any(entity["name"] == "service" for entity in graph.to_dict()["entities"]))
+
+    def test_build_graph_records_fact_validation_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            service = root / "service"
+            service.mkdir()
+            (service / "package.json").write_text('{"name":"service"}', encoding="utf-8")
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            with patch(
+                "repo_graph.extraction.orchestrator.default_extractors",
+                return_value=[InvalidInteractionExtractor()],
+            ):
+                graph = build_graph(config)
+
+        self.assertEqual(len(graph.errors), 3)
+        self.assertIn(
+            "Fact validation failed (source=service, path=package.json, line=1, "
+            "parser=invalid_http, edge_type=CALLS_SERVICE): missing interaction property 'target_boundary'",
+            graph.errors,
+        )
+        self.assertTrue(any(edge.edge_type == "CALLS_SERVICE" for edge in graph.edges.values()))
+
+    def test_strict_build_raises_on_fact_validation_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            service = root / "service"
+            service.mkdir()
+            (service / "package.json").write_text('{"name":"service"}', encoding="utf-8")
+            config_path = root / "sources.yaml"
+            config_path.write_text(
+                """
+name: test-scope
+sources:
+  - type: local_path
+    name: service
+    path: service
+""",
+                encoding="utf-8",
+            )
+            config = load_config(config_path)
+
+            with (
+                patch(
+                    "repo_graph.extraction.orchestrator.default_extractors",
+                    return_value=[InvalidInteractionExtractor()],
+                ),
+                self.assertRaisesRegex(RuntimeError, "Fact validation failed.*CALLS_SERVICE"),
+            ):
+                build_graph(config, strict=True)
 
     def test_build_graph_resolves_cross_source_code_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

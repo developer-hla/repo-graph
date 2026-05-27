@@ -71,7 +71,7 @@ repo-graph build [-h] --config CONFIG [--output OUTPUT] [--sync] [--strict] [--c
 | `--config` | yes |  | Path to the Repo Graph source config. |
 | `--output` | no |  | Graph JSON output path. |
 | `--sync` | no | `false` | Sync Git sources before scanning. |
-| `--strict` | no | `false` | Fail if any configured source cannot be scanned. |
+| `--strict` | no | `false` | Fail if source, scanner, database, or fact-validation errors occur. |
 | `--cached` | no | `false` | Reuse unchanged source graph artifacts. |
 | `--max-file-bytes` | no | `1000000` | Maximum file size to scan. |
 
@@ -89,7 +89,7 @@ repo-graph refresh [-h] --config CONFIG [--output OUTPUT] [--sync] [--strict] [-
 | `--config` | yes |  | Path to the Repo Graph source config. |
 | `--output` | no |  | Graph JSON output path. |
 | `--sync` | no | `false` | Sync Git sources before scanning. |
-| `--strict` | no | `false` | Fail if any configured source cannot be scanned. |
+| `--strict` | no | `false` | Fail if source, scanner, database, or fact-validation errors occur. |
 | `--load` | no | `false` | Load the refreshed graph into Neo4j. |
 | `--max-file-bytes` | no | `1000000` | Maximum file size to scan. |
 

@@ -113,6 +113,10 @@ or strict workflows before graph construction. Interaction edge facts must
 include `target_boundary`, `dependency_scope`, and `interaction_kind` with
 known vocabulary values.
 
+Graph builds always record fact validation failures in `graph.errors`.
+`strict=True` raises on those failures through the same error path used for
+source, scanner, and database errors.
+
 ## Refactor Path
 
 1. Keep scanner-family modules behind the registry and keep domain helper

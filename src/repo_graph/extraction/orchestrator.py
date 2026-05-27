@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from repo_graph.config import RepoGraphConfig, Source
 from repo_graph.database import DatabaseScanResult, DatabaseSourceRequest, scan_database_source
+from repo_graph.extraction.fact_validation import format_fact_validation_issue, validate_fact_batch
 from repo_graph.extraction.facts import FactBatch
 from repo_graph.extraction.registry import default_extractors
 from repo_graph.extraction.source_scanner import SourceScanResult, scan_source, source_to_dict
@@ -76,6 +77,7 @@ def add_source_scan_result(graph: Graph, result: SourceScanResult) -> None:
 
 def add_extraction_facts(graph: Graph, facts: FactBatch) -> None:
     add_facts_to_graph(graph, facts)
+    graph.errors.extend(format_fact_validation_issue(issue) for issue in validate_fact_batch(facts))
 
 
 def add_database_facts(graph: Graph, result: DatabaseScanResult) -> None:

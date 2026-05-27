@@ -332,7 +332,11 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--config", type=Path, required=True, help="Path to the Repo Graph source config.")
     build_parser.add_argument("--output", type=Path, help="Graph JSON output path.")
     build_parser.add_argument("--sync", action="store_true", help="Sync Git sources before scanning.")
-    build_parser.add_argument("--strict", action="store_true", help="Fail if any configured source cannot be scanned.")
+    build_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail if source, scanner, database, or fact-validation errors occur.",
+    )
     build_parser.add_argument("--cached", action="store_true", help="Reuse unchanged source graph artifacts.")
     build_parser.add_argument(
         "--max-file-bytes",
@@ -352,7 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_parser.add_argument(
         "--strict",
         action="store_true",
-        help="Fail if any configured source cannot be scanned.",
+        help="Fail if source, scanner, database, or fact-validation errors occur.",
     )
     refresh_parser.add_argument("--load", action="store_true", help="Load the refreshed graph into Neo4j.")
     refresh_parser.add_argument(

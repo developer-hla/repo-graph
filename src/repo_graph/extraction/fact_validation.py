@@ -29,6 +29,16 @@ def validate_fact_batch(facts: FactBatch) -> list[FactValidationIssue]:
     return validate_relationship_facts(facts.relationships)
 
 
+def format_fact_validation_issue(issue: FactValidationIssue) -> str:
+    location = [f"source={issue.source_name}"]
+    if issue.file_path:
+        location.append(f"path={issue.file_path}")
+    if issue.line_number is not None:
+        location.append(f"line={issue.line_number}")
+    location.extend([f"parser={issue.parser}", f"edge_type={issue.edge_type}"])
+    return f"Fact validation failed ({', '.join(location)}): {issue.message}"
+
+
 def validate_relationship_facts(relationships: Iterable[RelationshipFact]) -> list[FactValidationIssue]:
     issues: list[FactValidationIssue] = []
     for relationship in relationships:
@@ -73,6 +83,7 @@ def issue(relationship: RelationshipFact, message: str) -> FactValidationIssue:
 
 __all__ = [
     "FactValidationIssue",
+    "format_fact_validation_issue",
     "validate_fact_batch",
     "validate_interaction_relationship_fact",
     "validate_relationship_facts",
