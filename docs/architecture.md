@@ -302,7 +302,10 @@ repo_graph/
     _reader_common.py
     _readers.py
     _sqlserver_adapter.py
+    _sqlserver_filters.py
+    _sqlserver_queries.py
     _sqlserver_reader.py
+    _sqlserver_row_mapping.py
   sources/
     __init__.py
     _expansion.py

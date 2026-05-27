@@ -127,6 +127,9 @@ The largest runtime files should be addressed in this order:
 27. PostgreSQL reader: split catalog query builders, filter helpers, and row
     mapping behind the stable `read_postgres_metadata` reader entrypoint.
     Done.
+28. SQL Server reader: split catalog query builders, filter helpers, and row
+    mapping behind the stable `read_sqlserver_metadata` reader entrypoint.
+    Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -377,7 +380,10 @@ repo_graph/database/
   _connectors.py
   _readers.py
   _reader_common.py
+  _sqlserver_filters.py
+  _sqlserver_queries.py
   _sqlserver_reader.py
+  _sqlserver_row_mapping.py
   _postgres_filters.py
   _postgres_queries.py
   _postgres_reader.py
@@ -399,6 +405,9 @@ Responsibilities:
 - `_connectors.py`: live connector entry points and safe connection handling.
 - `_sqlserver_reader.py` and `_postgres_reader.py`: bounded catalog read
   orchestration for each engine.
+- `_sqlserver_queries.py`, `_sqlserver_filters.py`, and
+  `_sqlserver_row_mapping.py`: SQL Server catalog SQL, filter expansion, and
+  metadata-row conversion.
 - `_postgres_queries.py`, `_postgres_filters.py`, and
   `_postgres_row_mapping.py`: PostgreSQL catalog SQL, filter expansion, and
   metadata-row conversion.
