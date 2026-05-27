@@ -497,6 +497,14 @@ repo_graph/
     report-markup.js
     routing.js
     views.js
+  cli_runtime/
+    __init__.py
+    build.py
+    common.py
+    parser.py
+    reports.py
+    runtime.py
+    sources.py
   api.py
   cli.py
 ```

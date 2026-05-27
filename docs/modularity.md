@@ -115,6 +115,9 @@ The largest runtime files should be addressed in this order:
     modules for UI, system, source, build, query, and report workflows. Done.
 23. Neo4j read workflows: split scope, source, entity, relationship, and common
     read helpers behind the public storage surface. Done.
+24. CLI runtime: split parser setup, build/load/refresh commands, source
+    commands, report commands, runtime commands, and CLI-only helpers behind
+    the stable `repo_graph.cli` entrypoint. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
