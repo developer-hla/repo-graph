@@ -15,19 +15,20 @@ from repo_graph.extraction.fact_helpers import (
     unresolved_relationship_fact,
 )
 from repo_graph.extraction.facts import FactBatch
-from repo_graph.extraction.scanners.manifest_dotnet_helpers import (
-    DOTNET_BUILD_SUFFIXES,
-    DOTNET_PROJECT_SUFFIXES,
+from repo_graph.extraction.scanners.manifests.dotnet.config import (
     config_file_fact,
     config_service_fact,
-    dotnet_package_references,
-    dotnet_project_metadata_from_root,
-    dotnet_project_references,
     framework_config_value_facts,
-    packages_config_references,
-    solution_project_reference,
-    xml_root,
 )
+from repo_graph.extraction.scanners.manifests.dotnet.constants import DOTNET_BUILD_SUFFIXES, DOTNET_PROJECT_SUFFIXES
+from repo_graph.extraction.scanners.manifests.dotnet.metadata import dotnet_project_metadata_from_root
+from repo_graph.extraction.scanners.manifests.dotnet.references import (
+    dotnet_package_references,
+    dotnet_project_references,
+    packages_config_references,
+)
+from repo_graph.extraction.scanners.manifests.dotnet.solutions import solution_project_reference
+from repo_graph.extraction.scanners.manifests.dotnet.xml_utils import xml_root
 
 
 class DotnetProjectExtractor:

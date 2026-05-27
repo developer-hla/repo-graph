@@ -326,7 +326,6 @@ repo_graph/
         imports.py
         naming.py
         routes.py
-      manifest_dotnet_helpers.py
       manifest_helpers.py
       cache/
         __init__.py
@@ -393,6 +392,14 @@ repo_graph/
         kubernetes_values.py
       manifests/
         __init__.py
+        dotnet/
+          __init__.py
+          config.py
+          constants.py
+          metadata.py
+          references.py
+          solutions.py
+          xml_utils.py
         package_json.py
         pyproject.py
         dotnet_project.py

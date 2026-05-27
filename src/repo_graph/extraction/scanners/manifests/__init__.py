@@ -1,5 +1,7 @@
 """Public manifest scanner API."""
 
+from repo_graph.extraction.scanners.manifests.dotnet.constants import DOTNET_BUILD_SUFFIXES, DOTNET_PROJECT_SUFFIXES
+from repo_graph.extraction.scanners.manifests.dotnet.metadata import dotnet_project_metadata
 from repo_graph.extraction.scanners.manifests.dotnet_project import (
     DotnetBuildConfigExtractor,
     DotnetFrameworkConfigExtractor,
@@ -11,6 +13,8 @@ from repo_graph.extraction.scanners.manifests.package_json import PackageJsonExt
 from repo_graph.extraction.scanners.manifests.pyproject import PythonProjectExtractor, PythonRequirementsExtractor
 
 __all__ = [
+    "DOTNET_BUILD_SUFFIXES",
+    "DOTNET_PROJECT_SUFFIXES",
     "DotnetBuildConfigExtractor",
     "DotnetFrameworkConfigExtractor",
     "DotnetPackagesConfigExtractor",
@@ -20,4 +24,5 @@ __all__ = [
     "PnpmWorkspaceExtractor",
     "PythonProjectExtractor",
     "PythonRequirementsExtractor",
+    "dotnet_project_metadata",
 ]

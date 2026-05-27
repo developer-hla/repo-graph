@@ -29,7 +29,6 @@ SCANNER_PACKAGE_ROOT = "src/repo_graph/extraction/scanners"
 ALLOWED_SCANNER_HELPER_PATHS = frozenset(
     {
         f"{SCANNER_PACKAGE_ROOT}/code/javascript/helpers.py",
-        f"{SCANNER_PACKAGE_ROOT}/manifest_dotnet_helpers.py",
         f"{SCANNER_PACKAGE_ROOT}/manifest_helpers.py",
         f"{SCANNER_PACKAGE_ROOT}/package_helpers.py",
         f"{SCANNER_PACKAGE_ROOT}/symbol_helpers.py",

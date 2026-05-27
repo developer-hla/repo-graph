@@ -1,0 +1,1 @@
+""".NET manifest helper package."""

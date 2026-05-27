@@ -105,6 +105,8 @@ The largest runtime files should be addressed in this order:
     regex/method constants, and fact construction. Done.
 18. Scheduled job helpers: split shared job fact construction from JavaScript
     cron extraction. Done.
+19. .NET manifest helpers: split constants, XML parsing, project metadata,
+    references, solution parsing, and framework config facts. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -195,6 +197,15 @@ repo_graph/extraction/scanners/
     __init__.py
     facts.py
     javascript.py
+  manifests/
+    dotnet/
+      __init__.py
+      config.py
+      constants.py
+      metadata.py
+      references.py
+      solutions.py
+      xml_utils.py
   code/
     python/
       __init__.py

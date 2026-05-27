@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_graph.config import RepoGraphConfig
-from repo_graph.extraction.scanners.manifest_dotnet_helpers import DOTNET_BUILD_SUFFIXES, DOTNET_PROJECT_SUFFIXES
+from repo_graph.extraction.scanners.manifests.dotnet.constants import DOTNET_BUILD_SUFFIXES, DOTNET_PROJECT_SUFFIXES
 
 MANIFEST_FILENAMES = {
     "App.config",
