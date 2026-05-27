@@ -3,18 +3,25 @@ from __future__ import annotations
 import unittest
 
 from repo_graph.reports import (
+    blast_radius_profile_edge_types,
     blast_radius_report_from_graph,
     blast_radius_report_from_items,
     database_reconciliation_report_from_graph,
     database_reconciliation_report_from_items,
     interactions_report_from_graph,
     interactions_report_from_items,
+    normalize_blast_radius_profile,
     unresolved_report_from_graph,
     unresolved_report_from_items,
 )
 
 
 class ReportTests(unittest.TestCase):
+    def test_blast_radius_public_surface_exports_profile_helpers(self) -> None:
+        self.assertEqual(normalize_blast_radius_profile(" IMPACT "), "impact")
+        self.assertIn("READS_SQL_OBJECT", blast_radius_profile_edge_types("impact", None))
+        self.assertIsNone(blast_radius_profile_edge_types("impact", "CALLS_SQL"))
+
     def test_blast_radius_report_traces_endpoint_to_database_paths(self) -> None:
         graph_data = {
             "metadata": {"scope_name": "test-scope", "generated_at": "2026-05-14T00:00:00+00:00"},

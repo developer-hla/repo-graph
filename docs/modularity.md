@@ -109,6 +109,8 @@ The largest runtime files should be addressed in this order:
     references, solution parsing, and framework config facts. Done.
 20. .NET manifest scanner entrypoints: split project, packages config,
     framework config, build config, and solution scanners. Done.
+21. Blast-radius report: split report assembly, traversal, payload shaping,
+    profiles, and summaries. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.

@@ -441,7 +441,13 @@ repo_graph/
   reports/
     __init__.py
     _common.py
-    blast_radius.py
+    blast_radius/
+      __init__.py
+      _builder.py
+      _payloads.py
+      _profiles.py
+      _summaries.py
+      _traversal.py
     database_reconciliation/
       __init__.py
       _builder.py

@@ -322,6 +322,7 @@ docs/sql-interaction-builders.md SQL-specific interaction builder contract
 docs/database-metadata-builders.md Database metadata relationship builder contract
 docs/schema.md          Current JSON graph shape
 docs/agent-usage.md     Agent query API examples
+docs/blast-radius-report.md Blast-radius report contract
 docs/extension-author-guide.md One obvious extension path for contributors
 docs/extending-parsers.md Parser extension workflow
 docs/database-introspection.md Planned read-only database source design
