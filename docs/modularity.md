@@ -130,6 +130,9 @@ The largest runtime files should be addressed in this order:
 28. SQL Server reader: split catalog query builders, filter helpers, and row
     mapping behind the stable `read_sqlserver_metadata` reader entrypoint.
     Done.
+29. .NET scanner entrypoints: split C#, VB, and legacy endpoint scanner
+    classes into focused modules while keeping `scanner.py` as a compatibility
+    export surface. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -297,19 +300,22 @@ Responsibilities:
 
 ## .NET Scanner Package Target
 
-The .NET scanner package supports both modern C# and legacy VB. `scanner.py`
-owns the scan loop and scanner registration. Language-specific parsing details
-live in focused helpers so a route change does not require reading symbol
-resolution, SQL extraction, and legacy HTTP logic.
+The .NET scanner package supports modern C#, legacy VB, and legacy ASMX/WCF
+endpoints. Scanner entrypoint classes live in focused modules. Language-specific
+parsing details live in focused helpers so a route change does not require
+reading symbol resolution, SQL extraction, and legacy HTTP logic.
 
 ```text
 repo_graph/extraction/scanners/code/dotnet/
   __init__.py
   scanner.py
+  csharp_scanner.py
   csharp_syntax.py
   csharp_symbols.py
   csharp_routes.py
   csharp_interactions.py
+  legacy_endpoints.py
+  vb_scanner.py
   vb_syntax.py
   vb_symbols.py
   vb_routes.py
@@ -318,8 +324,10 @@ repo_graph/extraction/scanners/code/dotnet/
 
 Responsibilities:
 
-- `scanner.py`: line iteration, project context, scope state, and scanner
-  registration.
+- `__init__.py`: public package exports.
+- `scanner.py`: compatibility exports for older direct imports.
+- `csharp_scanner.py`, `vb_scanner.py`, and `legacy_endpoints.py`: scanner
+  classes, file eligibility, line iteration, and scan state.
 - `csharp_syntax.py` and `vb_syntax.py`: language syntax regexes, scope text,
   attributes, and string normalization.
 - `csharp_symbols.py` and `vb_symbols.py`: symbol declarations and local call

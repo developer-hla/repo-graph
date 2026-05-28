@@ -386,11 +386,14 @@ repo_graph/
           symbols.py
         dotnet/
           __init__.py
-          scanner.py
+          csharp_scanner.py
           csharp_interactions.py
           csharp_routes.py
           csharp_symbols.py
           csharp_syntax.py
+          legacy_endpoints.py
+          scanner.py
+          vb_scanner.py
           vb_interactions.py
           vb_routes.py
           vb_symbols.py
