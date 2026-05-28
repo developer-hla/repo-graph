@@ -139,6 +139,9 @@ The largest runtime files should be addressed in this order:
 31. Unresolved report: split public report assembly, classification,
     grouping, summaries, hotspots, and example payloads behind the stable
     `repo_graph.reports.unresolved` public surface. Done.
+32. Neo4j query catalog: split graph scope, source overview, and relationship
+    Cypher query builders into focused modules used directly by their owning
+    read workflows. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -471,27 +474,26 @@ The Neo4j storage adapter is organized by responsibility:
 ```text
 repo_graph/storage/
   __init__.py
-  _neo4j.py
   _neo4j_common.py
   _neo4j_loader.py
   _neo4j_models.py
   _neo4j_payloads.py
-  _neo4j_queries.py
   _neo4j_entity_reads.py
   _neo4j_read_common.py
-  _neo4j_reads.py
+  _neo4j_relationship_queries.py
   _neo4j_relationship_reads.py
   _neo4j_records.py
+  _neo4j_scope_queries.py
   _neo4j_scope_reads.py
   _neo4j_settings.py
+  _neo4j_source_queries.py
   _neo4j_source_reads.py
   _neo4j_writes.py
 ```
 
 `repo_graph.storage` remains the public import surface for CLI, API, and
-refresh code. `_neo4j.py` is a compatibility facade for older internal imports;
-new code should import through the package root or the focused module that owns
-the behavior.
+refresh code. Storage internals should import the focused module that owns the
+behavior.
 
 Responsibilities:
 
@@ -504,12 +506,15 @@ Responsibilities:
 - `_neo4j_entity_reads.py`: entity lookup, search, and type listing.
 - `_neo4j_relationship_reads.py`: relationship search, neighbors, and
   unresolved edge listing.
+- `_neo4j_relationship_queries.py`: relationship, traversal, and unresolved
+  edge Cypher query text builders.
 - `_neo4j_scope_reads.py`: graph stats, loaded scope, overview, and source
   activity.
+- `_neo4j_scope_queries.py`: graph scope and graph overview Cypher query text
+  builders.
 - `_neo4j_source_reads.py`: one-source overview.
+- `_neo4j_source_queries.py`: one-source overview Cypher query text builders.
 - `_neo4j_read_common.py`: shared read result conversion helpers.
-- `_neo4j_reads.py`: compatibility facade for older internal read imports.
-- `_neo4j_queries.py`: Cypher query text builders.
 - `_neo4j_payloads.py`: Neo4j records mapped into API/report payloads.
 - `_neo4j_common.py`: small adapter-local normalization helpers.
 

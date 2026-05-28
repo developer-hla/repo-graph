@@ -4,48 +4,57 @@ from __future__ import annotations
 
 import unittest
 
-from repo_graph.storage._neo4j import (
-    cross_source_edges_query,
-    delete_current_edges_tx,
-    delete_orphan_external_resources_tx,
-    delete_source_data_tx,
-    edge_payload,
-    edge_record,
-    edge_type_counts_query,
-    entity_payload,
-    entity_record,
-    entity_type_counts_query,
-    graph_node_payload,
-    load_summary,
-    neighbor_payload,
+from repo_graph.storage._neo4j_common import (
     normalize_depth,
     normalize_direction,
     normalize_edge_types,
     normalize_limit,
-    normalize_source_names,
-    outgoing_neighbors_query,
-    prepare_graph_records,
-    relationship_evidence_payload,
-    relationship_search_query,
     sanitize_relationship_type,
+)
+from repo_graph.storage._neo4j_payloads import (
+    edge_payload,
+    entity_payload,
+    graph_node_payload,
+    neighbor_payload,
+    relationship_evidence_payload,
     scope_payload,
-    source_detail_query,
-    source_edge_counts_query,
-    source_edge_type_counts_query,
-    source_entity_counts_query,
-    source_entity_type_counts_query,
-    source_incoming_cross_source_query,
-    source_metadata_query,
-    source_outgoing_cross_source_query,
-    source_owned_surface_query,
     source_payload,
-    source_record,
-    source_summary_query,
-    source_uses_query,
     target_payload,
     unloaded_scope_payload,
+)
+from repo_graph.storage._neo4j_records import (
+    edge_record,
+    entity_record,
+    load_summary,
+    normalize_source_names,
+    prepare_graph_records,
+    source_record,
     unresolved_target_records,
     validate_replace_sources,
+)
+from repo_graph.storage._neo4j_relationship_queries import outgoing_neighbors_query, relationship_search_query
+from repo_graph.storage._neo4j_scope_queries import (
+    cross_source_edges_query,
+    edge_type_counts_query,
+    entity_type_counts_query,
+    source_edge_counts_query,
+    source_entity_counts_query,
+    source_metadata_query,
+)
+from repo_graph.storage._neo4j_source_queries import (
+    source_detail_query,
+    source_edge_type_counts_query,
+    source_entity_type_counts_query,
+    source_incoming_cross_source_query,
+    source_outgoing_cross_source_query,
+    source_owned_surface_query,
+    source_summary_query,
+    source_uses_query,
+)
+from repo_graph.storage._neo4j_writes import (
+    delete_current_edges_tx,
+    delete_orphan_external_resources_tx,
+    delete_source_data_tx,
 )
 
 

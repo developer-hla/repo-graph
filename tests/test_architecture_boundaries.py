@@ -127,7 +127,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
     def test_reports_storage_internal_import_outside_storage_package(self) -> None:
         finding = self.scan_storage_internal_import(
             "src/repo_graph/api_runtime/query_responses.py",
-            "from repo_graph.storage._neo4j_reads import read_graph_scope\n",
+            "from repo_graph.storage._neo4j_scope_reads import read_graph_scope\n",
         )
 
         self.assertEqual(len(finding), 1)
@@ -135,8 +135,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
     def test_allows_storage_internal_import_inside_storage_package(self) -> None:
         finding = self.scan_storage_internal_import(
-            "src/repo_graph/storage/_neo4j.py",
-            "from repo_graph.storage._neo4j_reads import read_graph_scope\n",
+            "src/repo_graph/storage/_neo4j_scope_reads.py",
+            "from repo_graph.storage._neo4j_scope_queries import graph_scope_query\n",
         )
 
         self.assertEqual(finding, [])

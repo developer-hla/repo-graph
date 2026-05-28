@@ -15,11 +15,12 @@ from repo_graph.storage._neo4j_common import (
     optional_filter,
 )
 from repo_graph.storage._neo4j_payloads import neighbor_payload, relationship_evidence_payload, unresolved_edge_payload
-from repo_graph.storage._neo4j_queries import (
+from repo_graph.storage._neo4j_relationship_queries import (
     incoming_neighbors_query,
     outgoing_neighbors_query,
     relationship_search_by_edge_types_query,
     relationship_search_query,
+    unresolved_edges_query,
 )
 from repo_graph.storage._neo4j_settings import Neo4jSettings
 
@@ -116,16 +117,5 @@ def list_unresolved_edges(
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()
         with driver.session(database=settings.database) as session:
-            records = session.run(
-                """
-                MATCH (source:RepoGraphEntity)-[edge]->(target:RepoGraphTarget)
-                WHERE edge.edge_id IS NOT NULL
-                  AND ($source_name IS NULL OR edge.source_name = $source_name)
-                  AND ($edge_type IS NULL OR edge.edge_type = $edge_type)
-                RETURN source, edge, target
-                ORDER BY edge.source_name, edge.edge_type, edge.to_name
-                LIMIT $limit
-                """,
-                **params,
-            )
+            records = session.run(unresolved_edges_query(), **params)
             return [unresolved_edge_payload(record) for record in records]

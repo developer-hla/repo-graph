@@ -14,7 +14,9 @@ from repo_graph.storage._neo4j_common import (
     optional_filter,
 )
 from repo_graph.storage._neo4j_payloads import entity_payload, source_payload
-from repo_graph.storage._neo4j_queries import (
+from repo_graph.storage._neo4j_read_common import records_as_dicts
+from repo_graph.storage._neo4j_settings import Neo4jSettings
+from repo_graph.storage._neo4j_source_queries import (
     source_detail_query,
     source_edge_type_counts_query,
     source_entity_type_counts_query,
@@ -24,8 +26,6 @@ from repo_graph.storage._neo4j_queries import (
     source_summary_query,
     source_uses_query,
 )
-from repo_graph.storage._neo4j_read_common import records_as_dicts
-from repo_graph.storage._neo4j_settings import Neo4jSettings
 
 
 def read_source_overview(

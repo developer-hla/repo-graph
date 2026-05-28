@@ -30,11 +30,12 @@ Private Neo4j read modules own these workflows:
 | `_neo4j_entity_reads.py` | entity lookup, entity search, and entity type listing |
 | `_neo4j_relationship_reads.py` | relationship search, neighbor traversal, and unresolved edge listing |
 | `_neo4j_read_common.py` | small shared helpers for Neo4j read result conversion |
-| `_neo4j_queries.py` | reusable Cypher query strings |
+| `_neo4j_scope_queries.py` | graph scope and graph overview Cypher query strings |
+| `_neo4j_source_queries.py` | one-source overview Cypher query strings |
+| `_neo4j_relationship_queries.py` | relationship, traversal, and unresolved edge Cypher query strings |
 | `_neo4j_payloads.py` | Neo4j record-to-public-payload shaping |
 
-`_neo4j_reads.py` is a compatibility facade for older internal imports. New
-storage internals should import from the focused owning module.
+Storage internals should import from the focused owning module.
 
 ## Non-Ownership
 
@@ -53,8 +54,8 @@ structured graph data and evidence.
 
 ## Query Rules
 
-- Keep Cypher in `_neo4j_queries.py` unless the query is tiny and specific to
-  one read function.
+- Keep reusable Cypher in the focused query module that matches the owning
+  read workflow.
 - Keep payload shaping in `_neo4j_payloads.py`.
 - Normalize inputs before running queries.
 - Preserve evidence fields such as `edge_id`, source name, file path, line
@@ -69,7 +70,7 @@ When adding a new read:
 1. Add the public function to `repo_graph.storage` only if callers outside
    storage need it.
 2. Put the implementation in the focused `_neo4j_*_reads.py` module.
-3. Add reusable Cypher to `_neo4j_queries.py`.
+3. Add reusable Cypher to the focused `_neo4j_*_queries.py` module.
 4. Shape records through `_neo4j_payloads.py`.
 5. Add synthetic tests for the public storage/API behavior or the query string.
 6. Run `pixi run audit`.

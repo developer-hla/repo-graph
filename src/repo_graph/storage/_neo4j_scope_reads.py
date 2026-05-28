@@ -9,15 +9,17 @@ from neo4j import GraphDatabase
 
 from repo_graph.storage._neo4j_common import normalize_limit
 from repo_graph.storage._neo4j_payloads import scope_payload, unloaded_scope_payload
-from repo_graph.storage._neo4j_queries import (
+from repo_graph.storage._neo4j_read_common import records_as_dicts
+from repo_graph.storage._neo4j_scope_queries import (
     cross_source_edges_query,
     edge_type_counts_query,
     entity_type_counts_query,
+    graph_scope_query,
+    graph_stats_query,
     source_edge_counts_query,
     source_entity_counts_query,
     source_metadata_query,
 )
-from repo_graph.storage._neo4j_read_common import records_as_dicts
 from repo_graph.storage._neo4j_settings import Neo4jSettings
 
 
@@ -25,43 +27,7 @@ def read_graph_stats(settings: Neo4jSettings) -> dict[str, Any]:
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()
         with driver.session(database=settings.database) as session:
-            record = session.run(
-                """
-                CALL () {
-                  MATCH (entity:RepoGraphEntity)
-                  RETURN count(entity) AS entity_count
-                }
-                CALL () {
-                  MATCH (target:RepoGraphTarget)
-                  RETURN count(target) AS unresolved_target_count
-                }
-                CALL () {
-                  MATCH ()-[edge]->()
-                  WHERE edge.edge_id IS NOT NULL
-                  RETURN count(edge) AS edge_count
-                }
-                CALL () {
-                  MATCH ()-[edge]->()
-                  WHERE edge.edge_id IS NOT NULL AND coalesce(edge.resolved, false) = true
-                  RETURN count(edge) AS resolved_edge_count
-                }
-                CALL () {
-                  MATCH ()-[edge]->()
-                  WHERE edge.edge_id IS NOT NULL AND coalesce(edge.resolved, false) = false
-                  RETURN count(edge) AS unresolved_edge_count
-                }
-                OPTIONAL MATCH (graph:RepoGraphGraph {graph_id: "current"})
-                RETURN
-                  graph.scope_name AS scope_name,
-                  graph.schema_version AS schema_version,
-                  graph.generated_at AS generated_at,
-                  entity_count,
-                  edge_count,
-                  resolved_edge_count,
-                  unresolved_edge_count,
-                  unresolved_target_count
-                """
-            ).single()
+            record = session.run(graph_stats_query()).single()
     if record is None:
         return {}
     return dict(record)
@@ -71,15 +37,7 @@ def read_graph_scope(settings: Neo4jSettings) -> dict[str, Any]:
     with GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password)) as driver:
         driver.verify_connectivity()
         with driver.session(database=settings.database) as session:
-            record = session.run(
-                """
-                OPTIONAL MATCH (graph:RepoGraphGraph {graph_id: "current"})
-                OPTIONAL MATCH (graph)-[:INCLUDES_SOURCE]->(source:RepoGraphSource)
-                WITH graph, source
-                ORDER BY source.index, source.name
-                RETURN graph, [item IN collect(source) WHERE item IS NOT NULL] AS sources
-                """
-            ).single()
+            record = session.run(graph_scope_query()).single()
     if record is None or record["graph"] is None:
         return unloaded_scope_payload()
     return scope_payload(record["graph"], record["sources"])
