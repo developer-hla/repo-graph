@@ -484,7 +484,13 @@ repo_graph/
       _groups.py
       _normalization.py
       _summaries.py
-    interactions.py
+    interactions/
+      __init__.py
+      _builder.py
+      _examples.py
+      _groups.py
+      _hotspots.py
+      _summaries.py
     unresolved.py
   api_runtime/
     __init__.py

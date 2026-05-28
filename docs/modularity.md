@@ -133,6 +133,9 @@ The largest runtime files should be addressed in this order:
 29. .NET scanner entrypoints: split C#, VB, and legacy endpoint scanner
     classes into focused modules while keeping `scanner.py` as a compatibility
     export surface. Done.
+30. Interactions report: split public report assembly, grouping, summaries,
+    hotspots, and example payloads behind the stable
+    `repo_graph.reports.interactions` public surface. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -349,7 +352,13 @@ The reports package is organized by report type:
 repo_graph/reports/
   __init__.py
   _common.py
-  blast_radius.py
+  blast_radius/
+    __init__.py
+    _builder.py
+    _payloads.py
+    _profiles.py
+    _summaries.py
+    _traversal.py
   database_reconciliation/
     __init__.py
     _builder.py
@@ -357,7 +366,13 @@ repo_graph/reports/
     _groups.py
     _normalization.py
     _summaries.py
-  interactions.py
+  interactions/
+    __init__.py
+    _builder.py
+    _examples.py
+    _groups.py
+    _hotspots.py
+    _summaries.py
   unresolved.py
 ```
 
@@ -370,6 +385,12 @@ classification workflows. `_builder.py` owns the public report shape,
 `_groups.py` owns classification accumulation, `_summaries.py` owns totals and
 hotspots, `_normalization.py` owns SQL entity and edge normalization, and
 `_constants.py` owns classification vocabulary.
+
+The interactions report is a package because it combines multiple projection
+workflows. `_builder.py` owns graph/API input adaptation and public report
+assembly, `_groups.py` owns interaction grouping, `_summaries.py` owns totals,
+`_hotspots.py` owns source and target hotspot payloads, and `_examples.py` owns
+example payload shaping.
 
 ## Database Package Target
 
