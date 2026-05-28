@@ -136,6 +136,9 @@ The largest runtime files should be addressed in this order:
 30. Interactions report: split public report assembly, grouping, summaries,
     hotspots, and example payloads behind the stable
     `repo_graph.reports.interactions` public surface. Done.
+31. Unresolved report: split public report assembly, classification,
+    grouping, summaries, hotspots, and example payloads behind the stable
+    `repo_graph.reports.unresolved` public surface. Done.
 
 Each split should preserve generated docs and public examples unless the
 owning spec explicitly changes behavior.
@@ -373,7 +376,14 @@ repo_graph/reports/
     _groups.py
     _hotspots.py
     _summaries.py
-  unresolved.py
+  unresolved/
+    __init__.py
+    _builder.py
+    _classification.py
+    _examples.py
+    _groups.py
+    _hotspots.py
+    _summaries.py
 ```
 
 `repo_graph.reports` remains the public import surface for CLI and API code.
@@ -389,6 +399,13 @@ hotspots, `_normalization.py` owns SQL entity and edge normalization, and
 The interactions report is a package because it combines multiple projection
 workflows. `_builder.py` owns graph/API input adaptation and public report
 assembly, `_groups.py` owns interaction grouping, `_summaries.py` owns totals,
+`_hotspots.py` owns source and target hotspot payloads, and `_examples.py` owns
+example payload shaping.
+
+The unresolved report is a package because it combines classification and
+projection workflows. `_builder.py` owns graph/API input adaptation and public
+report assembly, `_classification.py` owns unresolved-reference heuristics,
+`_groups.py` owns target grouping, `_summaries.py` owns classification totals,
 `_hotspots.py` owns source and target hotspot payloads, and `_examples.py` owns
 example payload shaping.
 

@@ -491,7 +491,14 @@ repo_graph/
       _groups.py
       _hotspots.py
       _summaries.py
-    unresolved.py
+    unresolved/
+      __init__.py
+      _builder.py
+      _classification.py
+      _examples.py
+      _groups.py
+      _hotspots.py
+      _summaries.py
   api_runtime/
     __init__.py
     _build_routes.py
